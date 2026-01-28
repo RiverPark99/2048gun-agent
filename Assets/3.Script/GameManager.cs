@@ -40,9 +40,9 @@ public class GameManager : MonoBehaviour
         if (isProcessing) return;
         
         if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
-            Move(Vector2Int.up);
-        else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
             Move(Vector2Int.down);
+        else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
+            Move(Vector2Int.up);
         else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
             Move(Vector2Int.left);
         else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
@@ -128,20 +128,29 @@ public class GameManager : MonoBehaviour
     {
         float duration = 0.2f;
         float elapsed = 0f;
-        
+
         while (elapsed < duration)
         {
+            // 핵심: 매 프레임마다 obj가 아직 존재하는지 확인
+            if (obj == null) yield break;
+
             elapsed += Time.deltaTime;
             float t = elapsed / duration;
-            // Ease out back
+
+            // Ease out back 로직
             float s = 1.70158f;
             t = t - 1;
             float val = t * t * ((s + 1) * t + s) + 1;
-            obj.transform.localScale = Vector3.one * val;
+
+            // 접근 직전에 다시 한번 체크 (더 안전함)
+            if (obj != null)
+                obj.transform.localScale = Vector3.one * val;
+
             yield return null;
         }
-        
-        obj.transform.localScale = Vector3.one;
+
+        if (obj != null)
+            obj.transform.localScale = Vector3.one;
     }
     
     void Move(Vector2Int direction)
@@ -235,22 +244,36 @@ public class GameManager : MonoBehaviour
         
         isProcessing = false;
     }
-    
+
     bool CanMove()
     {
-        for (int y = 0; y < gridSize; y++)
+        for (int x = 0; x < gridSize; x++)
         {
-            for (int x = 0; x < gridSize; x++)
+            for (int y = 0; y < gridSize; y++)
             {
+                // 1. 빈 칸이 하나라도 있으면 움직일 수 있음
                 if (tiles[x, y] == null) return true;
-                
-                if (x < gridSize - 1 && tiles[x, y].value == tiles[x + 1, y].value) return true;
-                if (y < gridSize - 1 && tiles[x, y].value == tiles[x, y + 1].value) return true;
+
+                int currentValue = tiles[x, y].value;
+
+                // 2. 오른쪽 타일과 비교 (값이 같거나 빈 칸이면 이동 가능)
+                if (x < gridSize - 1)
+                {
+                    if (tiles[x + 1, y] == null || tiles[x + 1, y].value == currentValue)
+                        return true;
+                }
+
+                // 3. 아래쪽 타일과 비교 (값이 같거나 빈 칸이면 이동 가능)
+                if (y < gridSize - 1)
+                {
+                    if (tiles[x, y + 1] == null || tiles[x, y + 1].value == currentValue)
+                        return true;
+                }
             }
         }
         return false;
     }
-    
+
     void GameOver()
     {
         if (gameOverPanel != null)
