@@ -13,7 +13,7 @@ public class Tile : MonoBehaviour
     private RectTransform rectTransform;
     private Vector2 targetPosition;
     private bool isMoving = false;
-    private float moveSpeed = 20f;
+    private float moveSpeed = 12f; // 더 천천히 이동
     
     private Color[] tileColors = new Color[]
     {
@@ -81,31 +81,54 @@ public class Tile : MonoBehaviour
     public void MergeWith(Tile other)
     {
         SetValue(value * 2);
-        StartCoroutine(ScaleAnimation());
+        StartCoroutine(PopAnimation()); // ScaleAnimation에서 PopAnimation으로 변경
     }
     
-    private System.Collections.IEnumerator ScaleAnimation()
+    // 새로운 "펑!" 터지는 애니메이션
+    private System.Collections.IEnumerator PopAnimation()
     {
-        float duration = 0.1f;
+        float duration = 0.3f; // 0.1에서 0.3으로 증가 (더 눈에 띄게)
         float elapsed = 0f;
-        Vector3 startScale = Vector3.one * 0.9f;
-        Vector3 endScale = Vector3.one;
         
-        transform.localScale = startScale;
-        
-        while (elapsed < duration)
+        // 먼저 작아졌다가
+        float shrinkDuration = duration * 0.3f;
+        while (elapsed < shrinkDuration)
         {
             elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            // Ease out back
-            float s = 1.70158f;
-            t = t - 1;
-            float val = t * t * ((s + 1) * t + s) + 1;
-            transform.localScale = Vector3.Lerp(startScale, endScale, val);
+            float t = elapsed / shrinkDuration;
+            transform.localScale = Vector3.Lerp(Vector3.one, Vector3.one * 0.8f, t);
             yield return null;
         }
         
-        transform.localScale = endScale;
+        elapsed = 0f;
+        
+        // 크게 튀어나왔다가
+        float popDuration = duration * 0.4f;
+        while (elapsed < popDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / popDuration;
+            // Ease out elastic 효과
+            float s = 1.70158f * 1.525f;
+            t = t - 1;
+            float val = t * t * ((s + 1) * t + s) + 1;
+            transform.localScale = Vector3.Lerp(Vector3.one * 0.8f, Vector3.one * 1.2f, val);
+            yield return null;
+        }
+        
+        elapsed = 0f;
+        
+        // 원래 크기로 돌아옴
+        float returnDuration = duration * 0.3f;
+        while (elapsed < returnDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / returnDuration;
+            transform.localScale = Vector3.Lerp(Vector3.one * 1.2f, Vector3.one, t);
+            yield return null;
+        }
+        
+        transform.localScale = Vector3.one;
     }
     
     private void UpdateAppearance()

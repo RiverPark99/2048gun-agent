@@ -131,18 +131,18 @@ public class GameManager : MonoBehaviour
 
         while (elapsed < duration)
         {
-            // «ŸΩ…: ∏≈ «¡∑π¿”∏∂¥Ÿ obj∞° æ∆¡˜ ¡∏¿Á«œ¥¬¡ˆ »Æ¿Œ
+            // ÔøΩŸΩÔøΩ: ÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩ”∏ÔøΩÔøΩÔøΩ objÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩœ¥ÔøΩÔøΩÔøΩ »ÆÔøΩÔøΩ
             if (obj == null) yield break;
 
             elapsed += Time.deltaTime;
             float t = elapsed / duration;
 
-            // Ease out back ∑Œ¡˜
+            // Ease out back ÔøΩÔøΩÔøΩÔøΩ
             float s = 1.70158f;
             t = t - 1;
             float val = t * t * ((s + 1) * t + s) + 1;
 
-            // ¡¢±Ÿ ¡˜¿¸ø° ¥ŸΩ√ «—π¯ √º≈© (¥ı æ»¿¸«‘)
+            // ÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ ÔøΩŸΩÔøΩ ÔøΩ—πÔøΩ √º≈© (ÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ)
             if (obj != null)
                 obj.transform.localScale = Vector3.one * val;
 
@@ -155,77 +155,98 @@ public class GameManager : MonoBehaviour
     
     void Move(Vector2Int direction)
     {
+        StartCoroutine(MoveCoroutine(direction));
+    }
+    
+    // MoveÎ•º ÏΩîÎ£®Ìã¥ÏúºÎ°ú Î≥ÄÍ≤ΩÌïòÏó¨ Ïï†ÎãàÎ©îÏù¥ÏÖòÏùÑ Î≥º Ïàò ÏûàÍ≤å Ìï®
+    System.Collections.IEnumerator MoveCoroutine(Vector2Int direction)
+    {
         isProcessing = true;
         bool moved = false;
         
-        int startX = direction.x == 1 ? gridSize - 1 : 0;
-        int startY = direction.y == 1 ? gridSize - 1 : 0;
-        int dirX = direction.x != 0 ? -direction.x : 0;
-        int dirY = direction.y != 0 ? -direction.y : 0;
-        
-        Tile[,] newTiles = new Tile[gridSize, gridSize];
-        bool[,] merged = new bool[gridSize, gridSize];
-        
-        for (int i = 0; i < gridSize; i++)
+        // ÏΩ§Î≥¥Î•º ÏúÑÌï¥ Ìï©ÏÑ±Ïù¥ ÏùºÏñ¥ÎÇ† ÎïåÍπåÏßÄ Î∞òÎ≥µ
+        bool anyMerged = true;
+        while (anyMerged)
         {
-            for (int j = 0; j < gridSize; j++)
+            anyMerged = false;
+            
+            int startX = direction.x == 1 ? gridSize - 1 : 0;
+            int startY = direction.y == 1 ? gridSize - 1 : 0;
+            int dirX = direction.x != 0 ? -direction.x : 0;
+            int dirY = direction.y != 0 ? -direction.y : 0;
+            
+            Tile[,] newTiles = new Tile[gridSize, gridSize];
+            bool[,] merged = new bool[gridSize, gridSize];
+            
+            for (int i = 0; i < gridSize; i++)
             {
-                int x = startX + (dirX == 0 ? j : i * dirX);
-                int y = startY + (dirY == 0 ? j : i * dirY);
-                
-                if (tiles[x, y] == null) continue;
-                
-                Tile tile = tiles[x, y];
-                Vector2Int targetPos = new Vector2Int(x, y);
-                
-                while (true)
+                for (int j = 0; j < gridSize; j++)
                 {
-                    Vector2Int nextPos = targetPos + direction;
+                    int x = startX + (dirX == 0 ? j : i * dirX);
+                    int y = startY + (dirY == 0 ? j : i * dirY);
                     
-                    if (nextPos.x < 0 || nextPos.x >= gridSize || nextPos.y < 0 || nextPos.y >= gridSize)
-                        break;
+                    if (tiles[x, y] == null) continue;
                     
-                    if (newTiles[nextPos.x, nextPos.y] == null)
+                    Tile tile = tiles[x, y];
+                    Vector2Int targetPos = new Vector2Int(x, y);
+                    
+                    while (true)
                     {
-                        targetPos = nextPos;
-                    }
-                    else if (newTiles[nextPos.x, nextPos.y].value == tile.value && !merged[nextPos.x, nextPos.y])
-                    {
-                        Tile targetTile = newTiles[nextPos.x, nextPos.y];
-                        score += tile.value * 2;
-                        targetTile.MergeWith(tile);
-                        merged[nextPos.x, nextPos.y] = true;
+                        Vector2Int nextPos = targetPos + direction;
                         
-                        activeTiles.Remove(tile);
-                        Destroy(tile.gameObject);
-                        tile = null;
-                        moved = true;
-                        break;
+                        if (nextPos.x < 0 || nextPos.x >= gridSize || nextPos.y < 0 || nextPos.y >= gridSize)
+                            break;
+                        
+                        if (newTiles[nextPos.x, nextPos.y] == null)
+                        {
+                            targetPos = nextPos;
+                        }
+                        else if (newTiles[nextPos.x, nextPos.y].value == tile.value && !merged[nextPos.x, nextPos.y])
+                        {
+                            Tile targetTile = newTiles[nextPos.x, nextPos.y];
+                            score += tile.value * 2;
+                            targetTile.MergeWith(tile);
+                            merged[nextPos.x, nextPos.y] = true;
+                            anyMerged = true; // Ìï©ÏÑ±Ïù¥ ÏùºÏñ¥ÎÇ¨ÏùåÏùÑ ÌëúÏãú
+                            
+                            activeTiles.Remove(tile);
+                            Destroy(tile.gameObject);
+                            tile = null;
+                            moved = true;
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
                     }
-                    else
-                    {
-                        break;
-                    }
-                }
-                
-                if (tile != null)
-                {
-                    if (targetPos != new Vector2Int(x, y))
-                        moved = true;
                     
-                    tile.SetGridPosition(targetPos);
-                    tile.MoveTo(GetCellPosition(targetPos.x, targetPos.y));
-                    newTiles[targetPos.x, targetPos.y] = tile;
+                    if (tile != null)
+                    {
+                        if (targetPos != new Vector2Int(x, y))
+                            moved = true;
+                        
+                        tile.SetGridPosition(targetPos);
+                        tile.MoveTo(GetCellPosition(targetPos.x, targetPos.y));
+                        newTiles[targetPos.x, targetPos.y] = tile;
+                    }
                 }
             }
+            
+            tiles = newTiles;
+            
+            // Ìï©ÏÑ±Ïù¥ ÏùºÏñ¥ÎÇ¨Îã§Î©¥ Ïï†ÎãàÎ©îÏù¥ÏÖòÏùÑ Î≥¥Í∏∞ ÏúÑÌï¥ Ïû†Ïãú ÎåÄÍ∏∞
+            if (anyMerged)
+            {
+                yield return new WaitForSeconds(0.15f); // Í∞Å ÏΩ§Î≥¥ Îã®Í≥ÑÎßàÎã§ 0.15Ï¥à ÎåÄÍ∏∞
+            }
         }
-        
-        tiles = newTiles;
         
         if (moved)
         {
             UpdateScoreUI();
-            Invoke(nameof(AfterMove), 0.2f);
+            yield return new WaitForSeconds(0.2f);
+            AfterMove();
         }
         else
         {
@@ -251,19 +272,19 @@ public class GameManager : MonoBehaviour
         {
             for (int y = 0; y < gridSize; y++)
             {
-                // 1. ∫Û ƒ≠¿Ã «œ≥™∂Ûµµ ¿÷¿∏∏È øÚ¡˜¿œ ºˆ ¿÷¿Ω
+                // 1. ÔøΩÔøΩ ƒ≠ÔøΩÔøΩ ÔøΩœ≥ÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩ ÔøΩÔøΩÔøΩÔøΩ
                 if (tiles[x, y] == null) return true;
 
                 int currentValue = tiles[x, y].value;
 
-                // 2. ø¿∏•¬  ≈∏¿œ∞˙ ∫Ò±≥ (∞™¿Ã ∞∞∞≈≥™ ∫Û ƒ≠¿Ã∏È ¿Ãµø ∞°¥…)
+                // 2. ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ ≈∏ÔøΩœ∞ÔøΩ ÔøΩÔøΩ (ÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩ≈≥ÔøΩ ÔøΩÔøΩ ƒ≠ÔøΩÃ∏ÔøΩ ÔøΩÃµÔøΩ ÔøΩÔøΩÔøΩÔøΩ)
                 if (x < gridSize - 1)
                 {
                     if (tiles[x + 1, y] == null || tiles[x + 1, y].value == currentValue)
                         return true;
                 }
 
-                // 3. æ∆∑°¬  ≈∏¿œ∞˙ ∫Ò±≥ (∞™¿Ã ∞∞∞≈≥™ ∫Û ƒ≠¿Ã∏È ¿Ãµø ∞°¥…)
+                // 3. ÔøΩ∆∑ÔøΩÔøΩÔøΩ ≈∏ÔøΩœ∞ÔøΩ ÔøΩÔøΩ (ÔøΩÔøΩÔøΩÔøΩ ÔøΩÔøΩÔøΩ≈≥ÔøΩ ÔøΩÔøΩ ƒ≠ÔøΩÃ∏ÔøΩ ÔøΩÃµÔøΩ ÔøΩÔøΩÔøΩÔøΩ)
                 if (y < gridSize - 1)
                 {
                     if (tiles[x, y + 1] == null || tiles[x, y + 1].value == currentValue)
