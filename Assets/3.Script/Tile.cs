@@ -9,6 +9,7 @@ public class Tile : MonoBehaviour
     
     [SerializeField] private Image background;
     [SerializeField] private TextMeshProUGUI valueText;
+    [SerializeField] private ParticleSystem mergeParticle; // 파티클 시스템 추가
     
     private RectTransform rectTransform;
     private Vector2 targetPosition;
@@ -33,6 +34,12 @@ public class Tile : MonoBehaviour
     void Awake()
     {
         rectTransform = GetComponent<RectTransform>();
+        
+        // 파티클이 없으면 자동 생성
+        if (mergeParticle == null)
+        {
+            CreateParticleSystem();
+        }
     }
     
     void Update()
@@ -51,6 +58,71 @@ public class Tile : MonoBehaviour
                 isMoving = false;
             }
         }
+    }
+    
+    void CreateParticleSystem()
+    {
+        // 파티클 시스템 자동 생성
+        GameObject particleObj = new GameObject("MergeParticle");
+        particleObj.transform.SetParent(transform);
+        particleObj.transform.localPosition = Vector3.zero;
+        particleObj.transform.localScale = Vector3.one;
+        
+        mergeParticle = particleObj.AddComponent<ParticleSystem>();
+        
+        // 파티클 설정
+        var main = mergeParticle.main;
+        main.startLifetime = 0.5f;
+        main.startSpeed = 100f;
+        main.startSize = 10f;
+        main.startColor = new Color(1f, 0.8f, 0.2f, 1f); // 주황빛 노란색
+        main.maxParticles = 20;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.playOnAwake = false;
+        
+        // Emission 설정
+        var emission = mergeParticle.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0;
+        emission.SetBursts(new ParticleSystem.Burst[] {
+            new ParticleSystem.Burst(0f, 15, 20, 0.01f)
+        });
+        
+        // Shape 설정 (폭발 효과)
+        var shape = mergeParticle.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.1f;
+        
+        // Color over Lifetime (점점 투명해짐)
+        var colorOverLifetime = mergeParticle.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new GradientColorKey[] { 
+                new GradientColorKey(Color.white, 0.0f), 
+                new GradientColorKey(Color.yellow, 0.5f),
+                new GradientColorKey(Color.red, 1.0f) 
+            },
+            new GradientAlphaKey[] { 
+                new GradientAlphaKey(1.0f, 0.0f), 
+                new GradientAlphaKey(0.5f, 0.5f),
+                new GradientAlphaKey(0.0f, 1.0f) 
+            }
+        );
+        colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
+        
+        // Size over Lifetime (점점 작아짐)
+        var sizeOverLifetime = mergeParticle.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        AnimationCurve curve = new AnimationCurve();
+        curve.AddKey(0.0f, 1.0f);
+        curve.AddKey(1.0f, 0.0f);
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
+        
+        // Renderer 설정
+        var renderer = mergeParticle.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.material = new Material(Shader.Find("UI/Default"));
     }
     
     public void SetValue(int newValue)
@@ -81,6 +153,13 @@ public class Tile : MonoBehaviour
     public void MergeWith(Tile other)
     {
         SetValue(value * 2);
+        
+        // 파티클 이펙트 재생
+        if (mergeParticle != null)
+        {
+            mergeParticle.Play();
+        }
+        
         StartCoroutine(PopAnimation()); // ScaleAnimation에서 PopAnimation으로 변경
     }
     
@@ -137,5 +216,12 @@ public class Tile : MonoBehaviour
         background.color = tileColors[colorIndex];
         
         valueText.color = value <= 4 ? new Color(0.47f, 0.43f, 0.40f) : Color.white;
+        
+        // 파티클 색상도 타일 색상에 맞춤
+        if (mergeParticle != null)
+        {
+            var main = mergeParticle.main;
+            main.startColor = background.color;
+        }
     }
 }

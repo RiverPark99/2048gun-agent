@@ -18,12 +18,26 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private Button restartButton;
     
+    [Header("Gun System")]
+    [SerializeField] private Button gunButton;
+    [SerializeField] private TextMeshProUGUI bulletCountText;
+    [SerializeField] private TextMeshProUGUI turnsUntilBulletText;
+    [SerializeField] private Image gunButtonImage; // 총 버튼이 활성화되었는지 시각적으로 표시
+    [SerializeField] private RectTransform progressBarFill; // 진행도 바 Fill
+    
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
     private int score = 0;
     private int bestScore = 0;
     private float cellSize;
     private bool isProcessing = false;
+    
+    // 총알 시스템
+    private int bulletCount = 0;
+    private int mergeScore = 0; // 현재까지 획득한 점수 (합쳐진 타일 값의 합)
+    private int scoreUntilBullet = 0; // 다음 총알까지 필요한 점수
+    private bool isGunMode = false; // 총 모드 활성화 여부
+    private int currentBulletLevel = 0; // 현재 총알 레벨 (0부터 시작)
     
     void Start()
     {
@@ -33,20 +47,35 @@ public class GameManager : MonoBehaviour
         
         if (restartButton != null)
             restartButton.onClick.AddListener(RestartGame);
+        
+        if (gunButton != null)
+            gunButton.onClick.AddListener(ToggleGunMode);
+        
+        UpdateGunUI();
     }
     
     void Update()
     {
         if (isProcessing) return;
         
-        if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
-            Move(Vector2Int.down);
-        else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
-            Move(Vector2Int.up);
-        else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
-            Move(Vector2Int.left);
-        else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
-            Move(Vector2Int.right);
+        // 총 모드가 아닐 때만 키보드 입력 처리
+        if (!isGunMode)
+        {
+            if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
+                Move(Vector2Int.down);
+            else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
+                Move(Vector2Int.up);
+            else if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
+                Move(Vector2Int.left);
+            else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
+                Move(Vector2Int.right);
+        }
+        
+        // 총 모드일 때 타일 클릭 처리
+        if (isGunMode && Input.GetMouseButtonDown(0))
+        {
+            ShootTile();
+        }
     }
     
     void InitializeGrid()
@@ -71,7 +100,14 @@ public class GameManager : MonoBehaviour
     void StartGame()
     {
         score = 0;
+        bulletCount = 0;
+        mergeScore = 0;
+        currentBulletLevel = 0;
+        scoreUntilBullet = CalculateNextBulletScore(0); // 첫 총알은 64점
+        isGunMode = false;
+        
         UpdateScoreUI();
+        UpdateGunUI();
         SpawnTile();
         SpawnTile();
         if (gameOverPanel != null)
@@ -88,6 +124,146 @@ public class GameManager : MonoBehaviour
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
         StartGame();
+    }
+    
+    // n번째 총알을 얻기 위해 필요한 총 합성 점수
+    // 1번째 총알: 64점, 2번째: 128점, 3번째: 256점...
+    // 점수는 합쳐진 타일의 값으로 계산 (2+2=4 합성 시 4점 획득)
+    int CalculateNextBulletScore(int bulletNumber)
+    {
+        return 64 * (int)Mathf.Pow(2, bulletNumber);
+    }
+    
+    void CheckBulletReward()
+    {
+        while (mergeScore >= scoreUntilBullet)
+        {
+            bulletCount++;
+            currentBulletLevel++;
+            scoreUntilBullet = CalculateNextBulletScore(currentBulletLevel);
+            Debug.Log($"총알 획득! 현재 총알: {bulletCount}, 다음 총알까지: {scoreUntilBullet - mergeScore}점");
+        }
+        UpdateGunUI();
+    }
+    
+    void ToggleGunMode()
+    {
+        if (bulletCount <= 0) return;
+        
+        isGunMode = !isGunMode;
+        UpdateGunUI();
+    }
+    
+    void ShootTile()
+    {
+        if (bulletCount <= 0)
+        {
+            isGunMode = false;
+            UpdateGunUI();
+            return;
+        }
+        
+        // Canvas의 RenderMode에 따라 다르게 처리
+        Canvas canvas = gridContainer.GetComponentInParent<Canvas>();
+        Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main;
+        
+        // 마우스 위치를 월드 좌표로 변환
+        Vector2 localPoint;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            gridContainer, 
+            Input.mousePosition, 
+            cam, 
+            out localPoint
+        );
+        
+        // 클릭한 위치에 있는 타일 찾기
+        Tile targetTile = null;
+        float minDistance = cellSize / 2; // 타일 크기의 절반 이내
+        
+        Debug.Log($"Gun Mode Click - LocalPoint: {localPoint}, CellSize: {cellSize}");
+        
+        foreach (var tile in activeTiles)
+        {
+            if (tile == null) continue;
+            
+            RectTransform tileRect = tile.GetComponent<RectTransform>();
+            float distance = Vector2.Distance(localPoint, tileRect.anchoredPosition);
+            
+            Debug.Log($"Tile {tile.value} at {tileRect.anchoredPosition}, Distance: {distance}");
+            
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                targetTile = tile;
+            }
+        }
+        
+        if (targetTile != null)
+        {
+            bulletCount--;
+            
+            if (targetTile.value == 2)
+            {
+                // 2는 파괴
+                Vector2Int pos = targetTile.gridPosition;
+                tiles[pos.x, pos.y] = null;
+                activeTiles.Remove(targetTile);
+                Destroy(targetTile.gameObject);
+            }
+            else
+            {
+                // 2보다 크면 /2
+                targetTile.SetValue(targetTile.value / 2);
+            }
+            
+            isGunMode = false;
+            UpdateGunUI();
+            
+            // 게임 오버 체크
+            if (!CanMove())
+            {
+                GameOver();
+            }
+        }
+    }
+    
+    void UpdateGunUI()
+    {
+        if (bulletCountText != null)
+            bulletCountText.text = $"× {bulletCount}";
+        
+        if (turnsUntilBulletText != null)
+            turnsUntilBulletText.text = $"{mergeScore}/{scoreUntilBullet}";
+        
+        // 진행도 바 업데이트
+        if (progressBarFill != null)
+        {
+            float progress = Mathf.Clamp01((float)mergeScore / scoreUntilBullet);
+            progressBarFill.sizeDelta = new Vector2(progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress, progressBarFill.sizeDelta.y);
+        }
+        
+        // 총 버튼 시각적 표시
+        if (gunButtonImage != null)
+        {
+            if (isGunMode)
+            {
+                gunButtonImage.color = Color.yellow; // 활성화: 노란색
+            }
+            else if (bulletCount > 0)
+            {
+                gunButtonImage.color = Color.white; // 사용 가능: 흰색
+            }
+            else
+            {
+                gunButtonImage.color = Color.gray; // 사용 불가: 회색
+            }
+        }
+        
+        // 총 버튼 활성화/비활성화
+        if (gunButton != null)
+        {
+            gunButton.interactable = bulletCount > 0;
+        }
     }
     
     void SpawnTile()
@@ -131,18 +307,16 @@ public class GameManager : MonoBehaviour
 
         while (elapsed < duration)
         {
-            // �ٽ�: �� �����Ӹ��� obj�� ���� �����ϴ��� Ȯ��
             if (obj == null) yield break;
 
             elapsed += Time.deltaTime;
             float t = elapsed / duration;
 
-            // Ease out back ����
+            // Ease out back
             float s = 1.70158f;
             t = t - 1;
             float val = t * t * ((s + 1) * t + s) + 1;
 
-            // ���� ������ �ٽ� �ѹ� üũ (�� ������)
             if (obj != null)
                 obj.transform.localScale = Vector3.one * val;
 
@@ -207,7 +381,10 @@ public class GameManager : MonoBehaviour
                             score += tile.value * 2;
                             targetTile.MergeWith(tile);
                             merged[nextPos.x, nextPos.y] = true;
-                            anyMerged = true; // 합성이 일어났음을 표시
+                            anyMerged = true;
+                            
+                            // 합성 점수 증가 (합쳐진 타일의 값)
+                            mergeScore += tile.value * 2;
                             
                             activeTiles.Remove(tile);
                             Destroy(tile.gameObject);
@@ -238,13 +415,14 @@ public class GameManager : MonoBehaviour
             // 합성이 일어났다면 애니메이션을 보기 위해 잠시 대기
             if (anyMerged)
             {
-                yield return new WaitForSeconds(0.15f); // 각 콤보 단계마다 0.15초 대기
+                yield return new WaitForSeconds(0.15f);
             }
         }
         
         if (moved)
         {
             UpdateScoreUI();
+            CheckBulletReward(); // 총알 획득 체크
             yield return new WaitForSeconds(0.2f);
             AfterMove();
         }
@@ -272,19 +450,16 @@ public class GameManager : MonoBehaviour
         {
             for (int y = 0; y < gridSize; y++)
             {
-                // 1. �� ĭ�� �ϳ��� ������ ������ �� ����
                 if (tiles[x, y] == null) return true;
 
                 int currentValue = tiles[x, y].value;
 
-                // 2. ������ Ÿ�ϰ� �� (���� ���ų� �� ĭ�̸� �̵� ����)
                 if (x < gridSize - 1)
                 {
                     if (tiles[x + 1, y] == null || tiles[x + 1, y].value == currentValue)
                         return true;
                 }
 
-                // 3. �Ʒ��� Ÿ�ϰ� �� (���� ���ų� �� ĭ�̸� �̵� ����)
                 if (y < gridSize - 1)
                 {
                     if (tiles[x, y + 1] == null || tiles[x, y + 1].value == currentValue)
