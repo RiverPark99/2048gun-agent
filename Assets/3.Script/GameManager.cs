@@ -202,25 +202,17 @@ public class GameManager : MonoBehaviour
         {
             bulletCount--;
             
-            if (targetTile.value == 2)
-            {
-                // 2는 파괴
-                Vector2Int pos = targetTile.gridPosition;
-                tiles[pos.x, pos.y] = null;
-                activeTiles.Remove(targetTile);
-                Destroy(targetTile.gameObject);
-            }
-            else
-            {
-                // 2보다 크면 /2
-                targetTile.SetValue(targetTile.value / 2);
-            }
+            // 총으로 쏘면 블록 즉시 파괴
+            Vector2Int pos = targetTile.gridPosition;
+            tiles[pos.x, pos.y] = null;
+            activeTiles.Remove(targetTile);
+            Destroy(targetTile.gameObject);
             
             isGunMode = false;
             UpdateGunUI();
             
-            // 게임 오버 체크
-            if (!CanMove())
+            // 게임 오버 체크 (총알도 없고 움직일 수 없으면 게임 오버)
+            if (!CanMove() && bulletCount <= 0)
             {
                 GameOver();
             }
@@ -436,7 +428,8 @@ public class GameManager : MonoBehaviour
     {
         SpawnTile();
         
-        if (!CanMove())
+        // 게임 오버 체크 (총알도 없고 움직일 수 없으면 게임 오버)
+        if (!CanMove() && bulletCount <= 0)
         {
             GameOver();
         }
