@@ -25,6 +25,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Image gunButtonImage; // 총 버튼이 활성화되었는지 시각적으로 표시
     [SerializeField] private RectTransform progressBarFill; // 진행도 바 Fill
     
+    [Header("Boss System")]
+    [SerializeField] private BossManager bossManager;
+    
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
     private int score = 0;
@@ -126,12 +129,10 @@ public class GameManager : MonoBehaviour
         StartGame();
     }
     
-    // n번째 총알을 얻기 위해 필요한 총 합성 점수
-    // 1번째 총알: 64점, 2번째: 128점, 3번째: 256점...
-    // 점수는 합쳐진 타일의 값으로 계산 (2+2=4 합성 시 4점 획득)
+    // 총알 획득에 필요한 점수는 항상 64점 고정
     int CalculateNextBulletScore(int bulletNumber)
     {
-        return 64 * (int)Mathf.Pow(2, bulletNumber);
+        return 64;
     }
     
     void CheckBulletReward()
@@ -140,8 +141,9 @@ public class GameManager : MonoBehaviour
         {
             bulletCount++;
             currentBulletLevel++;
-            scoreUntilBullet = CalculateNextBulletScore(currentBulletLevel);
-            Debug.Log($"총알 획득! 현재 총알: {bulletCount}, 다음 총알까지: {scoreUntilBullet - mergeScore}점");
+            mergeScore -= scoreUntilBullet; // 총알 획득 후 진행도 초기화 (0/64로 리셋)
+            // scoreUntilBullet은 항상 64로 고정
+            Debug.Log($"총알 획득! 현재 총알: {bulletCount}, 진행도: {mergeScore}/{scoreUntilBullet}");
         }
         UpdateGunUI();
     }
@@ -201,12 +203,20 @@ public class GameManager : MonoBehaviour
         if (targetTile != null)
         {
             bulletCount--;
+            int damage = targetTile.value; // 타일 값이 데미지
             
             // 총으로 쏘면 블록 즉시 파괴
             Vector2Int pos = targetTile.gridPosition;
             tiles[pos.x, pos.y] = null;
             activeTiles.Remove(targetTile);
             Destroy(targetTile.gameObject);
+            
+            // 보스에게 데미지 전달
+            if (bossManager != null)
+            {
+                bossManager.TakeDamage(damage);
+                Debug.Log($"보스에게 {damage} 데미지!");
+            }
             
             isGunMode = false;
             UpdateGunUI();
