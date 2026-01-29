@@ -22,11 +22,19 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Button gunButton;
     [SerializeField] private TextMeshProUGUI bulletCountText;
     [SerializeField] private TextMeshProUGUI turnsUntilBulletText;
-    [SerializeField] private Image gunButtonImage; // 총 버튼이 활성화되었는지 시각적으로 표시
-    [SerializeField] private RectTransform progressBarFill; // 진행도 바 Fill
+    [SerializeField] private Image gunButtonImage;
+    [SerializeField] private RectTransform progressBarFill;
 
     [Header("Boss System")]
     [SerializeField] private BossManager bossManager;
+
+    [Header("Damage Text")]
+    [SerializeField] private GameObject damageTextPrefab; // 데미지 텍스트 프리팹
+    [SerializeField] private Transform damageTextParent; // Canvas
+
+    [Header("Turn System")]
+    [SerializeField] private TextMeshProUGUI turnCountText; // 턴 카운트 텍스트
+    [SerializeField] private int maxTurnsPerBoss = 30; // 보스당 최대 턴 수
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
@@ -34,12 +42,21 @@ public class GameManager : MonoBehaviour
     private int bestScore = 0;
     private float cellSize;
     private bool isProcessing = false;
+    private bool isBossTransitioning = false; // 보스 리스폰 중 플래그 추가
 
-    // --- 변경된 총알 시스템 변수 ---
+    // 총알 시스템
+    private const int MAX_BULLETS = 6; // 최대 6발
+    private const int MERGES_PER_BULLET = 32; // 32번 합치면 총알 1개
     private int bulletCount = 0;
-    private int mergeCount = 0; // 합성 점수 대신 합성 횟수로 변경
-    private int mergeCountUntilBullet = 10; // 10번 합성하면 총알 1개
-    private bool isGunMode = false; // 총 모드 활성화 여부
+    private int mergeCount = 0;
+    private bool isGunMode = false;
+
+    // 턴 시스템
+    private int currentTurn = 0;
+
+    // 크리티컬 시스템
+    private const float CRITICAL_CHANCE = 0.25f; // 25% 확률
+    private const int CRITICAL_MULTIPLIER = 4; // 4배
 
     void Start()
     {
@@ -58,9 +75,9 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (isProcessing) return;
+        // 보스 리스폰 중이거나 처리 중이면 인풋 무시
+        if (isProcessing || isBossTransitioning) return;
 
-        // 총 모드가 아닐 때만 키보드 입력 처리
         if (!isGunMode)
         {
             if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
@@ -73,7 +90,6 @@ public class GameManager : MonoBehaviour
                 Move(Vector2Int.right);
         }
 
-        // 총 모드일 때 타일 클릭 처리
         if (isGunMode && Input.GetMouseButtonDown(0))
         {
             ShootTile();
@@ -103,11 +119,14 @@ public class GameManager : MonoBehaviour
     {
         score = 0;
         bulletCount = 0;
-        mergeCount = 0; // 초기화
+        mergeCount = 0;
+        currentTurn = 0;
         isGunMode = false;
+        isBossTransitioning = false;
 
         UpdateScoreUI();
         UpdateGunUI();
+        UpdateTurnUI();
         SpawnTile();
         SpawnTile();
         if (gameOverPanel != null)
@@ -124,28 +143,41 @@ public class GameManager : MonoBehaviour
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
         StartGame();
-    }
 
-    // 총알 획득에 필요한 합성 횟수는 항상 10번 고정
-    int CalculateNextBulletMerges()
-    {
-        return 10;
+        // 보스도 리셋
+        if (bossManager != null)
+            bossManager.ResetBoss();
     }
 
     void CheckBulletReward()
     {
-        while (mergeCount >= mergeCountUntilBullet)
+        while (mergeCount >= MERGES_PER_BULLET && bulletCount < MAX_BULLETS)
         {
             bulletCount++;
-            mergeCount -= mergeCountUntilBullet; // 총알 획득 후 진행도 초기화 (0/10으로 리셋)
-            Debug.Log($"총알 획득! 현재 총알: {bulletCount}, 진행도: {mergeCount}/{mergeCountUntilBullet}");
+            mergeCount -= MERGES_PER_BULLET;
+            Debug.Log($"총알 획득! 현재 총알: {bulletCount}/{MAX_BULLETS}");
         }
+
+        // 최대치 초과 방지
+        if (bulletCount >= MAX_BULLETS)
+        {
+            bulletCount = MAX_BULLETS;
+            mergeCount = 0;
+        }
+
         UpdateGunUI();
     }
 
     void ToggleGunMode()
     {
         if (bulletCount <= 0) return;
+
+        // 타일이 1개 이하면 총 모드 비활성화
+        if (activeTiles.Count <= 1)
+        {
+            Debug.Log("타일이 1개 이하일 때는 총을 쓸 수 없습니다!");
+            return;
+        }
 
         isGunMode = !isGunMode;
         UpdateGunUI();
@@ -160,11 +192,18 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Canvas의 RenderMode에 따라 다르게 처리
+        // 타일이 1개 이하면 총을 쏠 수 없음
+        if (activeTiles.Count <= 1)
+        {
+            Debug.Log("타일이 1개 이하일 때는 총을 쓸 수 없습니다!");
+            isGunMode = false;
+            UpdateGunUI();
+            return;
+        }
+
         Canvas canvas = gridContainer.GetComponentInParent<Canvas>();
         Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main;
 
-        // 마우스 위치를 월드 좌표로 변환
         Vector2 localPoint;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             gridContainer,
@@ -173,9 +212,8 @@ public class GameManager : MonoBehaviour
             out localPoint
         );
 
-        // 클릭한 위치에 있는 타일 찾기
         Tile targetTile = null;
-        float minDistance = cellSize / 2; // 타일 크기의 절반 이내
+        float minDistance = cellSize / 2;
 
         foreach (var tile in activeTiles)
         {
@@ -193,26 +231,36 @@ public class GameManager : MonoBehaviour
 
         if (targetTile != null)
         {
-            bulletCount--;
-            int damage = targetTile.value; // 타일 값이 데미지
+            // 총알 개수에 따른 데미지 배수 계산
+            int[] damageMultipliers = { 0, 1, 2, 4, 6, 8, 16 }; // 인덱스 0은 사용 안함
+            int totalDamage = damageMultipliers[bulletCount];
 
-            // 총으로 쏘면 블록 즉시 파괴
+            // 타일 파괴
             Vector2Int pos = targetTile.gridPosition;
+            Vector3 tileWorldPos = targetTile.transform.position;
             tiles[pos.x, pos.y] = null;
             activeTiles.Remove(targetTile);
             Destroy(targetTile.gameObject);
 
-            // 보스에게 데미지 전달
+            // 보스에게 데미지
             if (bossManager != null)
             {
-                bossManager.TakeDamage(damage);
-                Debug.Log($"보스에게 {damage} 데미지!");
+                bossManager.TakeDamage(totalDamage);
+                ShowDamageText(totalDamage, false, true, tileWorldPos); // 노란색 총 데미지
             }
+
+            // 모든 총알 소진
+            bulletCount = 0;
+            currentTurn++; // 턴 증가
 
             isGunMode = false;
             UpdateGunUI();
+            UpdateTurnUI();
 
-            // 게임 오버 체크 (총알도 없고 움직일 수 없으면 게임 오버)
+            // 턴 제한 체크
+            CheckTurnLimit();
+
+            // 게임 오버 체크
             if (!CanMove() && bulletCount <= 0)
             {
                 GameOver();
@@ -226,30 +274,46 @@ public class GameManager : MonoBehaviour
             bulletCountText.text = $"× {bulletCount}";
 
         if (turnsUntilBulletText != null)
-            turnsUntilBulletText.text = $"{mergeCount}/{mergeCountUntilBullet}";
+            turnsUntilBulletText.text = $"{mergeCount}/{MERGES_PER_BULLET}";
 
-        // 진행도 바 업데이트
         if (progressBarFill != null)
         {
-            float progress = Mathf.Clamp01((float)mergeCount / mergeCountUntilBullet);
-            progressBarFill.sizeDelta = new Vector2(progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress, progressBarFill.sizeDelta.y);
+            float progress = Mathf.Clamp01((float)mergeCount / MERGES_PER_BULLET);
+            progressBarFill.sizeDelta = new Vector2(
+                progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress,
+                progressBarFill.sizeDelta.y
+            );
         }
 
-        // 총 버튼 시각적 표시 (요청하신 색상 적용)
         if (gunButtonImage != null)
         {
             if (isGunMode)
-                gunButtonImage.color = new Color(1f, 0.8f, 0.2f); // 노란색 (활성)
+                gunButtonImage.color = new Color(1f, 0.8f, 0.2f);
             else if (bulletCount > 0)
-                gunButtonImage.color = new Color(0.2f, 1f, 0.2f); // 초록색 (사용 가능)
+                gunButtonImage.color = new Color(0.2f, 1f, 0.2f);
             else
-                gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f); // 회색 (사용 불가)
+                gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f);
         }
 
-        // 총 버튼 활성화/비활성화
         if (gunButton != null)
         {
-            gunButton.interactable = bulletCount > 0;
+            // 타일이 1개 이하거나 총알이 없으면 버튼 비활성화
+            gunButton.interactable = bulletCount > 0 && activeTiles.Count > 1;
+        }
+    }
+
+    void UpdateTurnUI()
+    {
+        if (turnCountText != null)
+            turnCountText.text = $"Turn: {currentTurn}/{maxTurnsPerBoss}";
+    }
+
+    void CheckTurnLimit()
+    {
+        if (currentTurn >= maxTurnsPerBoss)
+        {
+            Debug.Log("턴 제한 초과! 게임 오버");
+            GameOver();
         }
     }
 
@@ -299,7 +363,6 @@ public class GameManager : MonoBehaviour
             elapsed += Time.deltaTime;
             float t = elapsed / duration;
 
-            // Ease out back
             float s = 1.70158f;
             t = t - 1;
             float val = t * t * ((s + 1) * t + s) + 1;
@@ -323,11 +386,8 @@ public class GameManager : MonoBehaviour
     {
         isProcessing = true;
         bool moved = false;
+        int totalMergedValue = 0; // 이번 턴에 합쳐진 값의 총합
 
-        // 콤보를 위한 변수
-        int consecutiveMerges = 0; // 이번 턴에서의 총 합성 횟수
-
-        // 콤보를 위해 합성이 일어날 때까지 반복
         bool anyMerged = true;
         while (anyMerged)
         {
@@ -367,14 +427,15 @@ public class GameManager : MonoBehaviour
                         else if (newTiles[nextPos.x, nextPos.y].value == tile.value && !merged[nextPos.x, nextPos.y])
                         {
                             Tile targetTile = newTiles[nextPos.x, nextPos.y];
-                            score += tile.value * 2;
+                            int mergedValue = tile.value * 2;
+                            score += mergedValue;
+                            totalMergedValue += mergedValue; // 합쳐진 값 누적
+
                             targetTile.MergeWith(tile);
                             merged[nextPos.x, nextPos.y] = true;
                             anyMerged = true;
 
-                            // --- 변경된 로직: 합성 횟수 및 콤보 체크 ---
-                            mergeCount += 1; // 합성 1회 = +1 포인트
-                            consecutiveMerges++; // 콤보 카운트 증가
+                            mergeCount++; // 합성 횟수 증가
 
                             activeTiles.Remove(tile);
                             Destroy(tile.gameObject);
@@ -410,15 +471,25 @@ public class GameManager : MonoBehaviour
 
         if (moved)
         {
-            // 한 턴에서 2번 이상 합쳐졌으면 콤보 보너스 +1
-            if (consecutiveMerges >= 2)
+            // 칼 데미지 적용 (합쳐진 값)
+            if (totalMergedValue > 0 && bossManager != null)
             {
-                mergeCount += 1;
-                Debug.Log($"콤보 보너스! +1 (총 {consecutiveMerges}회 합성)");
+                // 크리티컬 판정
+                bool isCritical = Random.value < CRITICAL_CHANCE;
+                int damage = isCritical ? totalMergedValue * CRITICAL_MULTIPLIER : totalMergedValue;
+
+                bossManager.TakeDamage(damage);
+                ShowDamageText(damage, isCritical, false, bossManager.transform.position);
             }
 
+            currentTurn++; // 턴 증가
             UpdateScoreUI();
-            CheckBulletReward(); // 총알 획득 체크
+            UpdateTurnUI();
+            CheckBulletReward();
+
+            // 턴 제한 체크
+            CheckTurnLimit();
+
             yield return new WaitForSeconds(0.2f);
             AfterMove();
         }
@@ -428,11 +499,65 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, Vector3 worldPosition)
+    {
+        if (damageTextPrefab == null || damageTextParent == null) return;
+
+        GameObject damageObj = Instantiate(damageTextPrefab, damageTextParent);
+        TextMeshProUGUI damageText = damageObj.GetComponent<TextMeshProUGUI>();
+
+        if (damageText != null)
+        {
+            if (isCritical)
+            {
+                damageText.text = "CRITICAL! -" + damage;
+                damageText.color = Color.red; // 빨강: 크리티컬
+            }
+            else if (isGunDamage)
+            {
+                damageText.text = "-" + damage;
+                damageText.color = Color.yellow; // 노랑: 총 데미지
+            }
+            else
+            {
+                damageText.text = "-" + damage;
+                damageText.color = Color.white; // 흰색: 칼 데미지
+            }
+
+            // 월드 좌표를 스크린 좌표로 변환
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPosition);
+            damageObj.transform.position = screenPos;
+
+            StartCoroutine(DamageTextAnimation(damageObj));
+        }
+    }
+
+    System.Collections.IEnumerator DamageTextAnimation(GameObject damageObj)
+    {
+        float duration = 1.5f;
+        float elapsed = 0f;
+        Vector3 startPos = damageObj.transform.position;
+        CanvasGroup canvasGroup = damageObj.GetComponent<CanvasGroup>();
+        if (canvasGroup == null) canvasGroup = damageObj.AddComponent<CanvasGroup>();
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = elapsed / duration;
+
+            damageObj.transform.position = startPos + Vector3.up * (50 * progress);
+            canvasGroup.alpha = 1 - progress;
+
+            yield return null;
+        }
+
+        Destroy(damageObj);
+    }
+
     void AfterMove()
     {
         SpawnTile();
 
-        // 게임 오버 체크 (총알도 없고 움직일 수 없으면 게임 오버)
         if (!CanMove() && bulletCount <= 0)
         {
             GameOver();
@@ -469,6 +594,7 @@ public class GameManager : MonoBehaviour
 
     void GameOver()
     {
+        Debug.Log("Game Over!");
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
     }
@@ -499,5 +625,19 @@ public class GameManager : MonoBehaviour
         float posY = startY - y * (cellSize + cellSpacing);
 
         return new Vector2(posX, posY);
+    }
+
+    // 보스 처치 시 턴 초기화
+    public void OnBossDefeated()
+    {
+        currentTurn = 0;
+        UpdateTurnUI();
+    }
+
+    // 보스 리스폰 상태 제어 (BossManager에서 호출)
+    public void SetBossTransitioning(bool transitioning)
+    {
+        isBossTransitioning = transitioning;
+        Debug.Log($"보스 리스폰 상태: {transitioning}");
     }
 }

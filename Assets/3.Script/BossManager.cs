@@ -21,12 +21,14 @@ public class BossManager : MonoBehaviour
 
     [Header("HP Bar Animation")]
     public float animationDuration = 0.3f;
-    public float bossSpawnDelay = 1.0f; // 보스 리젠 대기 시간
+    public float bossSpawnDelay = 1.0f;
 
-    private bool isTransitioning = false; // 보스 교체 중인지
+    private bool isTransitioning = false;
+    private GameManager gameManager;
 
     void Start()
     {
+        gameManager = FindObjectOfType<GameManager>();
         InitializeBoss();
     }
 
@@ -40,7 +42,7 @@ public class BossManager : MonoBehaviour
 
     public void TakeDamage(int damage)
     {
-        if (isTransitioning) return; // 보스 교체 중엔 데미지 무시
+        if (isTransitioning) return;
 
         currentHP -= damage;
 
@@ -68,25 +70,14 @@ public class BossManager : MonoBehaviour
             }
             else
             {
-                // 자연스럽게 줄어들기만
                 hpSlider.DOValue(targetValue, animationDuration)
                     .SetEase(Ease.OutCubic);
             }
-
-            Debug.Log($"HP Bar updated! value: {targetValue} ({currentHP}/{maxHP})");
-        }
-        else
-        {
-            Debug.LogWarning("hpSlider is NULL! Please connect it in Inspector.");
         }
 
         if (hpText != null)
         {
             hpText.text = "HP: " + currentHP + " / " + maxHP;
-        }
-        else
-        {
-            Debug.LogWarning("hpText is NULL! Please connect it in Inspector.");
         }
     }
 
@@ -94,20 +85,33 @@ public class BossManager : MonoBehaviour
     {
         isTransitioning = true;
 
+        // GameManager에 보스 리스폰 시작 알림
+        if (gameManager != null)
+        {
+            gameManager.OnBossDefeated(); // 턴 초기화
+            gameManager.SetBossTransitioning(true); // 인풋 막기
+        }
+
         Debug.Log("Boss " + bossLevel + " defeated!");
 
-        // 보스 처치 후 대기
+        // 보스 처치 후 대기 (이 동안 플레이어 인풋 불가)
         yield return new WaitForSeconds(bossSpawnDelay);
 
-        // 다음 보스 준비
         bossLevel++;
+        InitializeBoss();
 
-        // 보스 이미지 변경 여기서
-        // if (bossImageArea != null)
-        // {
-        //     bossImageArea.sprite = nextBossSprite;
-        // }
+        // GameManager에 보스 리스폰 완료 알림
+        if (gameManager != null)
+        {
+            gameManager.SetBossTransitioning(false); // 인풋 다시 허용
+        }
 
+        isTransitioning = false;
+    }
+
+    public void ResetBoss()
+    {
+        bossLevel = 1;
         InitializeBoss();
         isTransitioning = false;
     }
