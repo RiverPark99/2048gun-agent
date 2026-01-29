@@ -102,7 +102,7 @@ public class BossManager : MonoBehaviour
         // 다음 보스 준비
         bossLevel++;
 
-        // TODO: 여기서 보스 이미지 변경 (예시)
+        // 보스 이미지 변경 여기서
         // if (bossImageArea != null)
         // {
         //     bossImageArea.sprite = nextBossSprite;
