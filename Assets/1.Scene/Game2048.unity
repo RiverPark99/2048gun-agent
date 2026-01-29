@@ -773,11 +773,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BossManager
   bossImageArea: {fileID: 1561769434}
-  hpBarFill: {fileID: 1695587187}
+  hpSlider: {fileID: 529900504}
   hpText: {fileID: 653140202}
   maxHP: 256
   bossLevel: 1
   hpMultiplier: 1.1421356
+  animationDuration: 0.5
+  bounceStrength: 0.05
+  easeType: 9
 --- !u!1 &275353519
 GameObject:
   m_ObjectHideFlags: 0

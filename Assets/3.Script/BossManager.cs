@@ -1,62 +1,85 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using DG.Tweening;
+using System.Collections;
 
 public class BossManager : MonoBehaviour
 {
     [Header("Boss UI References")]
     public Image bossImageArea;
-    public Image hpBarFill;
+    public Slider hpSlider;
     public TextMeshProUGUI hpText;
-    
+
     [Header("Boss Stats")]
     public int maxHP = 256;
     private int currentHP;
-    
+
     [Header("Boss Progression")]
     public int bossLevel = 1;
-    public float hpMultiplier = 1.41421356f; // √2 (sqrt(2))
-    
+    public float hpMultiplier = 1.41421356f;
+
+    [Header("HP Bar Animation")]
+    public float animationDuration = 0.3f;
+    public float bossSpawnDelay = 1.0f; // 보스 리젠 대기 시간
+
+    private bool isTransitioning = false; // 보스 교체 중인지
+
     void Start()
     {
         InitializeBoss();
     }
-    
+
     void InitializeBoss()
     {
         maxHP = Mathf.RoundToInt(256 * Mathf.Pow(hpMultiplier, bossLevel - 1));
         currentHP = maxHP;
-        UpdateUI();
+        UpdateUI(true);
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}");
     }
-    
+
     public void TakeDamage(int damage)
     {
+        if (isTransitioning) return; // 보스 교체 중엔 데미지 무시
+
         currentHP -= damage;
-        
+
         if (currentHP <= 0)
         {
             currentHP = 0;
-            OnBossDefeated();
+            StartCoroutine(OnBossDefeatedCoroutine());
         }
-        
+
         Debug.Log($"Boss took {damage} damage! Current HP: {currentHP}/{maxHP}");
-        UpdateUI();
+        UpdateUI(false);
     }
-    
-    void UpdateUI()
+
+    void UpdateUI(bool instant = false)
     {
-        if (hpBarFill != null)
+        if (hpSlider != null)
         {
-            float fillPercentage = (float)currentHP / (float)maxHP;
-            hpBarFill.fillAmount = fillPercentage;
-            Debug.Log($"HP Bar updated! fillAmount: {fillPercentage} ({currentHP}/{maxHP})");
+            float targetValue = (float)currentHP / (float)maxHP;
+
+            hpSlider.DOKill();
+
+            if (instant)
+            {
+                hpSlider.value = targetValue;
+            }
+            else
+            {
+                // 자연스럽게 줄어들기만
+                hpSlider.DOValue(targetValue, animationDuration)
+                    .SetEase(Ease.OutCubic);
+            }
+
+            Debug.Log($"HP Bar updated! value: {targetValue} ({currentHP}/{maxHP})");
         }
         else
         {
-            Debug.LogWarning("hpBarFill is NULL! Please connect it in Inspector.");
+            Debug.LogWarning("hpSlider is NULL! Please connect it in Inspector.");
         }
-        
+
         if (hpText != null)
         {
             hpText.text = "HP: " + currentHP + " / " + maxHP;
@@ -66,14 +89,29 @@ public class BossManager : MonoBehaviour
             Debug.LogWarning("hpText is NULL! Please connect it in Inspector.");
         }
     }
-    
-    void OnBossDefeated()
+
+    IEnumerator OnBossDefeatedCoroutine()
     {
+        isTransitioning = true;
+
         Debug.Log("Boss " + bossLevel + " defeated!");
+
+        // 보스 처치 후 대기
+        yield return new WaitForSeconds(bossSpawnDelay);
+
+        // 다음 보스 준비
         bossLevel++;
+
+        // TODO: 여기서 보스 이미지 변경 (예시)
+        // if (bossImageArea != null)
+        // {
+        //     bossImageArea.sprite = nextBossSprite;
+        // }
+
         InitializeBoss();
+        isTransitioning = false;
     }
-    
+
     public int GetCurrentHP() { return currentHP; }
     public int GetMaxHP() { return maxHP; }
     public int GetBossLevel() { return bossLevel; }
