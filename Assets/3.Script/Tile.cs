@@ -73,8 +73,8 @@ public class Tile : MonoBehaviour
         // 파티클 설정
         var main = mergeParticle.main;
         main.startLifetime = 0.5f;
-        main.startSpeed = 100f;
-        main.startSize = 10f;
+        main.startSpeed = 200f;
+        main.startSize = 30f; // 10f → 30f (크기 3배)
         main.startColor = new Color(1f, 0.8f, 0.2f, 1f); // 주황빛 노란색
         main.maxParticles = 20;
         main.simulationSpace = ParticleSystemSimulationSpace.World;

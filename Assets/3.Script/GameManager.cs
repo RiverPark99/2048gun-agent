@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using DG.Tweening;
 
 public class GameManager : MonoBehaviour
 {
@@ -27,14 +28,23 @@ public class GameManager : MonoBehaviour
 
     [Header("Boss System")]
     [SerializeField] private BossManager bossManager;
+    [SerializeField] private TextMeshProUGUI hpText;
 
     [Header("Damage Text")]
-    [SerializeField] private GameObject damageTextPrefab; // 데미지 텍스트 프리팹
-    [SerializeField] private Transform damageTextParent; // Canvas
+    [SerializeField] private GameObject damageTextPrefab;
+    [SerializeField] private Transform damageTextParent;
 
-    [Header("Turn System")]
-    [SerializeField] private TextMeshProUGUI turnCountText; // 턴 카운트 텍스트
-    [SerializeField] private int maxTurnsPerBoss = 30; // 보스당 최대 턴 수
+    [Header("Heat System")]
+    [SerializeField] private TextMeshProUGUI heatText;
+    [SerializeField] private RectTransform heatBarFill;
+    [SerializeField] private Image heatBarImage;
+    private Slider heatSlider;
+    [SerializeField] private int maxHeat = 100;
+    [SerializeField] private int heatDecreasePerTurn = 5;
+    [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
+    [SerializeField] private int bossDefeatHeatRecover = 999;
+    [SerializeField] private int bossDefeatMaxHeatIncrease = 20;
+    [SerializeField] private int gunShotHeatRecover = 8;
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
@@ -42,25 +52,44 @@ public class GameManager : MonoBehaviour
     private int bestScore = 0;
     private float cellSize;
     private bool isProcessing = false;
-    private bool isBossTransitioning = false; // 보스 리스폰 중 플래그 추가
+    private bool isBossTransitioning = false;
+    private bool isGameOver = false;
 
-    // 총알 시스템
-    private const int MAX_BULLETS = 6; // 최대 6발
-    private const int MERGES_PER_BULLET = 32; // 32번 합치면 총알 1개
+    private const int MAX_BULLETS = 6;
+    private const int MERGES_PER_BULLET = 10;
     private int bulletCount = 0;
     private int mergeCount = 0;
     private bool isGunMode = false;
 
-    // 턴 시스템
-    private int currentTurn = 0;
+    private int currentHeat = 100;
 
-    // 크리티컬 시스템
-    private const float CRITICAL_CHANCE = 0.25f; // 25% 확률
-    private const int CRITICAL_MULTIPLIER = 4; // 4배
+    private const float CRITICAL_CHANCE = 0.25f;
+    private const int CRITICAL_MULTIPLIER = 4;
+
+    private const float COMBO_MULTIPLIER_BASE = 1.2f;
+    private int comboCount = 0;
+
+    private float[] gunDamageMultipliers = { 0f, 1f, 2f, 3f, 6f, 8f, 16f };
+
+    private ProjectileManager projectileManager;
+    private Vector3 lastMergedTilePosition;
 
     void Start()
     {
         bestScore = PlayerPrefs.GetInt("BestScore", 0);
+        projectileManager = FindAnyObjectByType<ProjectileManager>();
+
+        if (heatBarFill != null)
+        {
+            heatSlider = heatBarFill.GetComponentInParent<Slider>();
+            if (heatSlider != null)
+            {
+                heatSlider.minValue = 0;
+                heatSlider.maxValue = maxHeat;
+                heatSlider.value = maxHeat;
+            }
+        }
+
         InitializeGrid();
         StartGame();
 
@@ -75,8 +104,7 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // 보스 리스폰 중이거나 처리 중이면 인풋 무시
-        if (isProcessing || isBossTransitioning) return;
+        if (isGameOver || isProcessing || isBossTransitioning) return;
 
         if (!isGunMode)
         {
@@ -120,13 +148,14 @@ public class GameManager : MonoBehaviour
         score = 0;
         bulletCount = 0;
         mergeCount = 0;
-        currentTurn = 0;
+        currentHeat = maxHeat;
         isGunMode = false;
         isBossTransitioning = false;
+        isGameOver = false;
 
         UpdateScoreUI();
         UpdateGunUI();
-        UpdateTurnUI();
+        UpdateHeatUI();
         SpawnTile();
         SpawnTile();
         if (gameOverPanel != null)
@@ -135,6 +164,9 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        if (bossManager != null)
+            bossManager.ResetBoss();
+
         foreach (var tile in activeTiles)
         {
             if (tile != null)
@@ -142,11 +174,8 @@ public class GameManager : MonoBehaviour
         }
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
-        StartGame();
 
-        // 보스도 리셋
-        if (bossManager != null)
-            bossManager.ResetBoss();
+        StartGame();
     }
 
     void CheckBulletReward()
@@ -158,7 +187,6 @@ public class GameManager : MonoBehaviour
             Debug.Log($"총알 획득! 현재 총알: {bulletCount}/{MAX_BULLETS}");
         }
 
-        // 최대치 초과 방지
         if (bulletCount >= MAX_BULLETS)
         {
             bulletCount = MAX_BULLETS;
@@ -172,7 +200,6 @@ public class GameManager : MonoBehaviour
     {
         if (bulletCount <= 0) return;
 
-        // 타일이 1개 이하면 총 모드 비활성화
         if (activeTiles.Count <= 1)
         {
             Debug.Log("타일이 1개 이하일 때는 총을 쓸 수 없습니다!");
@@ -192,7 +219,6 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // 타일이 1개 이하면 총을 쏠 수 없음
         if (activeTiles.Count <= 1)
         {
             Debug.Log("타일이 1개 이하일 때는 총을 쓸 수 없습니다!");
@@ -231,36 +257,48 @@ public class GameManager : MonoBehaviour
 
         if (targetTile != null)
         {
-            // 총알 개수에 따른 데미지 배수 계산
-            int[] damageMultipliers = { 0, 1, 2, 4, 6, 8, 16 }; // 인덱스 0은 사용 안함
-            int totalDamage = damageMultipliers[bulletCount];
+            int tileValue = targetTile.value;
+            float damageMultiplier = gunDamageMultipliers[bulletCount];
+            int totalDamage = Mathf.RoundToInt(tileValue * damageMultiplier);
 
-            // 타일 파괴
+            Vector3 tilePos = targetTile.transform.position;
+
             Vector2Int pos = targetTile.gridPosition;
-            Vector3 tileWorldPos = targetTile.transform.position;
             tiles[pos.x, pos.y] = null;
             activeTiles.Remove(targetTile);
             Destroy(targetTile.gameObject);
 
-            // 보스에게 데미지
-            if (bossManager != null)
+            if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
             {
-                bossManager.TakeDamage(totalDamage);
-                ShowDamageText(totalDamage, false, true, tileWorldPos); // 노란색 총 데미지
+                Vector3 bossPos = bossManager.bossImageArea.transform.position;
+                int savedBulletCount = bulletCount;
+
+                Color bulletColor = Color.yellow;
+
+                projectileManager.FireBulletSalvo(tilePos, bossPos, savedBulletCount, totalDamage, bulletColor, (damage) =>
+                {
+                    bossManager.TakeDamage(damage);
+                });
+
+                ShowDamageText(totalDamage, false, true, 1.0f, tileValue, savedBulletCount);
+                CameraShake.Instance?.ShakeMedium();
+            }
+            else
+            {
+                if (bossManager != null)
+                {
+                    bossManager.TakeDamage(totalDamage);
+                    ShowDamageText(totalDamage, false, true, 1.0f, tileValue, bulletCount);
+                }
             }
 
-            // 모든 총알 소진
+            RecoverHeat(gunShotHeatRecover);
+
             bulletCount = 0;
-            currentTurn++; // 턴 증가
 
             isGunMode = false;
             UpdateGunUI();
-            UpdateTurnUI();
 
-            // 턴 제한 체크
-            CheckTurnLimit();
-
-            // 게임 오버 체크
             if (!CanMove() && bulletCount <= 0)
             {
                 GameOver();
@@ -297,24 +335,96 @@ public class GameManager : MonoBehaviour
 
         if (gunButton != null)
         {
-            // 타일이 1개 이하거나 총알이 없으면 버튼 비활성화
-            gunButton.interactable = bulletCount > 0 && activeTiles.Count > 1;
+            gunButton.interactable = !isGameOver && bulletCount > 0 && activeTiles.Count > 1;
         }
     }
 
-    void UpdateTurnUI()
+    void UpdateHeatUI()
     {
-        if (turnCountText != null)
-            turnCountText.text = $"Turn: {currentTurn}/{maxTurnsPerBoss}";
+        if (heatText != null)
+        {
+            heatText.text = $"Heat: {currentHeat}/{maxHeat}";
+
+            float heatPercent = (float)currentHeat / maxHeat;
+            Color heatColor;
+
+            // 초록색 → 흰푸른색 (얼어가는 느낌)
+            if (heatPercent <= 0.2f)
+            {
+                // 20% 이하: 흰푸른색 (얼어붙음)
+                heatColor = new Color(0.7f, 0.9f, 1f);
+            }
+            else if (heatPercent <= 0.4f)
+            {
+                // 40% 이하: 하늘색
+                heatColor = new Color(0.4f, 0.8f, 1f);
+            }
+            else if (heatPercent <= 0.6f)
+            {
+                // 60% 이하: 청록색
+                heatColor = new Color(0.3f, 1f, 0.8f);
+            }
+            else
+            {
+                // 60% 이상: 초록색
+                heatColor = new Color(0.3f, 1f, 0.3f);
+            }
+
+            heatText.color = heatColor;
+
+            if (heatBarImage != null)
+            {
+                heatBarImage.color = heatColor;
+            }
+        }
+
+        if (heatSlider != null)
+        {
+            heatSlider.maxValue = maxHeat;
+            heatSlider.value = currentHeat;
+        }
     }
 
-    void CheckTurnLimit()
+    void DecreaseHeat()
     {
-        if (currentTurn >= maxTurnsPerBoss)
+        int oldHeat = currentHeat;
+        currentHeat -= heatDecreasePerTurn;
+        if (currentHeat < 0)
+            currentHeat = 0;
+
+        int actualDecrease = oldHeat - currentHeat;
+
+        UpdateHeatUI();
+
+        if (actualDecrease != 0)
         {
-            Debug.Log("턴 제한 초과! 게임 오버");
+            ShowHeatChangeText(-actualDecrease);
+        }
+
+        if (currentHeat <= 0)
+        {
+            Debug.Log("히트 고갈! 게임 오버");
             GameOver();
         }
+    }
+
+    void RecoverHeat(int amount)
+    {
+        int oldHeat = currentHeat;
+        currentHeat += amount;
+        if (currentHeat > maxHeat)
+            currentHeat = maxHeat;
+
+        int actualRecovery = currentHeat - oldHeat;
+
+        UpdateHeatUI();
+
+        if (actualRecovery != 0)
+        {
+            ShowHeatChangeText(actualRecovery);
+        }
+
+        Debug.Log($"히트 회복: +{amount} (Current: {currentHeat}/{maxHeat})");
     }
 
     void SpawnTile()
@@ -386,7 +496,8 @@ public class GameManager : MonoBehaviour
     {
         isProcessing = true;
         bool moved = false;
-        int totalMergedValue = 0; // 이번 턴에 합쳐진 값의 총합
+        int totalMergedValue = 0;
+        int mergeCountThisTurn = 0;
 
         bool anyMerged = true;
         while (anyMerged)
@@ -429,13 +540,16 @@ public class GameManager : MonoBehaviour
                             Tile targetTile = newTiles[nextPos.x, nextPos.y];
                             int mergedValue = tile.value * 2;
                             score += mergedValue;
-                            totalMergedValue += mergedValue; // 합쳐진 값 누적
+                            totalMergedValue += mergedValue;
 
                             targetTile.MergeWith(tile);
                             merged[nextPos.x, nextPos.y] = true;
                             anyMerged = true;
 
-                            mergeCount++; // 합성 횟수 증가
+                            lastMergedTilePosition = targetTile.transform.position;
+
+                            mergeCount++;
+                            mergeCountThisTurn++;
 
                             activeTiles.Remove(tile);
                             Destroy(tile.gameObject);
@@ -471,24 +585,89 @@ public class GameManager : MonoBehaviour
 
         if (moved)
         {
-            // 칼 데미지 적용 (합쳐진 값)
+            float comboMultiplier = Mathf.Pow(COMBO_MULTIPLIER_BASE, mergeCountThisTurn);
+
+            comboCount = mergeCountThisTurn;
+
             if (totalMergedValue > 0 && bossManager != null)
             {
-                // 크리티컬 판정
                 bool isCritical = Random.value < CRITICAL_CHANCE;
-                int damage = isCritical ? totalMergedValue * CRITICAL_MULTIPLIER : totalMergedValue;
+                int baseDamage = Mathf.RoundToInt(totalMergedValue * comboMultiplier);
+                int damage = isCritical ? baseDamage * CRITICAL_MULTIPLIER : baseDamage;
 
-                bossManager.TakeDamage(damage);
-                ShowDamageText(damage, isCritical, false, bossManager.transform.position);
+                if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
+                {
+                    Vector3 bossPos = bossManager.bossImageArea.transform.position;
+
+                    Color laserColor = Color.white;
+                    if (isCritical)
+                    {
+                        laserColor = Color.red;
+                    }
+                    else if (comboMultiplier > 1.0f)
+                    {
+                        int comboNum = Mathf.RoundToInt(Mathf.Log(comboMultiplier) / Mathf.Log(1.2f));
+                        if (comboNum >= 5)
+                            laserColor = new Color(1f, 0f, 1f);
+                        else if (comboNum >= 4)
+                            laserColor = new Color(1f, 0.3f, 0f);
+                        else if (comboNum >= 3)
+                            laserColor = new Color(1f, 0.6f, 0f);
+                        else if (comboNum >= 2)
+                            laserColor = new Color(0.5f, 1f, 0.5f);
+                        else
+                            laserColor = new Color(1f, 1f, 0.5f);
+                    }
+
+                    projectileManager.FireKnifeProjectile(lastMergedTilePosition, bossPos, laserColor, () =>
+                    {
+                        bossManager.TakeDamage(damage);
+                        ShowDamageText(damage, isCritical, false, comboMultiplier);
+                        CameraShake.Instance?.ShakeLight();
+                    });
+                }
+                else
+                {
+                    bossManager.TakeDamage(damage);
+                    ShowDamageText(damage, isCritical, false, comboMultiplier);
+                }
             }
 
-            currentTurn++; // 턴 증가
+            // 히트 감소 및 회복 처리
+            int oldHeat = currentHeat;
+            currentHeat -= heatDecreasePerTurn;
+
+            if (mergeCountThisTurn > 0)
+            {
+                int comboIndex = Mathf.Min(mergeCountThisTurn, comboHeatRecover.Length - 1);
+                int heatRecovery = comboHeatRecover[comboIndex];
+                currentHeat += heatRecovery;
+            }
+
+            if (currentHeat > maxHeat)
+                currentHeat = maxHeat;
+            if (currentHeat < 0)
+                currentHeat = 0;
+
+            int netChange = currentHeat - oldHeat;
+
+            UpdateHeatUI();
+
+            // 순 증감량 표시
+            if (netChange != 0)
+            {
+                ShowHeatChangeText(netChange);
+            }
+
             UpdateScoreUI();
-            UpdateTurnUI();
             CheckBulletReward();
 
-            // 턴 제한 체크
-            CheckTurnLimit();
+            if (currentHeat <= 0)
+            {
+                Debug.Log("히트 고갈! 게임 오버");
+                GameOver();
+                yield break;
+            }
 
             yield return new WaitForSeconds(0.2f);
             AfterMove();
@@ -499,9 +678,9 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, Vector3 worldPosition)
+    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, float comboMultiplier = 1.0f, int baseTileValue = 0, int bulletCount = 0)
     {
-        if (damageTextPrefab == null || damageTextParent == null) return;
+        if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
 
         GameObject damageObj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI damageText = damageObj.GetComponent<TextMeshProUGUI>();
@@ -511,47 +690,123 @@ public class GameManager : MonoBehaviour
             if (isCritical)
             {
                 damageText.text = "CRITICAL! -" + damage;
-                damageText.color = Color.red; // 빨강: 크리티컬
+                damageText.color = Color.red;
+                damageText.fontSize = 50;
             }
             else if (isGunDamage)
             {
-                damageText.text = "-" + damage;
-                damageText.color = Color.yellow; // 노랑: 총 데미지
+                if (baseTileValue > 0 && bulletCount > 0)
+                {
+                    float multiplier = gunDamageMultipliers[bulletCount];
+                    damageText.text = $"({baseTileValue} x {multiplier:F0}) -{damage}";
+                }
+                else
+                {
+                    damageText.text = "-" + damage;
+                }
+                damageText.color = Color.yellow;
+                damageText.fontSize = 54;
             }
             else
             {
-                damageText.text = "-" + damage;
-                damageText.color = Color.white; // 흰색: 칼 데미지
+                if (comboMultiplier > 1.0f)
+                {
+                    int comboNum = Mathf.RoundToInt(Mathf.Log(comboMultiplier) / Mathf.Log(1.2f));
+                    damageText.text = $"{comboNum}x COMBO! (x{comboMultiplier:F2}) -{damage}";
+
+                    if (comboNum >= 5)
+                        damageText.color = new Color(1f, 0f, 1f);
+                    else if (comboNum >= 4)
+                        damageText.color = new Color(1f, 0.3f, 0f);
+                    else if (comboNum >= 3)
+                        damageText.color = new Color(1f, 0.6f, 0f);
+                    else if (comboNum >= 2)
+                        damageText.color = new Color(0.5f, 1f, 0.5f);
+                    else
+                        damageText.color = new Color(1f, 1f, 0.5f);
+
+                    damageText.fontSize = Mathf.Min(48 + comboNum * 2, 60);
+                }
+                else
+                {
+                    damageText.text = "-" + damage;
+                    damageText.color = Color.white;
+                    damageText.fontSize = 48;
+                }
             }
 
-            // 월드 좌표를 스크린 좌표로 변환
-            Vector3 screenPos = Camera.main.WorldToScreenPoint(worldPosition);
-            damageObj.transform.position = screenPos;
+            RectTransform damageRect = damageObj.GetComponent<RectTransform>();
+            RectTransform hpTextRect = hpText.GetComponent<RectTransform>();
 
-            StartCoroutine(DamageTextAnimation(damageObj));
+            damageRect.position = hpTextRect.position;
+
+            CanvasGroup canvasGroup = damageObj.GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = damageObj.AddComponent<CanvasGroup>();
+
+            Sequence damageSequence = DOTween.Sequence();
+
+            damageSequence.Append(damageRect.DOAnchorPosY(damageRect.anchoredPosition.y + 150f, 1.2f).SetEase(Ease.OutCubic));
+            damageSequence.Join(canvasGroup.DOFade(0f, 1.2f).SetEase(Ease.InCubic));
+
+            if (isCritical)
+            {
+                damageSequence.Insert(0f, damageRect.DOScale(1.3f, 0.2f).SetEase(Ease.OutBack));
+                damageSequence.Insert(0.2f, damageRect.DOScale(1f, 0.3f).SetEase(Ease.InOutQuad));
+            }
+            else
+            {
+                damageSequence.Insert(0f, damageRect.DOScale(1.2f, 0.15f).SetEase(Ease.OutQuad));
+                damageSequence.Insert(0.15f, damageRect.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
+            }
+
+            damageSequence.OnComplete(() => {
+                if (damageObj != null) Destroy(damageObj);
+            });
         }
     }
 
-    System.Collections.IEnumerator DamageTextAnimation(GameObject damageObj)
+    void ShowHeatChangeText(int change)
     {
-        float duration = 1.5f;
-        float elapsed = 0f;
-        Vector3 startPos = damageObj.transform.position;
-        CanvasGroup canvasGroup = damageObj.GetComponent<CanvasGroup>();
-        if (canvasGroup == null) canvasGroup = damageObj.AddComponent<CanvasGroup>();
+        if (damageTextPrefab == null || damageTextParent == null || heatText == null) return;
 
-        while (elapsed < duration)
+        GameObject heatChangeObj = Instantiate(damageTextPrefab, damageTextParent);
+        TextMeshProUGUI heatChangeText = heatChangeObj.GetComponent<TextMeshProUGUI>();
+
+        if (heatChangeText != null)
         {
-            elapsed += Time.deltaTime;
-            float progress = elapsed / duration;
+            if (change > 0)
+            {
+                heatChangeText.text = "+" + change;
+                heatChangeText.color = new Color(0.3f, 1f, 0.3f);
+            }
+            else
+            {
+                heatChangeText.text = change.ToString();
+                heatChangeText.color = new Color(0.5f, 0.8f, 1f); // 파란색 (얼어가는 느낌)
+            }
 
-            damageObj.transform.position = startPos + Vector3.up * (50 * progress);
-            canvasGroup.alpha = 1 - progress;
+            heatChangeText.fontSize = 40;
 
-            yield return null;
+            RectTransform heatChangeRect = heatChangeObj.GetComponent<RectTransform>();
+            RectTransform heatTextRect = heatText.GetComponent<RectTransform>();
+
+            heatChangeRect.position = heatTextRect.position;
+
+            CanvasGroup canvasGroup = heatChangeObj.GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = heatChangeObj.AddComponent<CanvasGroup>();
+
+            Sequence heatSequence = DOTween.Sequence();
+
+            heatSequence.Append(heatChangeRect.DOAnchorPosY(heatChangeRect.anchoredPosition.y + 100f, 1.0f).SetEase(Ease.OutCubic));
+            heatSequence.Join(canvasGroup.DOFade(0f, 1.0f).SetEase(Ease.InCubic));
+
+            heatSequence.Insert(0f, heatChangeRect.DOScale(1.2f, 0.15f).SetEase(Ease.OutQuad));
+            heatSequence.Insert(0.15f, heatChangeRect.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
+
+            heatSequence.OnComplete(() => {
+                if (heatChangeObj != null) Destroy(heatChangeObj);
+            });
         }
-
-        Destroy(damageObj);
     }
 
     void AfterMove()
@@ -594,7 +849,11 @@ public class GameManager : MonoBehaviour
 
     void GameOver()
     {
+        isGameOver = true;
         Debug.Log("Game Over!");
+
+        UpdateGunUI();
+
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
     }
@@ -627,14 +886,23 @@ public class GameManager : MonoBehaviour
         return new Vector2(posX, posY);
     }
 
-    // 보스 처치 시 턴 초기화
     public void OnBossDefeated()
     {
-        currentTurn = 0;
-        UpdateTurnUI();
+        maxHeat += bossDefeatMaxHeatIncrease;
+        Debug.Log($"보스 처치! 최대 히트 증가: {maxHeat}");
+
+        int oldHeat = currentHeat;
+        currentHeat = maxHeat;
+
+        UpdateHeatUI();
+
+        int recovery = currentHeat - oldHeat;
+        if (recovery > 0)
+        {
+            ShowHeatChangeText(recovery);
+        }
     }
 
-    // 보스 리스폰 상태 제어 (BossManager에서 호출)
     public void SetBossTransitioning(bool transitioning)
     {
         isBossTransitioning = transitioning;

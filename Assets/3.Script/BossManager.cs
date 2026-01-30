@@ -12,12 +12,13 @@ public class BossManager : MonoBehaviour
     public TextMeshProUGUI hpText;
 
     [Header("Boss Stats")]
-    public int maxHP = 256;
+    public int baseHP = 200; // 기본 HP (레벨 1)
+    public int hpIncreasePerLevel = 200; // 레벨당 HP 증가량 (150 → 200)
+    private int maxHP;
     private int currentHP;
 
     [Header("Boss Progression")]
     public int bossLevel = 1;
-    public float hpMultiplier = 1.41421356f;
 
     [Header("HP Bar Animation")]
     public float animationDuration = 0.3f;
@@ -28,13 +29,14 @@ public class BossManager : MonoBehaviour
 
     void Start()
     {
-        gameManager = FindObjectOfType<GameManager>();
+        gameManager = FindAnyObjectByType<GameManager>();
         InitializeBoss();
     }
 
     void InitializeBoss()
     {
-        maxHP = Mathf.RoundToInt(256 * Mathf.Pow(hpMultiplier, bossLevel - 1));
+        // 선형 증가: 200 + (level - 1) × 200
+        maxHP = baseHP + (bossLevel - 1) * hpIncreasePerLevel;
         currentHP = maxHP;
         UpdateUI(true);
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}");
