@@ -522,8 +522,8 @@ MonoBehaviour:
   heatDecreasePerTurn: 5
   comboHeatRecover: 0000000003000000060000000a0000000f00000014000000
   bossDefeatHeatRecover: 30
-  bossDefeatMaxHeatIncrease: 20
-  gunShotHeatRecover: 5
+  bossDefeatMaxHeatIncrease: 5
+  gunShotHeatRecover: 20
 --- !u!1 &166022315
 GameObject:
   m_ObjectHideFlags: 0
@@ -754,8 +754,8 @@ MonoBehaviour:
   bossImageArea: {fileID: 1561769434}
   hpSlider: {fileID: 529900504}
   hpText: {fileID: 653140202}
-  baseHP: 300
-  hpIncreasePerLevel: 200
+  baseHP: 400
+  hpIncreasePerLevel: 350
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1

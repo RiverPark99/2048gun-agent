@@ -43,7 +43,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int heatDecreasePerTurn = 5;
     [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
     [SerializeField] private int bossDefeatHeatRecover = 999;
-    [SerializeField] private int bossDefeatMaxHeatIncrease = 20;
+    [SerializeField] private int bossDefeatMaxHeatIncrease = 5;
     [SerializeField] private int gunShotHeatRecover = 8;
 
     private Tile[,] tiles;
