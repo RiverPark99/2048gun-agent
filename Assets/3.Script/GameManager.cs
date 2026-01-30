@@ -36,15 +36,15 @@ public class GameManager : MonoBehaviour
 
     [Header("Heat System")]
     [SerializeField] private TextMeshProUGUI heatText;
-    [SerializeField] private RectTransform heatBarFill;
+    [SerializeField] private Slider heatSlider;
     [SerializeField] private Image heatBarImage;
-    private Slider heatSlider;
     [SerializeField] private int maxHeat = 100;
     [SerializeField] private int heatDecreasePerTurn = 5;
     [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
     [SerializeField] private int bossDefeatHeatRecover = 999;
-    [SerializeField] private int bossDefeatMaxHeatIncrease = 5;
+    [SerializeField] private int bossDefeatMaxHeatIncrease = 20;
     [SerializeField] private int gunShotHeatRecover = 8;
+    [SerializeField] private float heatAnimationDuration = 0.3f;
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
@@ -79,15 +79,11 @@ public class GameManager : MonoBehaviour
         bestScore = PlayerPrefs.GetInt("BestScore", 0);
         projectileManager = FindAnyObjectByType<ProjectileManager>();
 
-        if (heatBarFill != null)
+        if (heatSlider != null)
         {
-            heatSlider = heatBarFill.GetComponentInParent<Slider>();
-            if (heatSlider != null)
-            {
-                heatSlider.minValue = 0;
-                heatSlider.maxValue = maxHeat;
-                heatSlider.value = maxHeat;
-            }
+            heatSlider.minValue = 0;
+            heatSlider.maxValue = maxHeat;
+            heatSlider.value = maxHeat;
         }
 
         InitializeGrid();
@@ -155,7 +151,7 @@ public class GameManager : MonoBehaviour
 
         UpdateScoreUI();
         UpdateGunUI();
-        UpdateHeatUI();
+        UpdateHeatUI(true);
         SpawnTile();
         SpawnTile();
         if (gameOverPanel != null)
@@ -164,6 +160,11 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        // 게임 오버 상태 즉시 해제
+        isGameOver = false;
+        isProcessing = false;
+        isBossTransitioning = false;
+        
         if (bossManager != null)
             bossManager.ResetBoss();
 
@@ -174,6 +175,8 @@ public class GameManager : MonoBehaviour
         }
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
+
+        maxHeat = 100;
 
         StartGame();
     }
@@ -339,7 +342,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void UpdateHeatUI()
+    void UpdateHeatUI(bool instant = false)
     {
         if (heatText != null)
         {
@@ -348,25 +351,20 @@ public class GameManager : MonoBehaviour
             float heatPercent = (float)currentHeat / maxHeat;
             Color heatColor;
 
-            // 초록색 → 흰푸른색 (얼어가는 느낌)
             if (heatPercent <= 0.2f)
             {
-                // 20% 이하: 흰푸른색 (얼어붙음)
                 heatColor = new Color(0.7f, 0.9f, 1f);
             }
             else if (heatPercent <= 0.4f)
             {
-                // 40% 이하: 하늘색
                 heatColor = new Color(0.4f, 0.8f, 1f);
             }
             else if (heatPercent <= 0.6f)
             {
-                // 60% 이하: 청록색
                 heatColor = new Color(0.3f, 1f, 0.8f);
             }
             else
             {
-                // 60% 이상: 초록색
                 heatColor = new Color(0.3f, 1f, 0.3f);
             }
 
@@ -381,7 +379,18 @@ public class GameManager : MonoBehaviour
         if (heatSlider != null)
         {
             heatSlider.maxValue = maxHeat;
-            heatSlider.value = currentHeat;
+
+            heatSlider.DOKill();
+
+            if (instant)
+            {
+                heatSlider.value = currentHeat;
+            }
+            else
+            {
+                heatSlider.DOValue(currentHeat, heatAnimationDuration)
+                    .SetEase(Ease.OutCubic);
+            }
         }
     }
 
@@ -633,7 +642,6 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            // 히트 감소 및 회복 처리
             int oldHeat = currentHeat;
             currentHeat -= heatDecreasePerTurn;
 
@@ -653,7 +661,6 @@ public class GameManager : MonoBehaviour
 
             UpdateHeatUI();
 
-            // 순 증감량 표시
             if (netChange != 0)
             {
                 ShowHeatChangeText(netChange);
@@ -782,7 +789,7 @@ public class GameManager : MonoBehaviour
             else
             {
                 heatChangeText.text = change.ToString();
-                heatChangeText.color = new Color(0.5f, 0.8f, 1f); // 파란색 (얼어가는 느낌)
+                heatChangeText.color = new Color(0.5f, 0.8f, 1f);
             }
 
             heatChangeText.fontSize = 40;
