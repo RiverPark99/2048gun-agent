@@ -106,7 +106,6 @@ public class Tile : MonoBehaviour
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.playOnAwake = false;
         main.loop = false; // 루프 끄기
-        main.loop = false; // 루프 끄기
 
         var emission = mergeParticle.emission;
         emission.enabled = true;
@@ -146,8 +145,8 @@ public class Tile : MonoBehaviour
         var renderer = mergeParticle.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
-        renderer.sortingOrder = 1000; // 매우 높게 설정
-        renderer.sortingLayerName = "UI"; // UI 레이어
+        renderer.sortingOrder = 5000; // 매우 높게 (이미지보다 위)
+        renderer.sortingLayerName = "UI";
     }
 
     public void SetValue(int newValue)
