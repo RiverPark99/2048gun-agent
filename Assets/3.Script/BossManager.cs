@@ -10,12 +10,23 @@ public class BossManager : MonoBehaviour
     public Image bossImageArea;
     public Slider hpSlider;
     public TextMeshProUGUI hpText;
+    public TextMeshProUGUI bossAttackInfoText;
 
     [Header("Boss Stats")]
-    public int baseHP = 200; // 기본 HP (레벨 1)
-    public int hpIncreasePerLevel = 200; // 레벨당 HP 증가량 (150 → 200)
+    public int baseHP = 200;
+    public int hpIncreasePerLevel = 200;
     private int maxHP;
     private int currentHP;
+
+    [Header("보스 공격 시스템")]
+    [SerializeField] private int baseTurnInterval = 8;
+    [SerializeField] private int minTurnInterval = 3;
+    [SerializeField] private int baseDamage = 10;
+    [SerializeField] private int maxDamage = 30;
+
+    private int currentTurnInterval;
+    private int currentTurnCount = 0;
+    private int currentBossDamage;
 
     [Header("Boss Progression")]
     public int bossLevel = 1;
@@ -35,11 +46,15 @@ public class BossManager : MonoBehaviour
 
     void InitializeBoss()
     {
-        // 선형 증가: 200 + (level - 1) × 200
         maxHP = baseHP + (bossLevel - 1) * hpIncreasePerLevel;
         currentHP = maxHP;
+
+        currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
+        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
+        currentTurnCount = currentTurnInterval;
+
         UpdateUI(true);
-        Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}");
+        Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, 공격 주기: {currentTurnInterval}턴, 공격력: {currentBossDamage}");
     }
 
     public void TakeDamage(int damage)
@@ -56,6 +71,49 @@ public class BossManager : MonoBehaviour
 
         Debug.Log($"Boss took {damage} damage! Current HP: {currentHP}/{maxHP}");
         UpdateUI(false);
+    }
+
+    public void OnPlayerTurn()
+    {
+        if (isTransitioning) return;
+
+        currentTurnCount--;
+        Debug.Log($"보스 공격까지 {currentTurnCount}턴 남음");
+
+        UpdateBossAttackUI();
+
+        if (currentTurnCount <= 0)
+        {
+            AttackPlayer();
+            currentTurnCount = currentTurnInterval;
+            UpdateBossAttackUI();
+        }
+    }
+
+    private void AttackPlayer()
+    {
+        if (gameManager != null)
+        {
+            Debug.Log($"⚠️ 보스 공격! {currentBossDamage} 데미지!");
+
+            // 보스 이미지 펄싱 효과
+            if (bossImageArea != null)
+            {
+                bossImageArea.transform.DOPunchScale(Vector3.one * 0.3f, 0.5f, 10, 1f);
+            }
+
+            gameManager.TakeBossAttack(currentBossDamage);
+
+            // 강한 화면 흔들림
+            CameraShake.Instance?.ShakeMedium();
+        }
+    }
+
+    public void ResetTurnCount()
+    {
+        currentTurnCount = currentTurnInterval;
+        Debug.Log($"💥 패링! 보스 공격 턴 초기화! ({currentTurnInterval}턴)");
+        UpdateBossAttackUI();
     }
 
     void UpdateUI(bool instant = false)
@@ -81,31 +139,54 @@ public class BossManager : MonoBehaviour
         {
             hpText.text = "HP: " + currentHP + " / " + maxHP;
         }
+
+        UpdateBossAttackUI();
+    }
+
+    void UpdateBossAttackUI()
+    {
+        if (bossAttackInfoText != null)
+        {
+            Color textColor = Color.white;
+
+            if (currentTurnCount <= 1)
+            {
+                textColor = new Color(1f, 0.2f, 0.2f);
+            }
+            else if (currentTurnCount <= 3)
+            {
+                textColor = new Color(1f, 0.8f, 0.2f);
+            }
+            else
+            {
+                textColor = new Color(0.7f, 0.7f, 0.7f);
+            }
+
+            bossAttackInfoText.color = textColor;
+            bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: {currentTurnCount}";
+        }
     }
 
     IEnumerator OnBossDefeatedCoroutine()
     {
         isTransitioning = true;
 
-        // GameManager에 보스 리스폰 시작 알림
         if (gameManager != null)
         {
-            gameManager.OnBossDefeated(); // 턴 초기화
-            gameManager.SetBossTransitioning(true); // 인풋 막기
+            gameManager.OnBossDefeated();
+            gameManager.SetBossTransitioning(true);
         }
 
         Debug.Log("Boss " + bossLevel + " defeated!");
 
-        // 보스 처치 후 대기 (이 동안 플레이어 인풋 불가)
         yield return new WaitForSeconds(bossSpawnDelay);
 
         bossLevel++;
         InitializeBoss();
 
-        // GameManager에 보스 리스폰 완료 알림
         if (gameManager != null)
         {
-            gameManager.SetBossTransitioning(false); // 인풋 다시 허용
+            gameManager.SetBossTransitioning(false);
         }
 
         isTransitioning = false;
@@ -121,4 +202,7 @@ public class BossManager : MonoBehaviour
     public int GetCurrentHP() { return currentHP; }
     public int GetMaxHP() { return maxHP; }
     public int GetBossLevel() { return bossLevel; }
+    public int GetTurnCount() { return currentTurnCount; }
+    public int GetTurnInterval() { return currentTurnInterval; }
+    public int GetBossDamage() { return currentBossDamage; }
 }

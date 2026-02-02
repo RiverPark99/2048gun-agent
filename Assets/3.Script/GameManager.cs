@@ -41,10 +41,17 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int maxHeat = 100;
     [SerializeField] private int heatDecreasePerTurn = 5;
     [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
-    [SerializeField] private int bossDefeatHeatRecover = 999;
+    //[SerializeField] private int bossDefeatHeatRecover = 999;
     [SerializeField] private int bossDefeatMaxHeatIncrease = 20;
     [SerializeField] private int gunShotHeatRecover = 8;
     [SerializeField] private float heatAnimationDuration = 0.3f;
+
+    [Header("색상 조합 보너스")]
+    [SerializeField] private int blackMergeDamageMultiplier = 4;
+    [SerializeField] private int pinkMergeHealMultiplier = 4;
+
+    [Header("Low Health Effect")]
+    [SerializeField] private LowHealthVignette lowHealthVignette;
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
@@ -57,9 +64,12 @@ public class GameManager : MonoBehaviour
 
     private const int MAX_BULLETS = 6;
     private const int MERGES_PER_BULLET = 10;
+    private const int MERGES_PER_BULLET_MIX = 30;
+    private const int MAX_BULLETS_FEVER = 2;
     private int bulletCount = 0;
     private int mergeCount = 0;
     private bool isGunMode = false;
+    private bool isFeverMode = false;
 
     private int currentHeat = 100;
 
@@ -148,6 +158,7 @@ public class GameManager : MonoBehaviour
         isGunMode = false;
         isBossTransitioning = false;
         isGameOver = false;
+        isFeverMode = false;
 
         UpdateScoreUI();
         UpdateGunUI();
@@ -160,11 +171,10 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
-        // 게임 오버 상태 즉시 해제
         isGameOver = false;
         isProcessing = false;
         isBossTransitioning = false;
-        
+
         if (bossManager != null)
             bossManager.ResetBoss();
 
@@ -183,17 +193,33 @@ public class GameManager : MonoBehaviour
 
     void CheckBulletReward()
     {
-        while (mergeCount >= MERGES_PER_BULLET && bulletCount < MAX_BULLETS)
+        int oldBulletCount = bulletCount;
+
+        if (mergeCount >= MERGES_PER_BULLET_MIX)
         {
-            bulletCount++;
-            mergeCount -= MERGES_PER_BULLET;
-            Debug.Log($"총알 획득! 현재 총알: {bulletCount}/{MAX_BULLETS}");
+            int bulletsToAdd = mergeCount / MERGES_PER_BULLET_MIX;
+            mergeCount %= MERGES_PER_BULLET_MIX;
+
+            bulletCount += bulletsToAdd;
+
+            if (bulletCount >= MAX_BULLETS_FEVER)
+            {
+                bulletCount = MAX_BULLETS_FEVER;
+                mergeCount = 0;
+
+                if (!isFeverMode)
+                {
+                    isFeverMode = true;
+                    Debug.Log("🔥🔥🔥 FEVER MODE! 🔥🔥🔥");
+                }
+            }
+
+            Debug.Log($"총알 획득! 현재 총알: {bulletCount}/{MAX_BULLETS_FEVER} (FEVER MODE)");
         }
 
-        if (bulletCount >= MAX_BULLETS)
+        if (bulletCount > oldBulletCount && bossManager != null)
         {
-            bulletCount = MAX_BULLETS;
-            mergeCount = 0;
+            bossManager.ResetTurnCount();
         }
 
         UpdateGunUI();
@@ -261,8 +287,23 @@ public class GameManager : MonoBehaviour
         if (targetTile != null)
         {
             int tileValue = targetTile.value;
+            TileColor tileColor = targetTile.tileColor;
             float damageMultiplier = gunDamageMultipliers[bulletCount];
             int totalDamage = Mathf.RoundToInt(tileValue * damageMultiplier);
+
+            int colorBonus = 0;
+            if (tileColor == TileColor.Black)
+            {
+                colorBonus = totalDamage;
+                totalDamage += colorBonus;
+                Debug.Log($"🔫⚫ 검정 블록 파괴! +{colorBonus} 추가 데미지!");
+            }
+            else if (tileColor == TileColor.Pink)
+            {
+                int baseHeal = gunShotHeatRecover;
+                colorBonus = baseHeal;
+                Debug.Log($"🔫💖 핑크 블록 파괴! +{colorBonus} 추가 회복!");
+            }
 
             Vector3 tilePos = targetTile.transform.position;
 
@@ -297,7 +338,18 @@ public class GameManager : MonoBehaviour
 
             RecoverHeat(gunShotHeatRecover);
 
+            if (tileColor == TileColor.Pink && colorBonus > 0)
+            {
+                RecoverHeat(colorBonus);
+            }
+
             bulletCount = 0;
+
+            if (isFeverMode)
+            {
+                isFeverMode = false;
+                Debug.Log("피버 모드 종료!");
+            }
 
             isGunMode = false;
             UpdateGunUI();
@@ -312,14 +364,14 @@ public class GameManager : MonoBehaviour
     void UpdateGunUI()
     {
         if (bulletCountText != null)
-            bulletCountText.text = $"× {bulletCount}";
+            bulletCountText.text = isFeverMode ? $"🔥 {bulletCount}" : $"× {bulletCount}";
 
         if (turnsUntilBulletText != null)
-            turnsUntilBulletText.text = $"{mergeCount}/{MERGES_PER_BULLET}";
+            turnsUntilBulletText.text = $"{mergeCount}/{MERGES_PER_BULLET_MIX}";
 
         if (progressBarFill != null)
         {
-            float progress = Mathf.Clamp01((float)mergeCount / MERGES_PER_BULLET);
+            float progress = Mathf.Clamp01((float)mergeCount / MERGES_PER_BULLET_MIX);
             progressBarFill.sizeDelta = new Vector2(
                 progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress,
                 progressBarFill.sizeDelta.y
@@ -328,7 +380,9 @@ public class GameManager : MonoBehaviour
 
         if (gunButtonImage != null)
         {
-            if (isGunMode)
+            if (isFeverMode)
+                gunButtonImage.color = new Color(1f, 0.3f, 0f);
+            else if (isGunMode)
                 gunButtonImage.color = new Color(1f, 0.8f, 0.2f);
             else if (bulletCount > 0)
                 gunButtonImage.color = new Color(0.2f, 1f, 0.2f);
@@ -390,6 +444,18 @@ public class GameManager : MonoBehaviour
             {
                 heatSlider.DOValue(currentHeat, heatAnimationDuration)
                     .SetEase(Ease.OutCubic);
+            }
+        }
+
+        if (lowHealthVignette != null)
+        {
+            if (instant)
+            {
+                lowHealthVignette.UpdateVignetteInstant(currentHeat, maxHeat);
+            }
+            else
+            {
+                lowHealthVignette.UpdateVignette(currentHeat, maxHeat);
             }
         }
     }
@@ -460,6 +526,10 @@ public class GameManager : MonoBehaviour
 
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
+
+        TileColor randomColor = Random.value < 0.5f ? TileColor.Black : TileColor.Pink;
+        tile.SetColor(randomColor);
+
         tile.SetGridPosition(pos);
         tile.MoveTo(GetCellPosition(pos.x, pos.y), false);
 
@@ -508,6 +578,9 @@ public class GameManager : MonoBehaviour
         int totalMergedValue = 0;
         int mergeCountThisTurn = 0;
 
+        int blackMergeCount = 0;
+        int pinkMergeCount = 0;
+
         bool anyMerged = true;
         while (anyMerged)
         {
@@ -551,13 +624,69 @@ public class GameManager : MonoBehaviour
                             score += mergedValue;
                             totalMergedValue += mergedValue;
 
-                            targetTile.MergeWith(tile);
+                            TileColor color1 = tile.tileColor;
+                            TileColor color2 = targetTile.tileColor;
+
+                            bool isColorBonus = false;
+                            bool isMixMerge = false;
+
+                            if (color1 == TileColor.Black && color2 == TileColor.Black)
+                            {
+                                blackMergeCount++;
+
+                                int bonusDamage = mergedValue * (blackMergeDamageMultiplier - 1);
+                                totalMergedValue += bonusDamage;
+
+                                Debug.Log($"⚫ BLACK MERGE! +{bonusDamage} 추가 데미지 (합체값: {mergedValue})");
+                                targetTile.PlayBlackMergeEffect();
+                                isColorBonus = true;
+                            }
+                            else if (color1 == TileColor.Pink && color2 == TileColor.Pink)
+                            {
+                                pinkMergeCount++;
+
+                                int baseHeal = Mathf.RoundToInt(mergedValue * 0.1f);
+                                int bonusHeal = baseHeal * (pinkMergeHealMultiplier - 1);
+
+                                currentHeat += bonusHeal;
+                                if (currentHeat > maxHeat) currentHeat = maxHeat;
+
+                                Debug.Log($"💖 PINK MERGE! +{bonusHeal} Heat 즉시 회복 (합체값: {mergedValue})");
+                                targetTile.PlayPinkMergeEffect();
+                                isColorBonus = true;
+                            }
+                            else
+                            {
+                                isMixMerge = true;
+                                score += mergedValue;
+                                Debug.Log($"🌈 MIX MERGE! 스코어 2배! +{mergedValue}");
+                            }
+
+                            if (isColorBonus)
+                            {
+                                targetTile.MergeWithoutParticle();
+                            }
+                            else
+                            {
+                                targetTile.MergeWith(tile);
+                            }
+
+                            TileColor newColor = Random.value < 0.5f ? TileColor.Black : TileColor.Pink;
+                            targetTile.SetColor(newColor);
+
                             merged[nextPos.x, nextPos.y] = true;
                             anyMerged = true;
 
                             lastMergedTilePosition = targetTile.transform.position;
 
-                            mergeCount++;
+                            if (isMixMerge)
+                            {
+                                mergeCount += 3;
+                            }
+                            else
+                            {
+                                mergeCount += 1;
+                            }
                             mergeCountThisTurn++;
 
                             activeTiles.Remove(tile);
@@ -602,6 +731,7 @@ public class GameManager : MonoBehaviour
             {
                 bool isCritical = Random.value < CRITICAL_CHANCE;
                 int baseDamage = Mathf.RoundToInt(totalMergedValue * comboMultiplier);
+
                 int damage = isCritical ? baseDamage * CRITICAL_MULTIPLIER : baseDamage;
 
                 if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
@@ -719,7 +849,7 @@ public class GameManager : MonoBehaviour
                 if (comboMultiplier > 1.0f)
                 {
                     int comboNum = Mathf.RoundToInt(Mathf.Log(comboMultiplier) / Mathf.Log(1.2f));
-                    damageText.text = $"{comboNum}x COMBO! (x{comboMultiplier:F2}) -{damage}";
+                    damageText.text = $"{comboNum}x COMBO!\n(x{comboMultiplier:F2})\n-{damage}";
 
                     if (comboNum >= 5)
                         damageText.color = new Color(1f, 0f, 1f);
@@ -820,6 +950,11 @@ public class GameManager : MonoBehaviour
     {
         SpawnTile();
 
+        if (bossManager != null)
+        {
+            bossManager.OnPlayerTurn();
+        }
+
         if (!CanMove() && bulletCount <= 0)
         {
             GameOver();
@@ -914,5 +1049,30 @@ public class GameManager : MonoBehaviour
     {
         isBossTransitioning = transitioning;
         Debug.Log($"보스 리스폰 상태: {transitioning}");
+    }
+
+    public void TakeBossAttack(int damage)
+    {
+        int oldHeat = currentHeat;
+        currentHeat -= damage;
+
+        if (currentHeat < 0)
+            currentHeat = 0;
+
+        UpdateHeatUI();
+
+        int actualDamage = oldHeat - currentHeat;
+        if (actualDamage > 0)
+        {
+            ShowHeatChangeText(-actualDamage);
+        }
+
+        Debug.Log($"⚠️ 보스 공격 피해: -{damage} Heat (Current: {currentHeat}/{maxHeat})");
+
+        if (currentHeat <= 0)
+        {
+            Debug.Log("히트 고갈! 게임 오버");
+            GameOver();
+        }
     }
 }
