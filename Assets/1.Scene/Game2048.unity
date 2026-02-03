@@ -521,7 +521,7 @@ MonoBehaviour:
   heatSlider: {fileID: 1922981446}
   heatBarImage: {fileID: 853118026}
   maxHeat: 100
-  heatDecreasePerTurn: 5
+  heatDecreasePerTurn: 0
   comboHeatRecover: 0000000003000000060000000a0000000f0000001e000000
   bossDefeatHeatRecover: 999
   bossDefeatMaxHeatIncrease: 5
@@ -764,10 +764,10 @@ MonoBehaviour:
   bossAttackInfoText: {fileID: 275876072}
   baseHP: 250
   hpIncreasePerLevel: 250
-  baseTurnInterval: 8
+  baseTurnInterval: 5
   minTurnInterval: 3
-  baseDamage: 10
-  maxDamage: 30
+  baseDamage: 30
+  maxDamage: 70
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1
@@ -3529,7 +3529,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.4, y: 0}
   m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: 12.500006, y: 0}
+  m_AnchoredPosition: {x: 12.500008, y: 0}
   m_SizeDelta: {x: -104.999985, y: 8}
   m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &1582436688
@@ -3849,7 +3849,7 @@ Canvas:
   m_Enabled: 1
   serializedVersion: 3
   m_RenderMode: 1
-  m_Camera: {fileID: 0}
+  m_Camera: {fileID: 1156312691}
   m_PlaneDistance: 100
   m_PixelPerfect: 0
   m_ReceivesEvents: 1
