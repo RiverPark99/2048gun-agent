@@ -35,6 +35,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Button gunButton;
     [SerializeField] private TextMeshProUGUI bulletCountText; // "Fever!" 또는 "Lv.X"
     [SerializeField] private TextMeshProUGUI turnsUntilBulletText;
+    [SerializeField] private TextMeshProUGUI attackPowerText;
+    [SerializeField] private TextMeshProUGUI expectedDamageText;
+
     [SerializeField] private Image gunButtonImage;
     [SerializeField] private RectTransform progressBarFill;
     [SerializeField] private GameObject bulletCountDisplay; // 총알 갯수 UI 오브젝트 (피버 시 숨김)
@@ -76,15 +79,23 @@ public class GameManager : MonoBehaviour
     private bool isBossTransitioning = false;
     private bool isGameOver = false;
 
-    // 피버 시스템 (15 머지 → 피버 → 10 머지로 해제)
-    private const int MERGES_FOR_FEVER = 15;
-    private int bulletCount = 0;
-    private int mergeCount = 0; // 전체 머지 카운트 (콤보용)
-    private int mixMergeCount = 0; // 믹스 머지 카운트만 (장전용)
-    private int feverMergeCount = 0; // 피버 중 머지 카운트
-    private bool isGunMode = false;
+    // Gun & Fever System v4.0 (0 → 20 → 40)
+    private const int GAUGE_FOR_BULLET = 20;
+    private const int GAUGE_FOR_FEVER = 40;
+    private const int FEVER_BASE_TURNS = 10;
+    private const int MAX_FEVER_TURNS = 10;
+
+    private int mergeGauge = 0;
+    private bool hasBullet = false;
     private bool isFeverMode = false;
-    private bool hasFeverShot = false;
+    private int feverTurnsRemaining = 0;
+    private int permanentAttackPower = 0;
+    private bool isGunMode = false;
+
+    // DOTween용 이전 값 저장
+    private int lastPermanentAttackPower = 0;
+    private int lastMergeGauge = 0;
+    private int lastFeverTurnsRemaining = 0;
 
     private int currentHeat = 100;
 
@@ -94,9 +105,6 @@ public class GameManager : MonoBehaviour
     private const float COMBO_MULTIPLIER_BASE = 1.2f;
     private int comboCount = 0;
 
-    // 총 레벨 시스템 (총 쏠 때마다 레벨업, 데미지 2배씩)
-    private int gunLevel = 1;
-    private int gunShotCount = 0;
 
     private ProjectileManager projectileManager;
     private Vector3 lastMergedTilePosition;
@@ -169,18 +177,15 @@ public class GameManager : MonoBehaviour
     void StartGame()
     {
         score = 0;
-        bulletCount = 0;
-        mergeCount = 0;
-        mixMergeCount = 0;
-        feverMergeCount = 0;
+        mergeGauge = 0;          // 변경
+        hasBullet = false;        // 변경
+        isFeverMode = false;      // 변경
+        feverTurnsRemaining = 0;  // 추가
+        permanentAttackPower = 0; // 추가
         currentHeat = maxHeat;
         isGunMode = false;
         isBossTransitioning = false;
         isGameOver = false;
-        isFeverMode = false;
-        hasFeverShot = false;
-        gunLevel = 1;
-        gunShotCount = 0;
 
         UpdateScoreUI();
         UpdateGunUI();
@@ -190,6 +195,7 @@ public class GameManager : MonoBehaviour
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
     }
+
 
     public void RestartGame()
     {
@@ -209,44 +215,46 @@ public class GameManager : MonoBehaviour
         tiles = new Tile[gridSize, gridSize];
 
         maxHeat = 100;
+        permanentAttackPower = 0; // ← 추가! (영구 공격력 초기화)
 
         StartGame();
+
     }
 
-    void CheckFeverMode()
+    void CheckGaugeAndFever()
     {
         if (isFeverMode)
         {
-            // 피버 중: 10 머지로 피버 해제
-            if (feverMergeCount >= 10)
+            if (feverTurnsRemaining <= 0)
             {
+                // 피버 자연 종료: 0으로 초기화
                 isFeverMode = false;
-                hasFeverShot = false;
-                feverMergeCount = 0;
-                mixMergeCount = 0;
-                Debug.Log("🔥 피버 모드 종료!");
+                mergeGauge = 0;
+                hasBullet = false;
+                Debug.Log("FEVER END! Reset to 0/40");
             }
         }
         else
         {
-            // 평상시: 15 믹스 머지로 피버 진입
-            if (mixMergeCount >= MERGES_FOR_FEVER)
+            if (mergeGauge >= GAUGE_FOR_FEVER)
             {
                 isFeverMode = true;
-                hasFeverShot = true; // 피버 진입 시 1발 가능
-                bulletCount = 1;
-                feverMergeCount = 0;
-                Debug.Log("🔥🔥🔥 FEVER MODE 진입! 🔥🔥🔥");
+                feverTurnsRemaining = FEVER_BASE_TURNS;
+                hasBullet = false;
+                Debug.Log($"FEVER MODE! {FEVER_BASE_TURNS} turns granted!");
+            }
+            else if (mergeGauge >= GAUGE_FOR_BULLET && !hasBullet)
+            {
+                hasBullet = true;
+                Debug.Log($"Bullet ready! ({mergeGauge}/40)");
             }
         }
-
         UpdateGunUI();
     }
 
     void ToggleGunMode()
     {
-        if (!isFeverMode && bulletCount <= 0) return;
-        if (isFeverMode && !hasFeverShot) return;
+        if (!hasBullet && !isFeverMode) return;
 
         if (activeTiles.Count <= 1)
         {
@@ -256,18 +264,13 @@ public class GameManager : MonoBehaviour
 
         isGunMode = !isGunMode;
         UpdateGunUI();
+
     }
 
     void ShootTile()
     {
-        if (!isFeverMode && bulletCount <= 0)
-        {
-            isGunMode = false;
-            UpdateGunUI();
-            return;
-        }
-
-        if (isFeverMode && !hasFeverShot)
+        // 사격 가능 여부 체크
+        if (!hasBullet && !isFeverMode)
         {
             isGunMode = false;
             UpdateGunUI();
@@ -282,6 +285,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        // 타일 선택 로직
         Canvas canvas = gridContainer.GetComponentInParent<Canvas>();
         Camera cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main;
 
@@ -312,147 +316,304 @@ public class GameManager : MonoBehaviour
 
         if (targetTile != null)
         {
-            int tileValue = targetTile.value;
             TileColor tileColor = targetTile.tileColor;
 
-            // 총 레벨에 따른 데미지 배율 (1레벨=1x, 2레벨=2x, 3레벨=4x, 4레벨=8x...)
-            float gunMultiplier = Mathf.Pow(2, gunLevel - 1);
-            int totalDamage = Mathf.RoundToInt(tileValue * gunMultiplier);
+            // === 1. 데미지 계산 ===
+            int allTilesSum = GetAllTilesSum(); // 판 위 모든 타일 합
+            int baseDamage = allTilesSum + ((int)permanentAttackPower);
 
-            int colorBonus = 0;
-            int healBonus = 0;
-
-            // 초코 색상 or 피버: 데미지 2배
-            if (tileColor == TileColor.Choco || isFeverMode)
+            // Choco 보너스: 2배
+            if (tileColor == TileColor.Choco)
             {
-                colorBonus = totalDamage;
-                totalDamage += colorBonus;
-                Debug.Log($"🔫⚫ 초코/피버 보너스! +{colorBonus} 추가 데미지!");
+                baseDamage *= 2;
+                Debug.Log($"🔫🍫 Choco 보너스! 데미지 2배!");
             }
 
-            // 베리 색상 or 피버: 회복 2배
-            if (tileColor == TileColor.Berry || isFeverMode)
+            int finalDamage = baseDamage;
+
+            // === 2. 체력 회복 ===
+            int baseHeal = Mathf.FloorToInt(maxHeat * 0.25f); // 25%
+            bool isBerry = (tileColor == TileColor.Berry);
+
+            if (isBerry)
             {
-                int baseHeal = gunShotHeatRecover;
-                healBonus = baseHeal;
-                Debug.Log($"🔫💖 핑크/피버 보너스! +{healBonus} 추가 회복!");
+                baseHeal = Mathf.FloorToInt(maxHeat * 0.75f); // 75%
+                Debug.Log($"BERRY BONUS! 75% heal");
             }
 
+            RecoverHeat(baseHeal);
+
+            if (isBerry)
+            {
+                ShowHeatChangeText(baseHeal, "BERRY BONUS");
+            }
+
+            // === 3. 무한 성장 (공격력 흡수) ===
+            int absorbRate = isFeverMode ? 10 : 5; // 피버 중 10%, 평시 5%
+            int absorbAmount = Mathf.FloorToInt(allTilesSum * absorbRate / 100f);
+            permanentAttackPower += absorbAmount;
+
+            Debug.Log($"💪 공격력 흡수! +{absorbAmount} (총 {permanentAttackPower}) [흡수율: {absorbRate}%]");
+
+            // === 4. 타일 제거 및 공격 ===
             Vector3 tilePos = targetTile.transform.position;
-
             Vector2Int pos = targetTile.gridPosition;
             tiles[pos.x, pos.y] = null;
             activeTiles.Remove(targetTile);
             Destroy(targetTile.gameObject);
 
-            if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
+            if (bossManager != null)
             {
-                Vector3 bossPos = bossManager.bossImageArea.transform.position;
-                Color bulletColor = isFeverMode ? new Color(1f, 0.3f, 0f) : Color.yellow;
-
-                projectileManager.FireBulletSalvo(tilePos, bossPos, 1, totalDamage, bulletColor, (damage) =>
+                if (projectileManager != null && bossManager.bossImageArea != null)
                 {
-                    bossManager.TakeDamage(damage);
-                });
+                    Vector3 bossPos = bossManager.bossImageArea.transform.position;
+                    Color bulletColor = isFeverMode ? new Color(1f, 0.3f, 0f) : Color.yellow;
 
-                ShowDamageText(totalDamage, false, true, 1.0f, tileValue, gunLevel);
-                CameraShake.Instance?.ShakeMedium();
-            }
-            else
-            {
-                if (bossManager != null)
+                    projectileManager.FireBulletSalvo(tilePos, bossPos, 1, finalDamage, bulletColor, (damage) =>
+                    {
+                        bossManager.TakeDamage(damage);
+                    });
+
+                    bool isChoco = (tileColor == TileColor.Choco);
+                    ShowDamageText(finalDamage, false, true, 1.0f, allTilesSum, permanentAttackPower, isChoco);
+
+                    CameraShake.Instance?.ShakeMedium();
+                }
+                else
                 {
-                    bossManager.TakeDamage(totalDamage);
-                    ShowDamageText(totalDamage, false, true, 1.0f, tileValue, gunLevel);
+                    bossManager.TakeDamage(finalDamage);
+                    bool isChoco = (tileColor == TileColor.Choco);
+                    ShowDamageText(finalDamage, false, true, 1.0f, allTilesSum, permanentAttackPower, isChoco);
+
                 }
             }
 
-            // 회복
-            RecoverHeat(gunShotHeatRecover);
-            if (healBonus > 0)
+            // === 5. 게이지 초기화 ===
+            if (isFeverMode)
             {
-                RecoverHeat(healBonus);
+                // 피버 사격 → 피버 유지, 게이지만 0
+                mergeGauge = 0;
+                hasBullet = false;
+                Debug.Log("FEVER SHOT! Fever maintained, gauge reset to 0");
             }
-
-            // 총 레벨 증가
-            gunShotCount++;
-            gunLevel = gunShotCount + 1;
-            Debug.Log($"🔫 Gun Level UP! Lv.{gunLevel} (데미지 배율: x{Mathf.Pow(2, gunLevel - 1)})");
-
-            bulletCount = 0;
-            hasFeverShot = false;
+            else
+            {
+                // 평시 사격 → 잔여 차지 유지 (20을 빼기)
+                mergeGauge = Mathf.Max(0, mergeGauge - GAUGE_FOR_BULLET);
+                hasBullet = (mergeGauge >= GAUGE_FOR_BULLET);
+                Debug.Log($"GUN SHOT! Remaining charge: {mergeGauge}/40");
+            }
 
             isGunMode = false;
             UpdateGunUI();
 
-            if (!CanMove() && bulletCount <= 0 && !hasFeverShot)
+            if (!CanMove() && !hasBullet && !isFeverMode)
             {
                 GameOver();
             }
         }
     }
-
-    void UpdateGunUI()
+    int GetAllTilesSum()
     {
-        // bulletCountText: "Fever!" or "Lv.X"
-        if (bulletCountText != null)
+        int sum = 0;
+        foreach (var tile in activeTiles)
         {
-            if (isFeverMode)
+            if (tile != null)
             {
-                bulletCountText.text = "Fever!";
+                sum += tile.value;
+            }
+        }
+        return sum;
+    }
+
+    void ShowHeatChangeText(int change, string bonusText = "")
+    {
+        if (damageTextPrefab == null || damageTextParent == null || heatText == null) return;
+
+        GameObject heatChangeObj = Instantiate(damageTextPrefab, damageTextParent);
+        TextMeshProUGUI heatChangeText = heatChangeObj.GetComponent<TextMeshProUGUI>();
+
+        if (heatChangeText != null)
+        {
+            if (change > 0)
+            {
+                if (!string.IsNullOrEmpty(bonusText))
+                {
+                    heatChangeText.text = $"{bonusText}\n+{change}";
+                }
+                else
+                {
+                    heatChangeText.text = "+" + change;
+                }
+                heatChangeText.color = new Color(0.3f, 1f, 0.3f);
             }
             else
             {
-                bulletCountText.text = $"Lv.{gunLevel}";
+                heatChangeText.text = change.ToString();
+                heatChangeText.color = new Color(0.5f, 0.8f, 1f);
             }
+
+            heatChangeText.fontSize = 40;
+
+            RectTransform heatChangeRect = heatChangeObj.GetComponent<RectTransform>();
+            RectTransform heatTextRect = heatText.GetComponent<RectTransform>();
+
+            heatChangeRect.position = heatTextRect.position;
+
+            CanvasGroup canvasGroup = heatChangeObj.GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = heatChangeObj.AddComponent<CanvasGroup>();
+
+            Sequence heatSequence = DOTween.Sequence();
+
+            heatSequence.Append(heatChangeRect.DOAnchorPosY(heatChangeRect.anchoredPosition.y + 100f, 1.0f).SetEase(Ease.OutCubic));
+            heatSequence.Join(canvasGroup.DOFade(0f, 1.0f).SetEase(Ease.InCubic));
+
+            heatSequence.Insert(0f, heatChangeRect.DOScale(1.2f, 0.15f).SetEase(Ease.OutQuad));
+            heatSequence.Insert(0.15f, heatChangeRect.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
+
+            heatSequence.OnComplete(() => {
+                if (heatChangeObj != null) Destroy(heatChangeObj);
+            });
         }
 
-        // 총알 갯수 표시: 피버 때 숨김
-        if (bulletCountDisplay != null)
+    }
+
+    void UpdateGunUI()
+    {
+        // bulletCountText: 상태 표시
+        if (bulletCountText != null)
         {
-            bulletCountDisplay.SetActive(!isFeverMode);
+            if (isGunMode)
+            {
+                bulletCountText.text = "CANCEL";
+            }
+            else if (isFeverMode)
+            {
+                bulletCountText.text = "FEVER";
+            }
+            else if (hasBullet)
+            {
+                bulletCountText.text = "CHARGE";
+            }
+            else
+            {
+                bulletCountText.text = "RELOAD";
+            }
         }
 
         // 진행도 표시
         if (turnsUntilBulletText != null)
         {
+            int currentValue = isFeverMode ? feverTurnsRemaining : mergeGauge;
+            int lastValue = isFeverMode ? lastFeverTurnsRemaining : lastMergeGauge;
+
             if (isFeverMode)
             {
-                turnsUntilBulletText.text = $"{feverMergeCount}/10";
+                turnsUntilBulletText.text = $"{feverTurnsRemaining}";
             }
             else
             {
-                turnsUntilBulletText.text = $"{mixMergeCount}/{MERGES_FOR_FEVER}";
+                turnsUntilBulletText.text = $"{mergeGauge}/40";
+            }
+
+            // 값이 변경되었을 때만 DOTween 실행
+            if (currentValue != lastValue)
+            {
+                if (isFeverMode)
+                    lastFeverTurnsRemaining = feverTurnsRemaining;
+                else
+                    lastMergeGauge = mergeGauge;
+
+                // 위로 튀어오르는 애니메이션
+                RectTransform textRect = turnsUntilBulletText.GetComponent<RectTransform>();
+                textRect.DOKill(); // 기존 애니메이션 중단
+
+                float originalY = textRect.anchoredPosition.y;
+
+                Sequence seq = DOTween.Sequence();
+                seq.Append(textRect.DOAnchorPosY(originalY + 8f, 0.12f).SetEase(Ease.OutQuad));
+                seq.Append(textRect.DOAnchorPosY(originalY, 0.12f).SetEase(Ease.InQuad));
+                seq.OnComplete(() => {
+                    // 중복 호출 대비 위치 강제 복원
+                    if (textRect != null)
+                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, originalY);
+                });
             }
         }
 
+
+        // 추가 공격력 표시
+        if (attackPowerText != null)
+        {
+            attackPowerText.text = $"+ATK: {permanentAttackPower}";
+
+            // 값이 변경되었을 때만 DOTween 실행
+            if (permanentAttackPower != lastPermanentAttackPower)
+            {
+                lastPermanentAttackPower = permanentAttackPower;
+
+                // 위로 튀어오르는 애니메이션
+                RectTransform textRect = attackPowerText.GetComponent<RectTransform>();
+                textRect.DOKill(); // 기존 애니메이션 중단
+
+                float originalY = textRect.anchoredPosition.y;
+
+                Sequence seq = DOTween.Sequence();
+                seq.Append(textRect.DOAnchorPosY(originalY + 10f, 0.15f).SetEase(Ease.OutQuad));
+                seq.Append(textRect.DOAnchorPosY(originalY, 0.15f).SetEase(Ease.InQuad));
+                seq.OnComplete(() => {
+                    // 중복 호출 대비 위치 강제 복원
+                    if (textRect != null)
+                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, originalY);
+                });
+            }
+        }
+
+
+        // 기댓값 표시 (새 UI)
+        if (expectedDamageText != null)
+        {
+            int expectedDamage = GetAllTilesSum() + permanentAttackPower;
+            expectedDamageText.text = $"DMG: {expectedDamage}";
+        }
+
+        // 프로그레스 바
         if (progressBarFill != null)
         {
             float progress = isFeverMode ?
-                Mathf.Clamp01((float)feverMergeCount / 10f) :
-                Mathf.Clamp01((float)mixMergeCount / MERGES_FOR_FEVER);
+                Mathf.Clamp01((float)feverTurnsRemaining / FEVER_BASE_TURNS) :
+                Mathf.Clamp01((float)mergeGauge / GAUGE_FOR_FEVER);
             progressBarFill.sizeDelta = new Vector2(
                 progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress,
                 progressBarFill.sizeDelta.y
             );
         }
 
+        // 버튼 색상
         if (gunButtonImage != null)
         {
-            if (isFeverMode)
-                gunButtonImage.color = new Color(1f, 0.3f, 0f);
-            else if (isGunMode)
-                gunButtonImage.color = new Color(1f, 0.8f, 0.2f);
-            else if (bulletCount > 0)
-                gunButtonImage.color = new Color(0.2f, 1f, 0.2f);
+            if (isGunMode)
+                gunButtonImage.color = Color.red; // 빨간색 (취소 가능)
+            else if (isFeverMode)
+                gunButtonImage.color = new Color(1f, 0.3f, 0f); // 주황색 (피버)
+            else if (hasBullet)
+                gunButtonImage.color = new Color(0.2f, 1f, 0.2f); // 초록색 (준비)
             else
-                gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f);
+                gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f); // 회색 (비활성)
         }
 
+        // 버튼 활성화
         if (gunButton != null)
         {
-            gunButton.interactable = !isGameOver && (bulletCount > 0 || hasFeverShot) && activeTiles.Count > 1;
+            gunButton.interactable = !isGameOver && (hasBullet || isFeverMode) && activeTiles.Count > 1;
         }
+
+        // 총알 표시 (피버 시 숨김)
+        if (bulletCountDisplay != null)
+        {
+            bulletCountDisplay.SetActive(!isFeverMode);
+        }
+
     }
 
     void UpdateHeatUI(bool instant = false)
@@ -690,7 +851,6 @@ public class GameManager : MonoBehaviour
                             TileColor color2 = targetTile.tileColor;
 
                             bool isColorBonus = false;
-                            bool isMixMerge = false;
 
                             if (color1 == TileColor.Choco && color2 == TileColor.Choco)
                             {
@@ -699,7 +859,13 @@ public class GameManager : MonoBehaviour
                                 int bonusDamage = mergedValue * (chocoMergeDamageMultiplier - 1);
                                 totalMergedValue += bonusDamage;
 
-                                Debug.Log($"🍫 CHOCO MERGE! +{bonusDamage} 추가 데미지");
+                                // 게이지 증가
+                                if (!isFeverMode)
+                                {
+                                    mergeGauge++;
+                                }
+
+                                Debug.Log($"CHOCO MERGE! Gauge +1 ({mergeGauge}/40)");
                                 targetTile.PlayChocoMergeEffect();
                                 isColorBonus = true;
                             }
@@ -707,27 +873,33 @@ public class GameManager : MonoBehaviour
                             {
                                 berryMergeCount++;
 
-                                // 베리 머지: 콤보 힐량과 별개로 보너스 힐 적용
                                 int bonusHeal = berryMergeBaseHeal * berryMergeHealMultiplier;
-
                                 currentHeat += bonusHeal;
                                 if (currentHeat > maxHeat) currentHeat = maxHeat;
 
-                                Debug.Log($"🍓 BERRY MERGE! +{bonusHeal} Heat 즉시 회복 (기본 {berryMergeBaseHeal} x {berryMergeHealMultiplier})");
+                                // 게이지 증가
+                                if (!isFeverMode)
+                                {
+                                    mergeGauge++;
+                                }
 
-                                // Heat 회복 텍스트는 턴 종료 시 총합으로 표시
-
+                                Debug.Log($"BERRY MERGE! Gauge +1 ({mergeGauge}/40)");
                                 targetTile.PlayBerryMergeEffect();
                                 isColorBonus = true;
                             }
                             else
                             {
-                                // 믹스 머지: 장전 카운트 +1
-                                isMixMerge = true;
-                                mixMergeCount++;
-                                score += mergedValue; // 스코어 2배
-                                Debug.Log($"🌈 MIX MERGE! 스코어 2배, 장전 카운트 +1");
+                                // Mix 머지: 게이지 +2 (보너스)
+
+                                if (!isFeverMode)
+                                {
+                                    mergeGauge += 2;
+                                }
+
+                                score += mergedValue;
+                                Debug.Log($"MIX MERGE! Gauge +2 ({mergeGauge}/40)");
                             }
+
 
                             if (isColorBonus)
                             {
@@ -747,13 +919,13 @@ public class GameManager : MonoBehaviour
                             lastMergedTilePosition = targetTile.transform.position;
 
                             // 전체 머지 카운트 (콤보용 - 모든 머지)
-                            mergeCount++;
                             mergeCountThisTurn++;
 
-                            // 피버 중이면 피버 카운트
+                            // 피버 중 머지 시 추가 공격력 +1
                             if (isFeverMode)
                             {
-                                feverMergeCount++;
+                                permanentAttackPower++;
+                                Debug.Log($"FEVER MERGE! +ATK +1 (Total: {permanentAttackPower})");
                             }
 
                             activeTiles.Remove(tile);
@@ -799,7 +971,10 @@ public class GameManager : MonoBehaviour
                 bool isCritical = Random.value < CRITICAL_CHANCE;
                 int baseDamage = Mathf.RoundToInt(totalMergedValue * comboMultiplier);
 
+                baseDamage += permanentAttackPower;
+
                 int damage = isCritical ? baseDamage * CRITICAL_MULTIPLIER : baseDamage;
+
 
                 if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
                 {
@@ -863,10 +1038,21 @@ public class GameManager : MonoBehaviour
                 ShowHeatChangeText(netChange);
             }
 
+            // 콤보 달성 시 게이지 증가
+            if (!isFeverMode && mergeCountThisTurn >= 2)
+            {
+                int gaugeIncrease = 1; // 2콤보 이상 = +1
+                mergeGauge += gaugeIncrease;
+                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +{gaugeIncrease} ({mergeGauge}/20)");
+            }
+
             UpdateScoreUI();
 
+            comboCount = mergeCountThisTurn;
+
             // 피버 모드 체크
-            CheckFeverMode();
+            CheckGaugeAndFever(); // CheckFeverMode() → CheckGaugeAndFever()로 변경!
+
 
             if (currentHeat <= 0)
             {
@@ -884,7 +1070,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, float comboMultiplier = 1.0f, int baseTileValue = 0, int gunLevel = 1)
+    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, float comboMultiplier = 1.0f, int baseTileValue = 0, int gunLevel = 1, bool isChoco = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
 
@@ -895,22 +1081,22 @@ public class GameManager : MonoBehaviour
         {
             if (isCritical)
             {
-                damageText.text = "CRITICAL! -" + damage;
+                damageText.text = "CRITICAL!\n-" + damage;
                 damageText.color = Color.red;
                 damageText.fontSize = 50;
             }
             else if (isGunDamage)
             {
-                if (baseTileValue > 0 && gunLevel > 0)
+                if (isChoco)
                 {
-                    float multiplier = Mathf.Pow(2, gunLevel - 1);
-                    damageText.text = $"Lv.{gunLevel} ({baseTileValue} x {multiplier:F0}) -{damage}";
+                    damageText.text = $"CHOCO x2\n-{damage}";
+                    damageText.color = new Color(1f, 0.84f, 0f); // 금색
                 }
                 else
                 {
-                    damageText.text = "-" + damage;
+                    damageText.text = $"-{damage}";
+                    damageText.color = Color.yellow;
                 }
-                damageText.color = Color.yellow;
                 damageText.fontSize = 54;
             }
             else
@@ -1019,13 +1205,35 @@ public class GameManager : MonoBehaviour
     {
         SpawnTile();
 
-        // 피버 중에는 보스 턴 증가 X
+        // 피버 턴 연장 먼저! (감소 전에)
+        if (isFeverMode && comboCount >= 2)
+        {
+            int extension = comboCount;
+            feverTurnsRemaining += extension;
+
+            if (feverTurnsRemaining > MAX_FEVER_TURNS)
+                feverTurnsRemaining = MAX_FEVER_TURNS;
+
+            Debug.Log($"FEVER EXTEND! +{extension} (Now: {feverTurnsRemaining})");
+        }
+
+        // 피버 턴 감소
+        if (isFeverMode)
+        {
+            feverTurnsRemaining--;
+            Debug.Log($"Fever turn -1: {feverTurnsRemaining} left");
+        }
+
+        // 게이지 체크
+        CheckGaugeAndFever();
+
+        // 보스 턴
         if (bossManager != null && !isFeverMode)
         {
             bossManager.OnPlayerTurn();
         }
 
-        if (!CanMove() && bulletCount <= 0 && !hasFeverShot)
+        if (!CanMove() && !hasBullet && !isFeverMode)
         {
             GameOver();
         }

@@ -17,6 +17,7 @@ public class Tile : MonoBehaviour
     [SerializeField] private Image background;
     [SerializeField] private TextMeshProUGUI valueText;
     [SerializeField] private ParticleSystem mergeParticle;
+    private Coffee.UIExtensions.UIParticle uiParticle; // UIParticle 컴포넌트
 
     private RectTransform rectTransform;
     private Vector2 targetPosition;
@@ -64,10 +65,8 @@ public class Tile : MonoBehaviour
     {
         rectTransform = GetComponent<RectTransform>();
 
-        if (mergeParticle == null)
-        {
-            CreateParticleSystem();
-        }
+        // CreateParticleSystem() 제거!
+        // 파티클은 머지 시에만 독립적으로 생성
     }
 
     void Update()
@@ -88,44 +87,54 @@ public class Tile : MonoBehaviour
         }
     }
 
-    void CreateParticleSystem()
+    // 독립 파티클 생성 함수
+    void SpawnParticleAtPosition(Vector2 position, Color color, float size, float lifetime)
     {
         GameObject particleObj = new GameObject("MergeParticle");
-        particleObj.transform.SetParent(transform);
-        particleObj.transform.localPosition = Vector3.zero;
-        particleObj.transform.localScale = Vector3.one;
 
-        mergeParticle = particleObj.AddComponent<ParticleSystem>();
+        // gridContainer의 자식으로 생성 (타일과 독립)
+        Transform gridContainer = transform.parent;
+        particleObj.transform.SetParent(gridContainer, false);
 
-        var main = mergeParticle.main;
-        main.startLifetime = 1.0f;
+        // RectTransform 설정
+        RectTransform particleRect = particleObj.AddComponent<RectTransform>();
+        particleRect.anchorMin = new Vector2(0.5f, 0.5f);
+        particleRect.anchorMax = new Vector2(0.5f, 0.5f);
+        particleRect.pivot = new Vector2(0.5f, 0.5f);
+        particleRect.anchoredPosition = position; // 지정된 위치
+        particleRect.sizeDelta = Vector2.zero;
+
+        ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
+
+        var main = ps.main;
+        main.startLifetime = lifetime;
         main.startSpeed = 300f;
-        main.startSize = 80f;
-        main.startColor = new Color(1f, 0.8f, 0.2f, 1f);
-        main.maxParticles = 50;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startSize = size;
+        main.startColor = color;
+        main.maxParticles = 80;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.playOnAwake = false;
-        main.loop = false; // 루프 끄기
+        main.loop = false;
 
-        var emission = mergeParticle.emission;
+        var emission = ps.emission;
         emission.enabled = true;
         emission.rateOverTime = 0;
         emission.SetBursts(new ParticleSystem.Burst[] {
-            new ParticleSystem.Burst(0f, 40, 60, 0.01f)
+            new ParticleSystem.Burst(0f, 50, 80)
         });
 
-        var shape = mergeParticle.shape;
+        var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius = 0.5f;
+        shape.radius = 50f;
 
-        var colorOverLifetime = mergeParticle.colorOverLifetime;
+        var colorOverLifetime = ps.colorOverLifetime;
         colorOverLifetime.enabled = true;
         Gradient gradient = new Gradient();
         gradient.SetKeys(
             new GradientColorKey[] {
                 new GradientColorKey(Color.white, 0.0f),
-                new GradientColorKey(Color.yellow, 0.5f),
-                new GradientColorKey(Color.red, 1.0f)
+                new GradientColorKey(color, 0.5f),
+                new GradientColorKey(color, 1.0f)
             },
             new GradientAlphaKey[] {
                 new GradientAlphaKey(1.0f, 0.0f),
@@ -135,19 +144,28 @@ public class Tile : MonoBehaviour
         );
         colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
 
-        var sizeOverLifetime = mergeParticle.sizeOverLifetime;
+        var sizeOverLifetime = ps.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
         AnimationCurve curve = new AnimationCurve();
         curve.AddKey(0.0f, 1.0f);
         curve.AddKey(1.0f, 0.0f);
         sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
 
-        var renderer = mergeParticle.GetComponent<ParticleSystemRenderer>();
+        var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
-        renderer.sortingOrder = 5000; // 매우 높게 (이미지보다 위)
-        renderer.sortingLayerName = "UI";
+
+        var uiParticle = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
+        uiParticle.scale = 3f;
+        uiParticle.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
+
+        // 재생 및 자동 삭제
+        ps.Play();
+        Destroy(particleObj, lifetime + 0.1f);
+
+        Debug.Log($"Independent particle spawned at {position}!");
     }
+
 
     public void SetValue(int newValue)
     {
@@ -195,15 +213,13 @@ public class Tile : MonoBehaviour
     {
         SetValue(value * 2);
 
-        if (mergeParticle != null)
-        {
-            Debug.Log("기본 머지 파티클 재생!");
-            mergeParticle.Play();
-        }
-        else
-        {
-            Debug.LogError("파티클 시스템이 없습니다!");
-        }
+        //// 독립 파티클 생성 (타일 위치에 고정)
+        //SpawnParticleAtPosition(
+        //    GetComponent<RectTransform>().anchoredPosition,
+        //    new Color(1f, 0.8f, 0.2f),
+        //    80f,
+        //    0.3f
+        //);
 
         StartCoroutine(PopAnimation());
     }
@@ -216,51 +232,33 @@ public class Tile : MonoBehaviour
 
     public void PlayChocoMergeEffect()
     {
-        if (mergeParticle != null)
-        {
-            Debug.Log("🍫 CHOCO MERGE 파티클 재생! (금색)");
+        Debug.Log("CHOCO particle!");
 
-            var main = mergeParticle.main;
-            main.startColor = new Color(1f, 0.84f, 0f);
-            main.startSize = 120f;
-            main.startLifetime = 1.2f;
-
-            var emission = mergeParticle.emission;
-            emission.SetBursts(new ParticleSystem.Burst[] {
-                new ParticleSystem.Burst(0f, 60, 80, 0.01f)
-            });
-
-            mergeParticle.Play();
-        }
-        else
-        {
-            Debug.LogError("CHOCO MERGE: 파티클 시스템이 없습니다!");
-        }
+        // 독립 파티클 생성
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.84f, 0f),
+            100f,
+            0.35f
+        );
     }
+
+
 
     public void PlayBerryMergeEffect()
     {
-        if (mergeParticle != null)
-        {
-            Debug.Log("🍓 BERRY MERGE 파티클 재생! (초록색)");
+        Debug.Log("BERRY particle!");
 
-            var main = mergeParticle.main;
-            main.startColor = new Color(0.3f, 1f, 0.3f);
-            main.startSize = 120f;
-            main.startLifetime = 1.2f;
-
-            var emission = mergeParticle.emission;
-            emission.SetBursts(new ParticleSystem.Burst[] {
-                new ParticleSystem.Burst(0f, 60, 80, 0.01f)
-            });
-
-            mergeParticle.Play();
-        }
-        else
-        {
-            Debug.LogError("BERRY MERGE: 파티클 시스템이 없습니다!");
-        }
+        // 독립 파티클 생성
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(0.3f, 1f, 0.3f),
+            100f,
+            0.35f
+        );
     }
+
+
 
     private System.Collections.IEnumerator PopAnimation()
     {

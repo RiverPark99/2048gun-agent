@@ -510,9 +510,11 @@ MonoBehaviour:
   gunButton: {fileID: 138865026}
   bulletCountText: {fileID: 1188142617}
   turnsUntilBulletText: {fileID: 751145185}
+  attackPowerText: {fileID: 451522639}
+  expectedDamageText: {fileID: 0}
   gunButtonImage: {fileID: 138865027}
   progressBarFill: {fileID: 1941858280}
-  bulletCountDisplay: {fileID: 451522637}
+  bulletCountDisplay: {fileID: 0}
   bossManager: {fileID: 178796534}
   hpText: {fileID: 653140202}
   damageTextPrefab: {fileID: 1311700191204704399, guid: 48c271b2a8c328f4591d6af4df71751f, type: 3}
@@ -527,8 +529,9 @@ MonoBehaviour:
   bossDefeatMaxHeatIncrease: 5
   gunShotHeatRecover: 20
   heatAnimationDuration: 0.3
-  blackMergeDamageMultiplier: 4
-  pinkMergeHealMultiplier: 4
+  chocoMergeDamageMultiplier: 4
+  berryMergeHealMultiplier: 4
+  berryMergeBaseHeal: 5
   lowHealthVignette: {fileID: 275612701}
 --- !u!1 &166022315
 GameObject:
@@ -764,8 +767,8 @@ MonoBehaviour:
   bossAttackInfoText: {fileID: 275876072}
   baseHP: 250
   hpIncreasePerLevel: 250
-  baseTurnInterval: 5
-  minTurnInterval: 3
+  baseTurnInterval: 6
+  minTurnInterval: 4
   baseDamage: 30
   maxDamage: 70
   bossLevel: 1
@@ -1554,7 +1557,7 @@ GameObject:
   - component: {fileID: 451522640}
   - component: {fileID: 451522639}
   m_Layer: 0
-  m_Name: LV
+  m_Name: aditional_atk
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1576,8 +1579,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.05, y: 0}
   m_AnchorMax: {x: 0.4, y: 1}
-  m_AnchoredPosition: {x: 75.25, y: 166}
-  m_SizeDelta: {x: 311.5, y: 280}
+  m_AnchoredPosition: {x: 100.50001, y: 166}
+  m_SizeDelta: {x: 261, y: 280}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &451522639
 MonoBehaviour:
@@ -1599,7 +1602,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 2048
+  m_text: Atk + 0
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 146234537}
@@ -2008,8 +2011,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 300.76, y: 80}
-  m_SizeDelta: {x: 150, y: 30}
+  m_AnchoredPosition: {x: 250, y: 80}
+  m_SizeDelta: {x: 200, y: 30}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &751145185
 MonoBehaviour:
@@ -2678,8 +2681,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 215, y: -6}
-  m_SizeDelta: {x: 180, y: 40}
+  m_AnchoredPosition: {x: 200, y: -0.5}
+  m_SizeDelta: {x: 260, y: 40}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &1188142617
 MonoBehaviour:
@@ -2701,7 +2704,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\xD7 0"
+  m_text: Reload
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 362956186}
@@ -2730,8 +2733,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 50
-  m_fontSizeBase: 50
+  m_fontSize: 42
+  m_fontSizeBase: 42
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
