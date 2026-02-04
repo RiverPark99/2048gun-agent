@@ -1,4 +1,6 @@
 // =====================================================
+// GameManager.cs - FINAL VERSION v2.0
+// Date: 2026-02-02 07:30
 // 
 // 변경사항:
 // 1. 핑크 머지: 콤보마다 힐량 적용 확인
@@ -58,8 +60,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float heatAnimationDuration = 0.3f;
 
     [Header("색상 조합 보너스")]
-    [SerializeField] private int blackMergeDamageMultiplier = 4;
-    [SerializeField] private int pinkMergeHealMultiplier = 4;
+    [SerializeField] private int chocoMergeDamageMultiplier = 4;
+    [SerializeField] private int berryMergeHealMultiplier = 4;
+    [SerializeField] private int berryMergeBaseHeal = 5; // Berry 머지 기본 힙량
 
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
@@ -73,8 +76,8 @@ public class GameManager : MonoBehaviour
     private bool isBossTransitioning = false;
     private bool isGameOver = false;
 
-    // 피버 시스템 (10 머지 → 피버 → 10 머지로 해제)
-    private const int MERGES_FOR_FEVER = 10;
+    // 피버 시스템 (15 머지 → 피버 → 10 머지로 해제)
+    private const int MERGES_FOR_FEVER = 15;
     private int bulletCount = 0;
     private int mergeCount = 0; // 전체 머지 카운트 (콤보용)
     private int mixMergeCount = 0; // 믹스 머지 카운트만 (장전용)
@@ -320,15 +323,15 @@ public class GameManager : MonoBehaviour
             int healBonus = 0;
 
             // 초코 색상 or 피버: 데미지 2배
-            if (tileColor == TileColor.Black || isFeverMode)
+            if (tileColor == TileColor.Choco || isFeverMode)
             {
                 colorBonus = totalDamage;
                 totalDamage += colorBonus;
                 Debug.Log($"🔫⚫ 초코/피버 보너스! +{colorBonus} 추가 데미지!");
             }
 
-            // 핑크 색상 or 피버: 회복 2배
-            if (tileColor == TileColor.Pink || isFeverMode)
+            // 베리 색상 or 피버: 회복 2배
+            if (tileColor == TileColor.Berry || isFeverMode)
             {
                 int baseHeal = gunShotHeatRecover;
                 healBonus = baseHeal;
@@ -583,7 +586,7 @@ public class GameManager : MonoBehaviour
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
 
-        TileColor randomColor = Random.value < 0.5f ? TileColor.Black : TileColor.Pink;
+        TileColor randomColor = Random.value < 0.5f ? TileColor.Choco : TileColor.Berry;
         tile.SetColor(randomColor);
 
         tile.SetGridPosition(pos);
@@ -634,8 +637,11 @@ public class GameManager : MonoBehaviour
         int totalMergedValue = 0;
         int mergeCountThisTurn = 0;
 
-        int blackMergeCount = 0;
-        int pinkMergeCount = 0;
+        int chocoMergeCount = 0;
+        int berryMergeCount = 0;
+
+        // Heat 변화 계산을 위해 턴 시작 시 Heat 저장
+        int oldHeat = currentHeat;
 
         bool anyMerged = true;
         while (anyMerged)
@@ -686,30 +692,32 @@ public class GameManager : MonoBehaviour
                             bool isColorBonus = false;
                             bool isMixMerge = false;
 
-                            if (color1 == TileColor.Black && color2 == TileColor.Black)
+                            if (color1 == TileColor.Choco && color2 == TileColor.Choco)
                             {
-                                blackMergeCount++;
+                                chocoMergeCount++;
 
-                                int bonusDamage = mergedValue * (blackMergeDamageMultiplier - 1);
+                                int bonusDamage = mergedValue * (chocoMergeDamageMultiplier - 1);
                                 totalMergedValue += bonusDamage;
 
-                                Debug.Log($"⚫ BLACK MERGE! +{bonusDamage} 추가 데미지");
-                                targetTile.PlayBlackMergeEffect();
+                                Debug.Log($"🍫 CHOCO MERGE! +{bonusDamage} 추가 데미지");
+                                targetTile.PlayChocoMergeEffect();
                                 isColorBonus = true;
                             }
-                            else if (color1 == TileColor.Pink && color2 == TileColor.Pink)
+                            else if (color1 == TileColor.Berry && color2 == TileColor.Berry)
                             {
-                                pinkMergeCount++;
+                                berryMergeCount++;
 
-                                // 핑크 머지: 콤보마다 힐량 적용
-                                int baseHeal = Mathf.RoundToInt(mergedValue * 0.1f);
-                                int bonusHeal = baseHeal * (pinkMergeHealMultiplier - 1);
+                                // 베리 머지: 콤보 힐량과 별개로 보너스 힐 적용
+                                int bonusHeal = berryMergeBaseHeal * berryMergeHealMultiplier;
 
                                 currentHeat += bonusHeal;
                                 if (currentHeat > maxHeat) currentHeat = maxHeat;
 
-                                Debug.Log($"💖 PINK MERGE! +{bonusHeal} Heat 즉시 회복");
-                                targetTile.PlayPinkMergeEffect();
+                                Debug.Log($"🍓 BERRY MERGE! +{bonusHeal} Heat 즉시 회복 (기본 {berryMergeBaseHeal} x {berryMergeHealMultiplier})");
+
+                                // Heat 회복 텍스트는 턴 종료 시 총합으로 표시
+
+                                targetTile.PlayBerryMergeEffect();
                                 isColorBonus = true;
                             }
                             else
@@ -730,7 +738,7 @@ public class GameManager : MonoBehaviour
                                 targetTile.MergeWith(tile);
                             }
 
-                            TileColor newColor = Random.value < 0.5f ? TileColor.Black : TileColor.Pink;
+                            TileColor newColor = Random.value < 0.5f ? TileColor.Choco : TileColor.Berry;
                             targetTile.SetColor(newColor);
 
                             merged[nextPos.x, nextPos.y] = true;
@@ -738,16 +746,14 @@ public class GameManager : MonoBehaviour
 
                             lastMergedTilePosition = targetTile.transform.position;
 
+                            // 전체 머지 카운트 (콤보용 - 모든 머지)
+                            mergeCount++;
+                            mergeCountThisTurn++;
+
                             // 피버 중이면 피버 카운트
                             if (isFeverMode)
                             {
                                 feverMergeCount++;
-                            }
-                            else
-                            {
-                                // 전체 머지 카운트 (콤보용 - 모든 머지)
-                                mergeCount++;
-                                mergeCountThisTurn++;
                             }
 
                             activeTiles.Remove(tile);
@@ -833,7 +839,7 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            int oldHeat = currentHeat;
+            // oldHeat는 턴 시작 시 이미 저장됨 (Berry 머지 회복 이전 값)
             currentHeat -= heatDecreasePerTurn;
 
             if (mergeCountThisTurn > 0)

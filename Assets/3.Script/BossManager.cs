@@ -63,6 +63,12 @@ public class BossManager : MonoBehaviour
 
         currentHP -= damage;
 
+        // 피격 시 작은 흔들림 효과
+        if (bossImageArea != null)
+        {
+            bossImageArea.transform.DOShakePosition(0.2f, strength: 10f, vibrato: 20, randomness: 90f);
+        }
+
         if (currentHP <= 0)
         {
             currentHP = 0;
@@ -96,11 +102,11 @@ public class BossManager : MonoBehaviour
         {
             Debug.Log($"⚠️ 보스 공격! {currentBossDamage} 데미지!");
 
-            // 보스 이미지 펄싱 효과
-            if (bossImageArea != null)
-            {
-                bossImageArea.transform.DOPunchScale(Vector3.one * 0.3f, 0.5f, 10, 1f);
-            }
+            //// 보스 이미지 펄싱 효과
+            //if (bossImageArea != null)
+            //{
+            //    bossImageArea.transform.DOPunchScale(Vector3.one * 0.3f, 0.5f, 10, 1f);
+            //}
 
             gameManager.TakeBossAttack(currentBossDamage);
 

@@ -4,8 +4,8 @@ using TMPro;
 
 public enum TileColor
 {
-    Black,
-    Pink
+    Choco,
+    Berry
 }
 
 public class Tile : MonoBehaviour
@@ -25,7 +25,7 @@ public class Tile : MonoBehaviour
 
     // 검정/핑크 그라데이션 (2~4096까지 12단계)
     // 검정 -> 초콜릿 계열로 변경 (흰색 -> 밝은 초콜릿 -> 초콜릿 -> 다크 초콜릿 -> 검정)
-    private Color[] blackGradient = new Color[]
+    private Color[] chocoGradient = new Color[]
     {
         new Color(1f, 1f, 1f),                 // 2 - 완전 흰색
         new Color(0.95f, 0.90f, 0.85f),        // 4 - 크림색
@@ -41,7 +41,7 @@ public class Tile : MonoBehaviour
         new Color(0.0f, 0.0f, 0.0f),           // 4096 - 완전 검정
     };
 
-    private Color[] pinkGradient = new Color[]
+    private Color[] berryGradient = new Color[]
     {
         new Color(1f, 0.92f, 0.95f),     // 2
         new Color(1f, 0.85f, 0.9f),      // 4
@@ -214,11 +214,11 @@ public class Tile : MonoBehaviour
         StartCoroutine(PopAnimation());
     }
 
-    public void PlayBlackMergeEffect()
+    public void PlayChocoMergeEffect()
     {
         if (mergeParticle != null)
         {
-            Debug.Log("⚫ BLACK MERGE 파티클 재생! (금색)");
+            Debug.Log("🍫 CHOCO MERGE 파티클 재생! (금색)");
 
             var main = mergeParticle.main;
             main.startColor = new Color(1f, 0.84f, 0f);
@@ -234,15 +234,15 @@ public class Tile : MonoBehaviour
         }
         else
         {
-            Debug.LogError("BLACK MERGE: 파티클 시스템이 없습니다!");
+            Debug.LogError("CHOCO MERGE: 파티클 시스템이 없습니다!");
         }
     }
 
-    public void PlayPinkMergeEffect()
+    public void PlayBerryMergeEffect()
     {
         if (mergeParticle != null)
         {
-            Debug.Log("💖 PINK MERGE 파티클 재생! (초록색)");
+            Debug.Log("🍓 BERRY MERGE 파티클 재생! (초록색)");
 
             var main = mergeParticle.main;
             main.startColor = new Color(0.3f, 1f, 0.3f);
@@ -258,7 +258,7 @@ public class Tile : MonoBehaviour
         }
         else
         {
-            Debug.LogError("PINK MERGE: 파티클 시스템이 없습니다!");
+            Debug.LogError("BERRY MERGE: 파티클 시스템이 없습니다!");
         }
     }
 
@@ -306,16 +306,16 @@ public class Tile : MonoBehaviour
 
     private void UpdateAppearance()
     {
-        int colorIndex = Mathf.Min((int)Mathf.Log(value, 2) - 1, blackGradient.Length - 1);
+        int colorIndex = Mathf.Min((int)Mathf.Log(value, 2) - 1, chocoGradient.Length - 1);
 
-        if (tileColor == TileColor.Black)
+        if (tileColor == TileColor.Choco)
         {
-            background.color = blackGradient[colorIndex];
+            background.color = chocoGradient[colorIndex];
             valueText.color = goldColor;
         }
         else
         {
-            background.color = pinkGradient[colorIndex];
+            background.color = berryGradient[colorIndex];
             valueText.color = silverColor;
         }
 
