@@ -23,7 +23,8 @@ public class BossManager : MonoBehaviour
     [SerializeField] private int baseTurnInterval = 8;
     [SerializeField] private int minTurnInterval = 3;
     [SerializeField] private int baseDamage = 10;
-    [SerializeField] private int maxDamage = 30;
+    [SerializeField] private int damageThreshold = 40; // 40 이상부터 천천히 증가
+    [SerializeField] private int slowIncreaseRate = 4; // 4번 쓰러뜨릴 때마다 1씩
 
     private int currentTurnInterval;
     private int currentTurnCount = 0;
@@ -60,16 +61,23 @@ public class BossManager : MonoBehaviour
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
+        
+        // ⭐ UPDATED: 공격력 계산 (40 이상부터 천천히)
+        if (bossLevel < damageThreshold)
+        {
+            // 40 미만: 기존 방식 (1씩 증가)
+            currentBossDamage = baseDamage + (bossLevel - 1);
+        }
+        else
+        {
+            // 40 이상: 4번마다 1씩 증가
+            int slowIncreaseCount = (bossLevel - damageThreshold) / slowIncreaseRate;
+            currentBossDamage = baseDamage + (damageThreshold - 1) + slowIncreaseCount;
+        }
+        
         currentTurnCount = currentTurnInterval;
 
-        // ⭐ UI 비활성화
-        SetBossUIActive(false);
-
-        currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
-        currentTurnCount = currentTurnInterval;
-
+        // ⭐ FIXED: 중복 제거
         UpdateUI(true);
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, 공격 주기: {currentTurnInterval}턴, 공격력: {currentBossDamage}");
     }
@@ -259,6 +267,12 @@ public class BossManager : MonoBehaviour
         // ⭐ NEW: 보스 이미지 나타나기 (DOTween)
         if (bossImageArea != null)
         {
+            // ⭐ FIXED: sprite가 null이면 기본 스프라이트 설정
+            if (bossImageArea.sprite == null && bossSprites.Count > 0)
+            {
+                bossImageArea.sprite = bossSprites[0];
+            }
+            
             bossImageArea.color = new Color(1f, 1f, 1f, 0f); // 투명
             bossImageArea.transform.localScale = Vector3.one * 1.2f;
 
@@ -274,7 +288,18 @@ public class BossManager : MonoBehaviour
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
+        
+        // ⭐ UPDATED: 공격력 계산 (40 이상부터 천천히)
+        if (bossLevel < damageThreshold)
+        {
+            currentBossDamage = baseDamage + (bossLevel - 1);
+        }
+        else
+        {
+            int slowIncreaseCount = (bossLevel - damageThreshold) / slowIncreaseRate;
+            currentBossDamage = baseDamage + (damageThreshold - 1) + slowIncreaseCount;
+        }
+        
         currentTurnCount = currentTurnInterval;
 
         UpdateUI(true);
@@ -293,8 +318,28 @@ public class BossManager : MonoBehaviour
     public void ResetBoss()
     {
         bossLevel = 1;
+        currentBossIndex = 0; // ⭐ FIXED: 보스 이미지 인덱스 초기화
+        
+        // ⭐ FIXED: 보스 이미지 복원
+        if (bossImageArea != null && bossSprites.Count > 0)
+        {
+            bossImageArea.sprite = bossSprites[0];
+            bossImageArea.color = Color.white;
+            bossImageArea.material = null; // 팔레트 스왑 제거
+            bossImageArea.transform.localScale = Vector3.one;
+        }
+        
         InitializeBoss();
         isTransitioning = false;
+        
+        // ⭐ FIXED: UI 활성화 (게임 시작 시)
+        StartCoroutine(ShowBossUIAfterDelay());
+    }
+    
+    IEnumerator ShowBossUIAfterDelay()
+    {
+        yield return new WaitForSeconds(0.1f);
+        SetBossUIActive(true);
     }
 
     void SelectNextBossImage()
@@ -308,13 +353,26 @@ public class BossManager : MonoBehaviour
         if (bossSprites.Count == 1)
         {
             // ⭐ 이미지 1개: 팔레트 스왑
+            if (bossImageArea.sprite == null)
+            {
+                bossImageArea.sprite = bossSprites[0];
+            }
             ApplyRandomPaletteSwap();
         }
         else
         {
             // ⭐ 이미지 여러 개: 순환
             currentBossIndex = (currentBossIndex + 1) % bossSprites.Count;
-            bossImageArea.sprite = bossSprites[currentBossIndex];
+            
+            // ⭐ FIXED: null 체크
+            if (bossSprites[currentBossIndex] != null)
+            {
+                bossImageArea.sprite = bossSprites[currentBossIndex];
+            }
+            else
+            {
+                Debug.LogWarning($"Boss sprite at index {currentBossIndex} is null!");
+            }
 
             // 처음으로 돌아갔으면 팔레트 스왑
             if (currentBossIndex == 0)

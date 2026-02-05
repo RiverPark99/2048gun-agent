@@ -722,6 +722,9 @@ public class GameManager : MonoBehaviour
 
     void UpdateGunUI()
     {
+        // ⭐ FIXED: Gun Button 애니메이션 업데이트 (머지 시에도 재시작 방지)
+        UpdateGunButtonAnimation();
+        
         // bulletCountText: 상태 표시
         if (bulletCountText != null)
         {
@@ -949,6 +952,61 @@ public class GameManager : MonoBehaviour
                 scopeHeartbeat = null;
             }
             scopeImage.transform.localScale = Vector3.one;
+        }
+    }
+
+    System.Collections.IEnumerator FlashOrangeOnDamage()
+    {
+        if (heatBarImage == null || heatText == null) yield break;
+
+        // 현재 색상 저장
+        Color originalBarColor = heatBarImage.color;
+        Color originalTextColor = heatText.color;
+
+        // 주황색으로 바꾸기
+        Color orangeColor = new Color(1f, 0.65f, 0f);
+        heatBarImage.color = orangeColor;
+        heatText.color = orangeColor;
+
+        yield return new WaitForSeconds(0.15f);
+
+        // 원래 색상으로 복귀
+        heatBarImage.color = originalBarColor;
+        heatText.color = originalTextColor;
+    }
+
+    void UpdateGunButtonAnimation()
+    {
+        if (gunButton == null || gunButtonImage == null) return;
+
+        // 기존 애니메이션 정지
+        if (gunButtonHeartbeat != null)
+        {
+            gunButtonHeartbeat.Kill();
+            gunButtonHeartbeat = null;
+        }
+
+        // 원래 크기로 초기화
+        gunButton.transform.localScale = Vector3.one;
+
+        if (isGunMode)
+        {
+            // Gun Mode: 빠른 템포 (긴박하게)
+            gunButtonHeartbeat = gunButton.transform.DOScale(1.15f, 0.3f)
+                .SetEase(Ease.InOutQuad)
+                .SetLoops(-1, LoopType.Yoyo);
+        }
+        else if (hasBullet || (isFeverMode && !feverBulletUsed))
+        {
+            // 총알 있음: 느린 템포 (심장 뛰듯)
+            gunButtonHeartbeat = gunButton.transform.DOScale(1.1f, 0.6f)
+                .SetEase(Ease.InOutQuad)
+                .SetLoops(-1, LoopType.Yoyo);
+        }
+        else
+        {
+            // 비활성: 크기 고정
+            gunButton.transform.localScale = Vector3.one;
         }
     }
 
@@ -1707,6 +1765,7 @@ public class GameManager : MonoBehaviour
             currentHeat = 0;
 
         UpdateHeatUI();
+        StartCoroutine(FlashOrangeOnDamage());
 
         int actualDamage = oldHeat - currentHeat;
         if (actualDamage > 0)
