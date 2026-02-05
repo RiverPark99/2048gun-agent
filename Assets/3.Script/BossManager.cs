@@ -46,7 +46,9 @@ public class BossManager : MonoBehaviour
 
     void InitializeBoss()
     {
-        maxHP = baseHP + (bossLevel - 1) * hpIncreasePerLevel;
+        float exponent = Mathf.Pow(1.5f, bossLevel - 1);
+        maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
@@ -57,11 +59,13 @@ public class BossManager : MonoBehaviour
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, 공격 주기: {currentTurnInterval}턴, 공격력: {currentBossDamage}");
     }
 
-    public void TakeDamage(int damage)
+    public void TakeDamage(long damage)
     {
         if (isTransitioning) return;
 
-        currentHP -= damage;
+        // long을 int로 변환 (보스 체력은 int)
+        int damageInt = (int)Mathf.Min(damage, int.MaxValue);
+        currentHP -= damageInt;
 
         // 피격 시 작은 흔들림 효과
         if (bossImageArea != null)
@@ -78,6 +82,7 @@ public class BossManager : MonoBehaviour
         Debug.Log($"Boss took {damage} damage! Current HP: {currentHP}/{maxHP}");
         UpdateUI(false);
     }
+
 
     public void OnPlayerTurn()
     {

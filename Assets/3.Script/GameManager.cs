@@ -41,6 +41,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Image gunButtonImage;
     [SerializeField] private RectTransform progressBarFill;
     [SerializeField] private GameObject bulletCountDisplay; // 총알 갯수 UI 오브젝트 (피버 시 숨김)
+    [SerializeField] private Image scopeImage; // 스코프 이미지
+
 
     [Header("Boss System")]
     [SerializeField] private BossManager bossManager;
@@ -72,8 +74,8 @@ public class GameManager : MonoBehaviour
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
-    private int score = 0;
-    private int bestScore = 0;
+    private long score = 0;
+    private long bestScore = 0;
     private float cellSize;
     private bool isProcessing = false;
     private bool isBossTransitioning = false;
@@ -89,7 +91,7 @@ public class GameManager : MonoBehaviour
     private bool hasBullet = false;
     private bool isFeverMode = false;
     private int feverTurnsRemaining = 0;
-    private int permanentAttackPower = 0;
+    private long permanentAttackPower = 0;
     private bool isGunMode = false;
     private bool feverBulletUsed = false; // 피버 중 총 사용 여부
 
@@ -101,9 +103,12 @@ public class GameManager : MonoBehaviour
 
 
     // DOTween용 이전 값 저장
-    private int lastPermanentAttackPower = 0;
+    private long lastPermanentAttackPower = 0;
     private int lastMergeGauge = 0;
     private int lastFeverTurnsRemaining = 0;
+
+    // ⭐ NEW: Gun Button 애니메이션
+    private Tweener gunButtonHeartbeat;
 
     private int currentHeat = 100;
 
@@ -119,7 +124,17 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        bestScore = PlayerPrefs.GetInt("BestScore", 0);
+        // ⭐ UPDATED: string에서 long으로 변환
+        string bestScoreStr = PlayerPrefs.GetString("BestScore", "0");
+        if (long.TryParse(bestScoreStr, out long parsedScore))
+        {
+            bestScore = parsedScore;
+        }
+        else
+        {
+            bestScore = 0;
+        }
+
         projectileManager = FindAnyObjectByType<ProjectileManager>();
 
         if (heatSlider != null)
@@ -195,6 +210,24 @@ public class GameManager : MonoBehaviour
         isGunMode = false;
         isBossTransitioning = false;
         isGameOver = false;
+
+        // ⭐ NEW: Gun Button 애니메이션 정리
+        if (gunButtonHeartbeat != null)
+        {
+            gunButtonHeartbeat.Kill();
+            gunButtonHeartbeat = null;
+        }
+
+        // ⭐ NEW: 스코프 이미지 초기화
+        if (scopeImage != null)
+        {
+            scopeImage.gameObject.SetActive(false);
+            CanvasGroup canvasGroup = scopeImage.GetComponent<CanvasGroup>();
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = 0f;
+            }
+        }
 
         UpdateScoreUI();
         UpdateGunUI();
@@ -284,8 +317,43 @@ public class GameManager : MonoBehaviour
         }
 
         isGunMode = !isGunMode;
-        UpdateGunUI();
 
+        // ⭐ NEW: 스코프 이미지 애니메이션
+        if (scopeImage != null)
+        {
+            if (isGunMode)
+            {
+                // Gun Mode 활성화: 투명에서 나타나기
+                scopeImage.gameObject.SetActive(true);
+
+                CanvasGroup canvasGroup = scopeImage.GetComponent<CanvasGroup>();
+                if (canvasGroup == null)
+                {
+                    canvasGroup = scopeImage.gameObject.AddComponent<CanvasGroup>();
+                }
+
+                canvasGroup.alpha = 0f;
+                canvasGroup.DOFade(1f, 0.3f).SetEase(Ease.OutBack);
+            }
+            else
+            {
+                // Gun Mode 비활성화: 사라지고 비활성화
+                CanvasGroup canvasGroup = scopeImage.GetComponent<CanvasGroup>();
+                if (canvasGroup != null)
+                {
+                    canvasGroup.DOFade(0f, 0.2f).SetEase(Ease.InQuad).OnComplete(() =>
+                    {
+                        if (scopeImage != null)
+                            scopeImage.gameObject.SetActive(false);
+                    });
+                }
+                else
+                {
+                    scopeImage.gameObject.SetActive(false);
+                }
+            }
+        }
+        UpdateGunUI();
     }
 
     void ShootTile()
@@ -340,8 +408,9 @@ public class GameManager : MonoBehaviour
             TileColor tileColor = targetTile.tileColor;
 
             // === 1. 데미지 계산 ===
-            int allTilesSum = GetAllTilesSum(); // 판 위 모든 타일 합
-            int baseDamage = allTilesSum + ((int)permanentAttackPower);
+            // ⭐ UPDATED: long 자료형
+            long allTilesSum = GetAllTilesSum();
+            long baseDamage = allTilesSum + permanentAttackPower;
 
             // Choco 보너스: 2배
             if (tileColor == TileColor.Choco)
@@ -350,7 +419,7 @@ public class GameManager : MonoBehaviour
                 Debug.Log($"🔫🍫 Choco 보너스! 데미지 2배!");
             }
 
-            int finalDamage = baseDamage;
+            long finalDamage = baseDamage;
 
             // === 2. 체력 회복 ===
             int baseHeal = Mathf.FloorToInt(maxHeat * 0.25f); // 25%
@@ -371,7 +440,7 @@ public class GameManager : MonoBehaviour
 
             // === 3. 무한 성장 (공격력 흡수) ===
             int absorbRate = isFeverMode ? 10 : 5; // 피버 중 10%, 평시 5%
-            int absorbAmount = Mathf.FloorToInt(allTilesSum * absorbRate / 100f);
+            long absorbAmount = (long)Mathf.Floor(allTilesSum * absorbRate / 100f);
             permanentAttackPower += absorbAmount;
 
             Debug.Log($"💪 공격력 흡수! +{absorbAmount} (총 {permanentAttackPower}) [흡수율: {absorbRate}%]");
@@ -390,16 +459,44 @@ public class GameManager : MonoBehaviour
                     Vector3 bossPos = bossManager.bossImageArea.transform.position;
                     Color bulletColor = isFeverMode ? new Color(1f, 0.3f, 0f) : Color.yellow;
 
-                    projectileManager.FireBulletSalvo(tilePos, bossPos, 1, finalDamage, bulletColor, (damage) =>
+                    // ⭐ NEW: 모든 타일에서 레이저 발사 (연출용)
+                    foreach (var tile in activeTiles)
                     {
-                        bossManager.TakeDamage(damage);
+                        if (tile == null) continue;
+
+                        Vector3 fromPos = tile.transform.position;
+
+                        // 레이저만 발사 (데미지 없음, 연출만)
+                        projectileManager.FireKnifeProjectile(fromPos, bossPos, bulletColor, null);
+                    }
+
+                    // 실제 데미지는 부순 타일에서만
+                    projectileManager.FireBulletSalvo(tilePos, bossPos, 1, (int)finalDamage, bulletColor, (damage) =>
+                    {
+                        bossManager.TakeDamage(finalDamage);
                     });
 
                     bool isChoco = (tileColor == TileColor.Choco);
                     ShowDamageText(finalDamage, false, true, 1.0f, allTilesSum, permanentAttackPower, isChoco);
 
                     CameraShake.Instance?.ShakeMedium();
+
+                    //scope 초기화
+                    CanvasGroup canvasGroup = scopeImage.GetComponent<CanvasGroup>();
+                    if (canvasGroup != null)
+                    {
+                        canvasGroup.DOFade(0f, 0.2f).SetEase(Ease.InQuad).OnComplete(() =>
+                        {
+                            if (scopeImage != null)
+                                scopeImage.gameObject.SetActive(false);
+                        });
+                    }
+                    else
+                    {
+                        scopeImage.gameObject.SetActive(false);
+                    }
                 }
+
                 else
                 {
                     bossManager.TakeDamage(finalDamage);
@@ -434,9 +531,9 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-    int GetAllTilesSum()
+    long GetAllTilesSum()
     {
-        int sum = 0;
+        long sum = 0;
         foreach (var tile in activeTiles)
         {
             if (tile != null)
@@ -551,14 +648,14 @@ public class GameManager : MonoBehaviour
             }
             else
             {
-                // 피버 종료 직후 0/20 표시
+                // 피버 종료 직후 0/40 표시 kitos수정사항
                 if (mergeGauge == 0)
                 {
-                    turnsUntilBulletText.text = "0/20";
+                    turnsUntilBulletText.text = "0/40";
                 }
                 else if (mergeGauge < GAUGE_FOR_BULLET)
                 {
-                    turnsUntilBulletText.text = $"{mergeGauge}/20";
+                    turnsUntilBulletText.text = $"{mergeGauge}/40";
                 }
                 else
                 {
@@ -623,7 +720,7 @@ public class GameManager : MonoBehaviour
         // 기댓값 표시 (새 UI)
         if (expectedDamageText != null)
         {
-            int expectedDamage = GetAllTilesSum() + permanentAttackPower;
+            long expectedDamage = GetAllTilesSum() + permanentAttackPower;
             expectedDamageText.text = $"DMG: {expectedDamage}";
         }
 
@@ -667,7 +764,39 @@ public class GameManager : MonoBehaviour
         {
             bulletCountDisplay.SetActive(!isFeverMode);
         }
+        // ⭐ NEW: Gun Button 심장 뛰는 애니메이션
+        if (gunButton != null && gunButtonImage != null)
+        {
+            // 기존 애니메이션 정지
+            if (gunButtonHeartbeat != null)
+            {
+                gunButtonHeartbeat.Kill();
+                gunButtonHeartbeat = null;
+            }
 
+            // 원래 크기로 초기화
+            gunButton.transform.localScale = Vector3.one;
+
+            if (isGunMode)
+            {
+                // Gun Mode: 빠른 템포 (긴박하게)
+                gunButtonHeartbeat = gunButton.transform.DOScale(1.15f, 0.3f)
+                    .SetEase(Ease.InOutQuad)
+                    .SetLoops(-1, LoopType.Yoyo);
+            }
+            else if (hasBullet || (isFeverMode && !feverBulletUsed))
+            {
+                // 총알 있음: 느린 템포 (심장 뛰듯)
+                gunButtonHeartbeat = gunButton.transform.DOScale(1.1f, 0.6f)
+                    .SetEase(Ease.InOutQuad)
+                    .SetLoops(-1, LoopType.Yoyo);
+            }
+            else
+            {
+                // 비활성: 크기 고정
+                gunButton.transform.localScale = Vector3.one;
+            }
+        }
     }
 
     void UpdateHeatUI(bool instant = false)
@@ -1024,12 +1153,12 @@ public class GameManager : MonoBehaviour
             if (totalMergedValue > 0 && bossManager != null)
             {
                 bool isCritical = Random.value < CRITICAL_CHANCE;
-                int baseDamage = Mathf.RoundToInt(totalMergedValue * comboMultiplier);
+                // ⭐ UPDATED: long 자료형
+                long baseDamage = Mathf.RoundToInt(totalMergedValue * comboMultiplier);
 
                 baseDamage += permanentAttackPower;
 
-                int damage = isCritical ? baseDamage * CRITICAL_MULTIPLIER : baseDamage;
-
+                long damage = isCritical ? baseDamage * CRITICAL_MULTIPLIER : baseDamage;
 
                 if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
                 {
@@ -1125,7 +1254,7 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void ShowDamageText(int damage, bool isCritical, bool isGunDamage, float comboMultiplier = 1.0f, int baseTileValue = 0, int gunLevel = 1, bool isChoco = false)
+    void ShowDamageText(long damage, bool isCritical, bool isGunDamage, float comboMultiplier = 1.0f, long baseTileValue = 0, long gunLevel = 1, bool isChoco = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
 
@@ -1329,10 +1458,24 @@ public class GameManager : MonoBehaviour
 
         UpdateGunUI();
 
+        // ⭐ NEW: 2초 딜레이 + 서서히 나타나기
         if (gameOverPanel != null)
+        {
             gameOverPanel.SetActive(true);
-    }
 
+            CanvasGroup canvasGroup = gameOverPanel.GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = gameOverPanel.AddComponent<CanvasGroup>();
+            }
+
+            // 초기 투명
+            canvasGroup.alpha = 0f;
+
+            // 2초 후 1초에 걸쳐 서서히 나타남
+            canvasGroup.DOFade(1f, 1f).SetDelay(2f).SetEase(Ease.InOutQuad);
+        }
+    }
     void UpdateScoreUI()
     {
         if (scoreText != null)
@@ -1341,7 +1484,8 @@ public class GameManager : MonoBehaviour
         if (score > bestScore)
         {
             bestScore = score;
-            PlayerPrefs.SetInt("BestScore", bestScore);
+            // ⭐ UPDATED: long을 string으로 저장
+            PlayerPrefs.SetString("BestScore", bestScore.ToString());
             PlayerPrefs.Save();
         }
 
