@@ -267,8 +267,26 @@ public class Tile : MonoBehaviour
             0.35f
         );
     }
+    public void PlayGunDestroyEffect()
+    {
+        Debug.Log("GUN DESTROY particle!");
 
+        // 총으로 부서질 때 특수 파티클 (금색 폭발)
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.84f, 0f),  // 금색
+            120f,  // 더 큰 크기
+            0.4f   // 조금 더 긴 지속시간
+        );
 
+        // 추가 파티클 (흰색 섬광)
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            Color.white,
+            150f,  // 매우 큰 크기
+            0.2f   // 짧은 지속시간 (섬광 효과)
+        );
+    }
     private System.Collections.IEnumerator PopAnimation()
     {
         float duration = 0.3f;

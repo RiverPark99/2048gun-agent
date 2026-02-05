@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using DG.Tweening;
 using System.Collections;
+using System.Collections.Generic;
 
 public class BossManager : MonoBehaviour
 {
@@ -35,6 +36,13 @@ public class BossManager : MonoBehaviour
     public float animationDuration = 0.3f;
     public float bossSpawnDelay = 1.0f;
 
+    [Header("Boss Attack Animation")]
+    [SerializeField] private float attackMotionDuration = 0.5f;
+
+    [Header("Boss Images")]
+    [SerializeField] private List<Sprite> bossSprites = new List<Sprite>(); // 보스 이미지 리스트
+    private int currentBossIndex = 0;
+
     private bool isTransitioning = false;
     private GameManager gameManager;
 
@@ -50,6 +58,13 @@ public class BossManager : MonoBehaviour
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
         currentHP = maxHP;
+
+        currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
+        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
+        currentTurnCount = currentTurnInterval;
+
+        // ⭐ UI 비활성화
+        SetBossUIActive(false);
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
         currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
@@ -103,22 +118,54 @@ public class BossManager : MonoBehaviour
 
     private void AttackPlayer()
     {
+        StartCoroutine(AttackPlayerCoroutine());
+    }
+
+    private IEnumerator AttackPlayerCoroutine()
+    {
+        Debug.Log($"⚠️ 보스 공격 준비!");
+
+        // ⭐ NEW: 플레이어 입력 차단
+        if (gameManager != null)
+        {
+            gameManager.SetBossAttacking(true);
+        }
+
+        // ⭐ NEW: 공격 모션 (앞으로 이동)
+        if (bossImageArea != null)
+        {
+            Vector3 originalPos = bossImageArea.transform.localPosition;
+
+            // 앞으로 돌진
+            Sequence attackSeq = DOTween.Sequence();
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x - 50f, attackMotionDuration * 0.3f)
+                .SetEase(Ease.OutQuad));
+            // 원래 위치로
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x, attackMotionDuration * 0.7f)
+                .SetEase(Ease.OutBounce));
+
+            yield return attackSeq.WaitForCompletion();
+        }
+        else
+        {
+            yield return new WaitForSeconds(attackMotionDuration);
+        }
+
+        // ⭐ 모션 후 데미지
         if (gameManager != null)
         {
             Debug.Log($"⚠️ 보스 공격! {currentBossDamage} 데미지!");
-
-            //// 보스 이미지 펄싱 효과
-            //if (bossImageArea != null)
-            //{
-            //    bossImageArea.transform.DOPunchScale(Vector3.one * 0.3f, 0.5f, 10, 1f);
-            //}
-
             gameManager.TakeBossAttack(currentBossDamage);
-
-            // 강한 화면 흔들림
             CameraShake.Instance?.ShakeMedium();
         }
+
+        // ⭐ NEW: 플레이어 입력 재개
+        if (gameManager != null)
+        {
+            gameManager.SetBossAttacking(false);
+        }
     }
+
 
     public void ResetTurnCount()
     {
@@ -190,10 +237,50 @@ public class BossManager : MonoBehaviour
 
         Debug.Log("Boss " + bossLevel + " defeated!");
 
+        // ⭐ NEW: UI 비활성화
+        SetBossUIActive(false);
+
+        // ⭐ NEW: 보스 이미지 사라지기 (DOTween)
+        if (bossImageArea != null)
+        {
+            Sequence fadeSeq = DOTween.Sequence();
+            fadeSeq.Append(bossImageArea.DOFade(0f, 0.5f).SetEase(Ease.InQuad));
+            fadeSeq.Join(bossImageArea.transform.DOScale(0.8f, 0.5f).SetEase(Ease.InBack));
+            yield return fadeSeq.WaitForCompletion();
+        }
+
         yield return new WaitForSeconds(bossSpawnDelay);
 
         bossLevel++;
-        InitializeBoss();
+
+        // ⭐ NEW: 다음 보스 이미지 선택
+        SelectNextBossImage();
+
+        // ⭐ NEW: 보스 이미지 나타나기 (DOTween)
+        if (bossImageArea != null)
+        {
+            bossImageArea.color = new Color(1f, 1f, 1f, 0f); // 투명
+            bossImageArea.transform.localScale = Vector3.one * 1.2f;
+
+            Sequence appearSeq = DOTween.Sequence();
+            appearSeq.Append(bossImageArea.DOFade(1f, 0.5f).SetEase(Ease.OutQuad));
+            appearSeq.Join(bossImageArea.transform.DOScale(1f, 0.5f).SetEase(Ease.OutBack));
+            yield return appearSeq.WaitForCompletion();
+        }
+
+        // ⭐ NEW: 체력 설정 (지수 증가)
+        float exponent = Mathf.Pow(1.5f, bossLevel - 1);
+        maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+        currentHP = maxHP;
+
+        currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
+        currentBossDamage = Mathf.Min(maxDamage, baseDamage + (bossLevel - 1));
+        currentTurnCount = currentTurnInterval;
+
+        UpdateUI(true);
+
+        // ⭐ NEW: UI 활성화
+        SetBossUIActive(true);
 
         if (gameManager != null)
         {
@@ -208,6 +295,59 @@ public class BossManager : MonoBehaviour
         bossLevel = 1;
         InitializeBoss();
         isTransitioning = false;
+    }
+
+    void SelectNextBossImage()
+    {
+        if (bossSprites.Count == 0)
+        {
+            Debug.LogWarning("No boss sprites assigned!");
+            return;
+        }
+
+        if (bossSprites.Count == 1)
+        {
+            // ⭐ 이미지 1개: 팔레트 스왑
+            ApplyRandomPaletteSwap();
+        }
+        else
+        {
+            // ⭐ 이미지 여러 개: 순환
+            currentBossIndex = (currentBossIndex + 1) % bossSprites.Count;
+            bossImageArea.sprite = bossSprites[currentBossIndex];
+
+            // 처음으로 돌아갔으면 팔레트 스왑
+            if (currentBossIndex == 0)
+            {
+                ApplyRandomPaletteSwap();
+            }
+        }
+    }
+    void ApplyRandomPaletteSwap()
+    {
+        if (bossImageArea == null) return;
+
+        // ⭐ 랜덤 색상 (채도 높은 색상)
+        Color randomColor = Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.8f, 1f);
+
+        // ⭐ 팔레트 스왑 (Material 사용)
+        Material mat = new Material(Shader.Find("UI/Default"));
+        mat.SetColor("_Color", randomColor);
+        bossImageArea.material = mat;
+
+        Debug.Log($"Boss palette swapped to {randomColor}");
+    }
+
+    void SetBossUIActive(bool active)
+    {
+        if (hpSlider != null)
+            hpSlider.gameObject.SetActive(active);
+
+        if (hpText != null)
+            hpText.gameObject.SetActive(active);
+
+        if (bossAttackInfoText != null)
+            bossAttackInfoText.gameObject.SetActive(active);
     }
 
     public int GetCurrentHP() { return currentHP; }

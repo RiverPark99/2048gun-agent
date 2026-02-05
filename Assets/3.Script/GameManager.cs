@@ -43,6 +43,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject bulletCountDisplay; // 총알 갯수 UI 오브젝트 (피버 시 숨김)
     [SerializeField] private Image scopeImage; // 스코프 이미지
 
+    private Tweener scopeHeartbeat; // Scope 애니메이션
+    private bool isBossAttacking = false; // 보스 공격 중
+    private GameObject activeFeverParticle; // Fever 파티클
+
+    [Header("Fever Effects")]
+    [SerializeField] private Transform feverParticleSpawnPoint;
+    [SerializeField] private GameObject feverParticlePrefab; // 나중에
+    [SerializeField] private Image feverBackgroundImage;
 
     [Header("Boss System")]
     [SerializeField] private BossManager bossManager;
@@ -158,7 +166,7 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (isGameOver || isProcessing || isBossTransitioning) return;
+        if (isGameOver || isProcessing || isBossTransitioning || isBossAttacking) return;
 
         if (!isGunMode)
         {
@@ -229,6 +237,13 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        // ⭐ NEW: Scope 애니메이션 정리
+        if (scopeHeartbeat != null)
+        {
+            scopeHeartbeat.Kill();
+            scopeHeartbeat = null;
+        }
+
         UpdateScoreUI();
         UpdateGunUI();
         UpdateHeatUI(true);
@@ -269,21 +284,34 @@ public class GameManager : MonoBehaviour
         {
             if (feverTurnsRemaining <= 0)
             {
+                // ⭐ Fever 종료: 파티클 제거
+                if (activeFeverParticle != null)
+                {
+                    Destroy(activeFeverParticle);
+                    activeFeverParticle = null;
+                }
+
+                // ⭐ Fever 배경 이미지 비활성화
+                if (feverBackgroundImage != null)
+                {
+                    feverBackgroundImage.gameObject.SetActive(false);
+                }
+
                 isFeverMode = false;
 
                 // ⭐ UPDATED: 피버 중 총을 쐈으면 0, 안 쐈으면 20 유지
                 if (feverBulletUsed)
                 {
                     mergeGauge = 0;  // 총 쏨 → 0/40
+                    hasBullet = false;
                     Debug.Log("FEVER END! Shot used, reset to 0/40");
                 }
                 else
                 {
                     mergeGauge = 20;  // 총 안 쏨 → 20/40
+                    hasBullet = true;
                     Debug.Log("FEVER END! No shot, keep 20/40");
                 }
-
-                hasBullet = false;
                 feverBulletUsed = false; // ⭐ NEW: 리셋
             }
         }
@@ -291,6 +319,15 @@ public class GameManager : MonoBehaviour
         {
             if (mergeGauge >= GAUGE_FOR_FEVER)
             {
+                // ⭐ Fever 시작: 파티클 생성
+                SpawnFeverParticle();
+
+                // ⭐ Fever 배경 이미지 활성화
+                if (feverBackgroundImage != null)
+                {
+                    feverBackgroundImage.gameObject.SetActive(true);
+                }
+
                 isFeverMode = true;
                 feverBulletUsed = false; // ⭐ NEW: 피버 시작 시 리셋
                 feverTurnsRemaining = FEVER_BASE_TURNS;
@@ -305,6 +342,81 @@ public class GameManager : MonoBehaviour
         }
         UpdateGunUI();
     }
+    void SpawnFeverParticle()
+    {
+        if (feverParticleSpawnPoint == null)
+        {
+            Debug.LogWarning("Fever particle spawn point not set!");
+            return;
+        }
+
+        // 기존 파티클 제거
+        if (activeFeverParticle != null)
+        {
+            Destroy(activeFeverParticle);
+        }
+
+        // ⭐ 임시: 파티클 시스템 생성 (나중에 프리펩으로 교체)
+        GameObject particleObj = new GameObject("FeverFlameParticle");
+        particleObj.transform.SetParent(feverParticleSpawnPoint, false);
+        particleObj.transform.localPosition = Vector3.zero;
+
+        ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
+
+        var main = ps.main;
+        main.startLifetime = 0.5f;
+        main.startSpeed = 50f;
+        main.startSize = 30f;
+        main.startColor = new Color(1f, 0.5f, 0f); // 주황색
+        main.maxParticles = 50;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.playOnAwake = true;
+        main.loop = true; // ⭐ 지속적으로 생성
+
+        var emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 20; // 초당 20개
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle = 15f;
+        shape.radius = 10f;
+
+        var colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new GradientColorKey[] {
+            new GradientColorKey(new Color(1f, 1f, 0f), 0.0f), // 노란색
+            new GradientColorKey(new Color(1f, 0.5f, 0f), 0.5f), // 주황색
+            new GradientColorKey(new Color(1f, 0f, 0f), 1.0f)  // 빨간색
+            },
+            new GradientAlphaKey[] {
+            new GradientAlphaKey(1.0f, 0.0f),
+            new GradientAlphaKey(0.8f, 0.5f),
+            new GradientAlphaKey(0.0f, 1.0f)
+            }
+        );
+        colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
+
+        var velocityOverLifetime = ps.velocityOverLifetime;
+        velocityOverLifetime.enabled = true;
+        velocityOverLifetime.y = new ParticleSystem.MinMaxCurve(100f); // 위로 올라감
+
+        var renderer = ps.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.material = new Material(Shader.Find("UI/Default"));
+        renderer.sortingOrder = 5; // ⭐ 버튼과 배경 사이
+
+        // UIParticle 추가
+        var uiParticle = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
+        uiParticle.scale = 2f;
+
+        activeFeverParticle = particleObj;
+
+        Debug.Log("Fever flame particle spawned!");
+    }
+
 
     void ToggleGunMode()
     {
@@ -337,7 +449,15 @@ public class GameManager : MonoBehaviour
             }
             else
             {
-                // Gun Mode 비활성화: 사라지고 비활성화
+                // Gun Mode 비활성화
+                // ⭐ 애니메이션 정지
+                if (scopeHeartbeat != null)
+                {
+                    scopeHeartbeat.Kill();
+                    scopeHeartbeat = null;
+                }
+                scopeImage.transform.localScale = Vector3.one;
+
                 CanvasGroup canvasGroup = scopeImage.GetComponent<CanvasGroup>();
                 if (canvasGroup != null)
                 {
@@ -448,6 +568,10 @@ public class GameManager : MonoBehaviour
             // === 4. 타일 제거 및 공격 ===
             Vector3 tilePos = targetTile.transform.position;
             Vector2Int pos = targetTile.gridPosition;
+
+            // ⭐ NEW: 파티클 먼저 재생
+            targetTile.PlayGunDestroyEffect();
+
             tiles[pos.x, pos.y] = null;
             activeTiles.Remove(targetTile);
             Destroy(targetTile.gameObject);
@@ -796,6 +920,35 @@ public class GameManager : MonoBehaviour
                 // 비활성: 크기 고정
                 gunButton.transform.localScale = Vector3.one;
             }
+        }
+
+        // ⭐ NEW: Scope 심장박동 애니메이션
+        if (scopeImage != null && isGunMode)
+        {
+            // 기존 애니메이션 정지
+            if (scopeHeartbeat != null)
+            {
+                scopeHeartbeat.Kill();
+                scopeHeartbeat = null;
+            }
+
+            // 원래 크기로 초기화
+            scopeImage.transform.localScale = Vector3.one;
+
+            // 빠른 템포 (긴박하게)
+            scopeHeartbeat = scopeImage.transform.DOScale(1.05f, 0.3f)
+                .SetEase(Ease.InOutQuad)
+                .SetLoops(-1, LoopType.Yoyo);
+        }
+        else if (scopeImage != null && !isGunMode)
+        {
+            // Gun Mode 아닐 때 정지
+            if (scopeHeartbeat != null)
+            {
+                scopeHeartbeat.Kill();
+                scopeHeartbeat = null;
+            }
+            scopeImage.transform.localScale = Vector3.one;
         }
     }
 
@@ -1235,7 +1388,7 @@ public class GameManager : MonoBehaviour
             comboCount = mergeCountThisTurn;
 
             // 피버 모드 체크
-            CheckGaugeAndFever(); // CheckFeverMode() → CheckGaugeAndFever()로 변경!
+            CheckGaugeAndFever();
 
 
             if (currentHeat <= 0)
@@ -1417,9 +1570,19 @@ public class GameManager : MonoBehaviour
             bossManager.OnPlayerTurn();
         }
 
-        if (!CanMove() && !hasBullet && !isFeverMode)
+        // FIXED: 피버 중에도 게임오버 체크
+        // 피버 총알까지 다 쓰고, 이동 불가능하면 게임오버
+        if (!CanMove())
         {
-            GameOver();
+            if (!isFeverMode || feverBulletUsed)
+            {
+                // 평시이거나, 피버 중 총알 이미 사용했으면 게임오버
+                if (!hasBullet)
+                {
+                    GameOver();
+                    return; // ⭐ 중요: 게임오버 후 isProcessing 리셋 안 함
+                }
+            }
         }
 
         isProcessing = false;
@@ -1504,6 +1667,13 @@ public class GameManager : MonoBehaviour
 
         return new Vector2(posX, posY);
     }
+
+    public void SetBossAttacking(bool attacking)
+    {
+        isBossAttacking = attacking;
+        Debug.Log($"Boss attacking: {attacking}");
+    }
+
 
     public void OnBossDefeated()
     {
