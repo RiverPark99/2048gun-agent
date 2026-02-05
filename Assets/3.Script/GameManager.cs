@@ -91,6 +91,14 @@ public class GameManager : MonoBehaviour
     private int feverTurnsRemaining = 0;
     private int permanentAttackPower = 0;
     private bool isGunMode = false;
+    private bool feverBulletUsed = false; // 피버 중 총 사용 여부
+
+    // UI 위치 저장 (위치 초기화 문제)
+    private float turnsTextOriginalY = 0f;
+    private bool turnsTextInitialized = false;
+    private float attackTextOriginalY = 0f;
+    private bool attackTextInitialized = false;
+
 
     // DOTween용 이전 값 저장
     private int lastPermanentAttackPower = 0;
@@ -182,6 +190,7 @@ public class GameManager : MonoBehaviour
         isFeverMode = false;      // 변경
         feverTurnsRemaining = 0;  // 추가
         permanentAttackPower = 0; // 추가
+        feverBulletUsed = false;
         currentHeat = maxHeat;
         isGunMode = false;
         isBossTransitioning = false;
@@ -227,11 +236,22 @@ public class GameManager : MonoBehaviour
         {
             if (feverTurnsRemaining <= 0)
             {
-                // 피버 자연 종료: 0으로 초기화
                 isFeverMode = false;
-                mergeGauge = 0;
+
+                // ⭐ UPDATED: 피버 중 총을 쐈으면 0, 안 쐈으면 20 유지
+                if (feverBulletUsed)
+                {
+                    mergeGauge = 0;  // 총 쏨 → 0/40
+                    Debug.Log("FEVER END! Shot used, reset to 0/40");
+                }
+                else
+                {
+                    mergeGauge = 20;  // 총 안 쏨 → 20/40
+                    Debug.Log("FEVER END! No shot, keep 20/40");
+                }
+
                 hasBullet = false;
-                Debug.Log("FEVER END! Reset to 0/40");
+                feverBulletUsed = false; // ⭐ NEW: 리셋
             }
         }
         else
@@ -239,6 +259,7 @@ public class GameManager : MonoBehaviour
             if (mergeGauge >= GAUGE_FOR_FEVER)
             {
                 isFeverMode = true;
+                feverBulletUsed = false; // ⭐ NEW: 피버 시작 시 리셋
                 feverTurnsRemaining = FEVER_BASE_TURNS;
                 hasBullet = false;
                 Debug.Log($"FEVER MODE! {FEVER_BASE_TURNS} turns granted!");
@@ -254,7 +275,7 @@ public class GameManager : MonoBehaviour
 
     void ToggleGunMode()
     {
-        if (!hasBullet && !isFeverMode) return;
+        if (!hasBullet && (!isFeverMode || feverBulletUsed)) return;
 
         if (activeTiles.Count <= 1)
         {
@@ -270,7 +291,7 @@ public class GameManager : MonoBehaviour
     void ShootTile()
     {
         // 사격 가능 여부 체크
-        if (!hasBullet && !isFeverMode)
+        if (!hasBullet && (!isFeverMode || feverBulletUsed))
         {
             isGunMode = false;
             UpdateGunUI();
@@ -391,10 +412,10 @@ public class GameManager : MonoBehaviour
             // === 5. 게이지 초기화 ===
             if (isFeverMode)
             {
-                // 피버 사격 → 피버 유지, 게이지만 0
+                feverBulletUsed = true; // ⭐ NEW: 피버 중 총 사용 기록
                 mergeGauge = 0;
                 hasBullet = false;
-                Debug.Log("FEVER SHOT! Fever maintained, gauge reset to 0");
+                Debug.Log("FEVER SHOT! Bullet used, cannot shoot again");
             }
             else
             {
@@ -501,19 +522,48 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // 진행도 표시
+        // ⭐ UPDATED: 진행도 표시
         if (turnsUntilBulletText != null)
         {
+            // 초기 Y 위치 저장 (한 번만)
+            if (!turnsTextInitialized)
+            {
+                RectTransform textRect = turnsUntilBulletText.GetComponent<RectTransform>();
+                turnsTextOriginalY = textRect.anchoredPosition.y;
+                turnsTextInitialized = true;
+            }
+
             int currentValue = isFeverMode ? feverTurnsRemaining : mergeGauge;
             int lastValue = isFeverMode ? lastFeverTurnsRemaining : lastMergeGauge;
 
+            // 텍스트 설정
             if (isFeverMode)
             {
-                turnsUntilBulletText.text = $"{feverTurnsRemaining}";
+                // 콤보 여부 확인
+                if (comboCount >= 2)
+                {
+                    turnsUntilBulletText.text = $"Remain {feverTurnsRemaining} COMBO!";
+                }
+                else
+                {
+                    turnsUntilBulletText.text = $"Remain {feverTurnsRemaining}";
+                }
             }
             else
             {
-                turnsUntilBulletText.text = $"{mergeGauge}/40";
+                // 피버 종료 직후 0/20 표시
+                if (mergeGauge == 0)
+                {
+                    turnsUntilBulletText.text = "0/20";
+                }
+                else if (mergeGauge < GAUGE_FOR_BULLET)
+                {
+                    turnsUntilBulletText.text = $"{mergeGauge}/20";
+                }
+                else
+                {
+                    turnsUntilBulletText.text = $"{mergeGauge}/40";
+                }
             }
 
             // 값이 변경되었을 때만 DOTween 실행
@@ -524,27 +574,31 @@ public class GameManager : MonoBehaviour
                 else
                     lastMergeGauge = mergeGauge;
 
-                // 위로 튀어오르는 애니메이션
+                // 위로 튀어오르는 애니메이션 (저장된 originalY 사용)
                 RectTransform textRect = turnsUntilBulletText.GetComponent<RectTransform>();
-                textRect.DOKill(); // 기존 애니메이션 중단
-
-                float originalY = textRect.anchoredPosition.y;
+                textRect.DOKill();
 
                 Sequence seq = DOTween.Sequence();
-                seq.Append(textRect.DOAnchorPosY(originalY + 8f, 0.12f).SetEase(Ease.OutQuad));
-                seq.Append(textRect.DOAnchorPosY(originalY, 0.12f).SetEase(Ease.InQuad));
+                seq.Append(textRect.DOAnchorPosY(turnsTextOriginalY + 8f, 0.12f).SetEase(Ease.OutQuad));
+                seq.Append(textRect.DOAnchorPosY(turnsTextOriginalY, 0.12f).SetEase(Ease.InQuad));
                 seq.OnComplete(() => {
-                    // 중복 호출 대비 위치 강제 복원
                     if (textRect != null)
-                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, originalY);
+                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, turnsTextOriginalY);
                 });
             }
         }
 
-
-        // 추가 공격력 표시
+        // ⭐ UPDATED: 추가 공격력 표시
         if (attackPowerText != null)
         {
+            // 초기 Y 위치 저장 (한 번만)
+            if (!attackTextInitialized)
+            {
+                RectTransform textRect = attackPowerText.GetComponent<RectTransform>();
+                attackTextOriginalY = textRect.anchoredPosition.y;
+                attackTextInitialized = true;
+            }
+
             attackPowerText.text = $"+ATK: {permanentAttackPower}";
 
             // 값이 변경되었을 때만 DOTween 실행
@@ -552,23 +606,19 @@ public class GameManager : MonoBehaviour
             {
                 lastPermanentAttackPower = permanentAttackPower;
 
-                // 위로 튀어오르는 애니메이션
+                // 위로 튀어오르는 애니메이션 (저장된 originalY 사용)
                 RectTransform textRect = attackPowerText.GetComponent<RectTransform>();
-                textRect.DOKill(); // 기존 애니메이션 중단
-
-                float originalY = textRect.anchoredPosition.y;
+                textRect.DOKill();
 
                 Sequence seq = DOTween.Sequence();
-                seq.Append(textRect.DOAnchorPosY(originalY + 10f, 0.15f).SetEase(Ease.OutQuad));
-                seq.Append(textRect.DOAnchorPosY(originalY, 0.15f).SetEase(Ease.InQuad));
+                seq.Append(textRect.DOAnchorPosY(attackTextOriginalY + 10f, 0.15f).SetEase(Ease.OutQuad));
+                seq.Append(textRect.DOAnchorPosY(attackTextOriginalY, 0.15f).SetEase(Ease.InQuad));
                 seq.OnComplete(() => {
-                    // 중복 호출 대비 위치 강제 복원
                     if (textRect != null)
-                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, originalY);
+                        textRect.anchoredPosition = new Vector2(textRect.anchoredPosition.x, attackTextOriginalY);
                 });
             }
         }
-
 
         // 기댓값 표시 (새 UI)
         if (expectedDamageText != null)
@@ -583,10 +633,14 @@ public class GameManager : MonoBehaviour
             float progress = isFeverMode ?
                 Mathf.Clamp01((float)feverTurnsRemaining / FEVER_BASE_TURNS) :
                 Mathf.Clamp01((float)mergeGauge / GAUGE_FOR_FEVER);
-            progressBarFill.sizeDelta = new Vector2(
-                progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress,
-                progressBarFill.sizeDelta.y
-            );
+
+            float targetWidth = progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress;
+
+            progressBarFill.DOKill();
+            progressBarFill.DOSizeDelta(
+                new Vector2(targetWidth, progressBarFill.sizeDelta.y),
+                0.3f
+            ).SetEase(Ease.OutQuad);
         }
 
         // 버튼 색상
@@ -605,7 +659,7 @@ public class GameManager : MonoBehaviour
         // 버튼 활성화
         if (gunButton != null)
         {
-            gunButton.interactable = !isGameOver && (hasBullet || isFeverMode) && activeTiles.Count > 1;
+            gunButton.interactable = !isGameOver && (hasBullet || (isFeverMode && !feverBulletUsed)) && activeTiles.Count > 1;
         }
 
         // 총알 표시 (피버 시 숨김)
@@ -908,6 +962,7 @@ public class GameManager : MonoBehaviour
                             else
                             {
                                 targetTile.MergeWith(tile);
+                                targetTile.PlayMixMergeEffect(); // ⭐ NEW: Mix 머지 파티클 호출
                             }
 
                             TileColor newColor = Random.value < 0.5f ? TileColor.Choco : TileColor.Berry;

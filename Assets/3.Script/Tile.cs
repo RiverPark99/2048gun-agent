@@ -213,13 +213,13 @@ public class Tile : MonoBehaviour
     {
         SetValue(value * 2);
 
-        //// 독립 파티클 생성 (타일 위치에 고정)
-        //SpawnParticleAtPosition(
-        //    GetComponent<RectTransform>().anchoredPosition,
-        //    new Color(1f, 0.8f, 0.2f),
-        //    80f,
-        //    0.3f
-        //);
+        // 독립 파티클 생성 (타일 위치에 고정)
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.8f, 0.2f),
+            80f,
+            0.3f
+        );
 
         StartCoroutine(PopAnimation());
     }
@@ -243,8 +243,6 @@ public class Tile : MonoBehaviour
         );
     }
 
-
-
     public void PlayBerryMergeEffect()
     {
         Debug.Log("BERRY particle!");
@@ -257,7 +255,18 @@ public class Tile : MonoBehaviour
             0.35f
         );
     }
+    public void PlayMixMergeEffect()
+    {
+        Debug.Log("MIX particle!");
 
+        // ⭐ Mix 머지 파티클 (초코색 + 핑크색 혼합)
+        SpawnParticleAtPosition(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.65f, 0.65f),  // 초코+핑크 중간색 (밝은 코랄 핑크)
+            100f,
+            0.35f
+        );
+    }
 
 
     private System.Collections.IEnumerator PopAnimation()
