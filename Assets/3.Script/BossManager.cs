@@ -46,11 +46,14 @@ public class BossManager : MonoBehaviour
 
     private bool isTransitioning = false;
     private GameManager gameManager;
+    private Tweener bossIdleAnimation; // ⭐ NEW: 보스 오뚜기 애니메이션
+    private Sequence attackBlinkAnimation; // ⭐ NEW: 공격 시 점멸 애니메이션
 
     void Start()
     {
         gameManager = FindAnyObjectByType<GameManager>();
         InitializeBoss();
+        StartBossIdleAnimation(); // ⭐ NEW: 보스 오뚜기 애니메이션 시작
     }
 
     void InitializeBoss()
@@ -61,7 +64,7 @@ public class BossManager : MonoBehaviour
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-        
+
         // ⭐ UPDATED: 공격력 계산 (40 이상부터 천천히)
         if (bossLevel < damageThreshold)
         {
@@ -74,7 +77,7 @@ public class BossManager : MonoBehaviour
             int slowIncreaseCount = (bossLevel - damageThreshold) / slowIncreaseRate;
             currentBossDamage = baseDamage + (damageThreshold - 1) + slowIncreaseCount;
         }
-        
+
         currentTurnCount = currentTurnInterval;
 
         // ⭐ FIXED: 중복 제거
@@ -106,6 +109,15 @@ public class BossManager : MonoBehaviour
         UpdateUI(false);
     }
 
+    // ⭐ NEW: 턴 추가 (Fever 총 사용 시)
+    public void AddTurns(int turns)
+    {
+        if (isTransitioning) return;
+
+        currentTurnCount += turns;
+        Debug.Log($"보스 공격 턴 +{turns} (현재: {currentTurnCount}턴 남음)");
+        UpdateBossAttackUI();
+    }
 
     public void OnPlayerTurn()
     {
@@ -119,8 +131,6 @@ public class BossManager : MonoBehaviour
         if (currentTurnCount <= 0)
         {
             AttackPlayer();
-            currentTurnCount = currentTurnInterval;
-            UpdateBossAttackUI();
         }
     }
 
@@ -132,6 +142,23 @@ public class BossManager : MonoBehaviour
     private IEnumerator AttackPlayerCoroutine()
     {
         Debug.Log($"⚠️ 보스 공격 준비!");
+
+        // ⭐ NEW: In: 0 표시 + 점멸 시작
+        if (bossAttackInfoText != null)
+        {
+            bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: 0";
+
+            // 빨강/흰색 점멸 애니메이션
+            if (attackBlinkAnimation != null)
+            {
+                attackBlinkAnimation.Kill();
+            }
+
+            attackBlinkAnimation = DOTween.Sequence()
+                .Append(bossAttackInfoText.DOColor(Color.red, 0.2f))
+                .Append(bossAttackInfoText.DOColor(Color.white, 0.2f))
+                .SetLoops(-1, LoopType.Restart);
+        }
 
         // ⭐ NEW: 플레이어 입력 차단
         if (gameManager != null)
@@ -172,246 +199,309 @@ public class BossManager : MonoBehaviour
         {
             gameManager.SetBossAttacking(false);
         }
+    
+
+        // ⭐ NEW: 점멸 중지 + 턴 초기화
+        if (attackBlinkAnimation != null)
+        {
+            attackBlinkAnimation.Kill();
+            attackBlinkAnimation = null;
+        }
+
+// 턴 초기화 (공격 후)
+currentTurnCount = currentTurnInterval;
+UpdateBossAttackUI();
+
+Debug.Log($"보스 공격 완료! 턴 초기화: {currentTurnCount}");
     }
 
 
     public void ResetTurnCount()
+{
+    currentTurnCount = currentTurnInterval;
+    Debug.Log($"💥 패링! 보스 공격 턴 초기화! ({currentTurnInterval}턴)");
+    UpdateBossAttackUI();
+}
+
+void UpdateUI(bool instant = false)
+{
+    if (hpSlider != null)
     {
-        currentTurnCount = currentTurnInterval;
-        Debug.Log($"💥 패링! 보스 공격 턴 초기화! ({currentTurnInterval}턴)");
-        UpdateBossAttackUI();
-    }
+        float targetValue = (float)currentHP / (float)maxHP;
 
-    void UpdateUI(bool instant = false)
-    {
-        if (hpSlider != null)
+        hpSlider.DOKill();
+
+        if (instant)
         {
-            float targetValue = (float)currentHP / (float)maxHP;
-
-            hpSlider.DOKill();
-
-            if (instant)
-            {
-                hpSlider.value = targetValue;
-            }
-            else
-            {
-                hpSlider.DOValue(targetValue, animationDuration)
-                    .SetEase(Ease.OutCubic);
-            }
-        }
-
-        if (hpText != null)
-        {
-            hpText.text = "HP: " + currentHP + " / " + maxHP;
-        }
-
-        UpdateBossAttackUI();
-    }
-
-    void UpdateBossAttackUI()
-    {
-        if (bossAttackInfoText != null)
-        {
-            Color textColor = Color.white;
-
-            if (currentTurnCount <= 1)
-            {
-                textColor = new Color(1f, 0.2f, 0.2f);
-            }
-            else if (currentTurnCount <= 3)
-            {
-                textColor = new Color(1f, 0.8f, 0.2f);
-            }
-            else
-            {
-                textColor = new Color(0.7f, 0.7f, 0.7f);
-            }
-
-            bossAttackInfoText.color = textColor;
-            bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: {currentTurnCount}";
-        }
-    }
-
-    IEnumerator OnBossDefeatedCoroutine()
-    {
-        isTransitioning = true;
-
-        if (gameManager != null)
-        {
-            gameManager.OnBossDefeated();
-            gameManager.SetBossTransitioning(true);
-        }
-
-        Debug.Log("Boss " + bossLevel + " defeated!");
-
-        // ⭐ NEW: UI 비활성화
-        SetBossUIActive(false);
-
-        // ⭐ NEW: 보스 이미지 사라지기 (DOTween)
-        if (bossImageArea != null)
-        {
-            Sequence fadeSeq = DOTween.Sequence();
-            fadeSeq.Append(bossImageArea.DOFade(0f, 0.5f).SetEase(Ease.InQuad));
-            fadeSeq.Join(bossImageArea.transform.DOScale(0.8f, 0.5f).SetEase(Ease.InBack));
-            yield return fadeSeq.WaitForCompletion();
-        }
-
-        yield return new WaitForSeconds(bossSpawnDelay);
-
-        bossLevel++;
-
-        // ⭐ NEW: 다음 보스 이미지 선택
-        SelectNextBossImage();
-
-        // ⭐ NEW: 보스 이미지 나타나기 (DOTween)
-        if (bossImageArea != null)
-        {
-            // ⭐ FIXED: sprite가 null이면 기본 스프라이트 설정
-            if (bossImageArea.sprite == null && bossSprites.Count > 0)
-            {
-                bossImageArea.sprite = bossSprites[0];
-            }
-            
-            bossImageArea.color = new Color(1f, 1f, 1f, 0f); // 투명
-            bossImageArea.transform.localScale = Vector3.one * 1.2f;
-
-            Sequence appearSeq = DOTween.Sequence();
-            appearSeq.Append(bossImageArea.DOFade(1f, 0.5f).SetEase(Ease.OutQuad));
-            appearSeq.Join(bossImageArea.transform.DOScale(1f, 0.5f).SetEase(Ease.OutBack));
-            yield return appearSeq.WaitForCompletion();
-        }
-
-        // ⭐ NEW: 체력 설정 (지수 증가)
-        float exponent = Mathf.Pow(1.5f, bossLevel - 1);
-        maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
-        currentHP = maxHP;
-
-        currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-        
-        // ⭐ UPDATED: 공격력 계산 (40 이상부터 천천히)
-        if (bossLevel < damageThreshold)
-        {
-            currentBossDamage = baseDamage + (bossLevel - 1);
+            hpSlider.value = targetValue;
         }
         else
         {
-            int slowIncreaseCount = (bossLevel - damageThreshold) / slowIncreaseRate;
-            currentBossDamage = baseDamage + (damageThreshold - 1) + slowIncreaseCount;
+            hpSlider.DOValue(targetValue, animationDuration)
+                .SetEase(Ease.OutCubic);
         }
-        
-        currentTurnCount = currentTurnInterval;
-
-        UpdateUI(true);
-
-        // ⭐ NEW: UI 활성화
-        SetBossUIActive(true);
-
-        if (gameManager != null)
-        {
-            gameManager.SetBossTransitioning(false);
-        }
-
-        isTransitioning = false;
     }
 
-    public void ResetBoss()
+    if (hpText != null)
     {
-        bossLevel = 1;
-        currentBossIndex = 0; // ⭐ FIXED: 보스 이미지 인덱스 초기화
-        
-        // ⭐ FIXED: 보스 이미지 복원
-        if (bossImageArea != null && bossSprites.Count > 0)
+        hpText.text = "HP: " + currentHP + " / " + maxHP;
+    }
+
+    UpdateBossAttackUI();
+}
+
+void UpdateBossAttackUI()
+{
+    if (bossAttackInfoText != null)
+    {
+        Color textColor = Color.white;
+
+        if (currentTurnCount <= 1)
+        {
+            textColor = new Color(1f, 0.2f, 0.2f);
+        }
+        else if (currentTurnCount <= 3)
+        {
+            textColor = new Color(1f, 0.8f, 0.2f);
+        }
+        else
+        {
+            textColor = new Color(0.7f, 0.7f, 0.7f);
+        }
+
+        bossAttackInfoText.color = textColor;
+        bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: {currentTurnCount}";
+    }
+}
+
+IEnumerator OnBossDefeatedCoroutine()
+{
+    isTransitioning = true;
+
+    if (gameManager != null)
+    {
+        gameManager.OnBossDefeated();
+        gameManager.SetBossTransitioning(true);
+    }
+
+    Debug.Log("Boss " + bossLevel + " defeated!");
+
+    // ⭐ NEW: UI 비활성화
+    SetBossUIActive(false);
+
+    // ⭐ NEW: 오뚜기 애니메이션 정지
+    StopBossIdleAnimation();
+
+    // ⭐ NEW: 보스 이미지 사라지기 (DOTween)
+    if (bossImageArea != null)
+    {
+        Sequence fadeSeq = DOTween.Sequence();
+        fadeSeq.Append(bossImageArea.DOFade(0f, 0.5f).SetEase(Ease.InQuad));
+        fadeSeq.Join(bossImageArea.transform.DOScale(0.8f, 0.5f).SetEase(Ease.InBack));
+        yield return fadeSeq.WaitForCompletion();
+    }
+
+    yield return new WaitForSeconds(bossSpawnDelay);
+
+    bossLevel++;
+
+    // ⭐ NEW: 다음 보스 이미지 선택
+    SelectNextBossImage();
+
+    // ⭐ NEW: 보스 이미지 나타나기 (DOTween)
+    if (bossImageArea != null)
+    {
+        // ⭐ FIXED: sprite가 null이면 기본 스프라이트 설정
+        if (bossImageArea.sprite == null && bossSprites.Count > 0)
         {
             bossImageArea.sprite = bossSprites[0];
-            bossImageArea.color = Color.white;
-            bossImageArea.material = null; // 팔레트 스왑 제거
-            bossImageArea.transform.localScale = Vector3.one;
-        }
-        
-        InitializeBoss();
-        isTransitioning = false;
-        
-        // ⭐ FIXED: UI 활성화 (게임 시작 시)
-        StartCoroutine(ShowBossUIAfterDelay());
-    }
-    
-    IEnumerator ShowBossUIAfterDelay()
-    {
-        yield return new WaitForSeconds(0.1f);
-        SetBossUIActive(true);
-    }
-
-    void SelectNextBossImage()
-    {
-        if (bossSprites.Count == 0)
-        {
-            Debug.LogWarning("No boss sprites assigned!");
-            return;
         }
 
-        if (bossSprites.Count == 1)
+        bossImageArea.color = new Color(1f, 1f, 1f, 0f); // 투명
+        bossImageArea.transform.localScale = Vector3.one * 1.2f;
+
+        Sequence appearSeq = DOTween.Sequence();
+        appearSeq.Append(bossImageArea.DOFade(1f, 0.5f).SetEase(Ease.OutQuad));
+        appearSeq.Join(bossImageArea.transform.DOScale(1f, 0.5f).SetEase(Ease.OutBack));
+        yield return appearSeq.WaitForCompletion();
+    }
+
+    // ⭐ NEW: 체력 설정 (지수 증가)
+    float exponent = Mathf.Pow(1.5f, bossLevel - 1);
+    maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+    currentHP = maxHP;
+
+    currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
+
+    // ⭐ UPDATED: 공격력 계산 (40 이상부터 천천히)
+    if (bossLevel < damageThreshold)
+    {
+        currentBossDamage = baseDamage + (bossLevel - 1);
+    }
+    else
+    {
+        int slowIncreaseCount = (bossLevel - damageThreshold) / slowIncreaseRate;
+        currentBossDamage = baseDamage + (damageThreshold - 1) + slowIncreaseCount;
+    }
+
+    currentTurnCount = currentTurnInterval;
+
+    UpdateUI(true);
+
+    // ⭐ NEW: UI 활성화
+    SetBossUIActive(true);
+
+    // ⭐ NEW: 오뚜기 애니메이션 재시작
+    StartBossIdleAnimation();
+
+    if (gameManager != null)
+    {
+        gameManager.SetBossTransitioning(false);
+    }
+
+    isTransitioning = false;
+}
+
+public void ResetBoss()
+{
+    bossLevel = 1;
+    currentBossIndex = 0; // ⭐ FIXED: 보스 이미지 인덱스 초기화
+
+    // ⭐ FIXED: 보스 이미지 복원
+    if (bossImageArea != null && bossSprites.Count > 0)
+    {
+        bossImageArea.sprite = bossSprites[0];
+        bossImageArea.color = Color.white;
+        bossImageArea.material = null; // 팔레트 스왑 제거
+        bossImageArea.transform.localScale = Vector3.one;
+    }
+
+    InitializeBoss();
+    isTransitioning = false;
+
+    // ⭐ FIXED: UI 활성화 (게임 시작 시)
+    StartCoroutine(ShowBossUIAfterDelay());
+
+    // ⭐ NEW: 오뚜기 애니메이션 재시작
+    StartBossIdleAnimation();
+}
+
+IEnumerator ShowBossUIAfterDelay()
+{
+    yield return new WaitForSeconds(0.1f);
+    SetBossUIActive(true);
+}
+
+void SelectNextBossImage()
+{
+    if (bossSprites.Count == 0)
+    {
+        Debug.LogWarning("No boss sprites assigned!");
+        return;
+    }
+
+    if (bossSprites.Count == 1)
+    {
+        // ⭐ 이미지 1개: 팔레트 스왑
+        if (bossImageArea.sprite == null)
         {
-            // ⭐ 이미지 1개: 팔레트 스왑
-            if (bossImageArea.sprite == null)
-            {
-                bossImageArea.sprite = bossSprites[0];
-            }
-            ApplyRandomPaletteSwap();
+            bossImageArea.sprite = bossSprites[0];
+        }
+        ApplyBrightnessBasedPaletteSwap();
+    }
+    else
+    {
+        // ⭐ 이미지 여러 개: 순환
+        currentBossIndex = (currentBossIndex + 1) % bossSprites.Count;
+
+        // ⭐ FIXED: null 체크
+        if (bossSprites[currentBossIndex] != null)
+        {
+            bossImageArea.sprite = bossSprites[currentBossIndex];
         }
         else
         {
-            // ⭐ 이미지 여러 개: 순환
-            currentBossIndex = (currentBossIndex + 1) % bossSprites.Count;
-            
-            // ⭐ FIXED: null 체크
-            if (bossSprites[currentBossIndex] != null)
-            {
-                bossImageArea.sprite = bossSprites[currentBossIndex];
-            }
-            else
-            {
-                Debug.LogWarning($"Boss sprite at index {currentBossIndex} is null!");
-            }
+            Debug.LogWarning($"Boss sprite at index {currentBossIndex} is null!");
+        }
 
-            // 처음으로 돌아갔으면 팔레트 스왑
-            if (currentBossIndex == 0)
-            {
-                ApplyRandomPaletteSwap();
-            }
+        // 처음으로 돌아갔으면 팔레트 스왑
+        if (currentBossIndex == 0)
+        {
+            ApplyBrightnessBasedPaletteSwap();
         }
     }
-    void ApplyRandomPaletteSwap()
+}
+
+// ⭐ UPDATED: 밝기만 변경 (흰색→검은색, 최대 0.3까지)
+void ApplyBrightnessBasedPaletteSwap()
+{
+    if (bossImageArea == null) return;
+
+    // bossLevel이 높을수록 어두워짐 (최대 70%까지)
+    float brightness = Mathf.Max(0.3f, 1.0f - (bossLevel * 0.02f));
+    Color grayscaleColor = new Color(brightness, brightness, brightness, 1f);
+
+    // ⭐ 팔레트 스왑 (Material 사용)
+    Material mat = new Material(Shader.Find("UI/Default"));
+    mat.SetColor("_Color", grayscaleColor);
+    bossImageArea.material = mat;
+
+    Debug.Log($"Boss palette swapped to brightness: {brightness}");
+}
+
+// ⭐ NEW: 보스 오뚜기 애니메이션
+void StartBossIdleAnimation()
+{
+    if (bossImageArea == null) return;
+
+    // 기존 애니메이션 정리
+    if (bossIdleAnimation != null)
     {
-        if (bossImageArea == null) return;
-
-        // ⭐ 랜덤 색상 (채도 높은 색상)
-        Color randomColor = Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.8f, 1f);
-
-        // ⭐ 팔레트 스왑 (Material 사용)
-        Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", randomColor);
-        bossImageArea.material = mat;
-
-        Debug.Log($"Boss palette swapped to {randomColor}");
+        bossIdleAnimation.Kill();
     }
 
-    void SetBossUIActive(bool active)
+    // 좌우 회전 애니메이션 (-5도 ~ +5도)
+    bossIdleAnimation = bossImageArea.transform.DOLocalRotate(
+        new Vector3(0f, 0f, 5f), // 5도 회전
+        2.0f // 2초 동안
+    )
+    .SetEase(Ease.InOutSine)
+    .SetLoops(-1, LoopType.Yoyo); // 무한 반복
+
+    Debug.Log("Boss idle animation started!");
+}
+
+// ⭐ NEW: 보스 오뚜기 애니메이션 정지
+void StopBossIdleAnimation()
+{
+    if (bossIdleAnimation != null)
     {
-        if (hpSlider != null)
-            hpSlider.gameObject.SetActive(active);
-
-        if (hpText != null)
-            hpText.gameObject.SetActive(active);
-
-        if (bossAttackInfoText != null)
-            bossAttackInfoText.gameObject.SetActive(active);
+        bossIdleAnimation.Kill();
+        bossIdleAnimation = null;
     }
 
-    public int GetCurrentHP() { return currentHP; }
-    public int GetMaxHP() { return maxHP; }
-    public int GetBossLevel() { return bossLevel; }
-    public int GetTurnCount() { return currentTurnCount; }
-    public int GetTurnInterval() { return currentTurnInterval; }
-    public int GetBossDamage() { return currentBossDamage; }
+    if (bossImageArea != null)
+    {
+        bossImageArea.transform.localRotation = Quaternion.identity;
+    }
+}
+
+void SetBossUIActive(bool active)
+{
+    if (hpSlider != null)
+        hpSlider.gameObject.SetActive(active);
+
+    if (hpText != null)
+        hpText.gameObject.SetActive(active);
+
+    if (bossAttackInfoText != null)
+        bossAttackInfoText.gameObject.SetActive(active);
+}
+
+public int GetCurrentHP() { return currentHP; }
+public int GetMaxHP() { return maxHP; }
+public int GetBossLevel() { return bossLevel; }
+public int GetTurnCount() { return currentTurnCount; }
+public int GetTurnInterval() { return currentTurnInterval; }
+public int GetBossDamage() { return currentBossDamage; }
 }
