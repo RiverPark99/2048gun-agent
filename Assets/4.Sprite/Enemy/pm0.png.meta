@@ -1,16 +1,10 @@
 fileFormatVersion: 2
-guid: aa99a41f9241c5e4e883dc04a50931cb
+guid: 89971bf03c184224680112448d45e1dc
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -204505957576086280
-    second: m5_0
-  - first:
-      213: -86062376172362248
-    second: m5_1
-  - first:
-      213: -2436547088525956995
-    second: m5_2
+      213: 2013516368848096846
+    second: pm0_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -145,13 +139,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: m5_0
+      name: pm0_0
       rect:
         serializedVersion: 2
         x: 0
         y: 0
-        width: 1088
-        height: 960
+        width: 1024
+        height: 1024
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -160,52 +154,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 8fce9344ae2792df0800000000000000
-      internalID: -204505957576086280
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: m5_1
-      rect:
-        serializedVersion: 2
-        x: 954
-        y: 430
-        width: 63
-        height: 86
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 8f568bf89be3ecef0800000000000000
-      internalID: -86062376172362248
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: m5_2
-      rect:
-        serializedVersion: 2
-        x: 987
-        y: 331
-        width: 48
-        height: 40
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: d78e5e51555af2ed0800000000000000
-      internalID: -2436547088525956995
+      spriteID: e4e00aa287271fb10800000000000000
+      internalID: 2013516368848096846
       vertices: []
       indices: 
       edges: []
@@ -224,9 +174,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      m5_0: -204505957576086280
-      m5_1: -86062376172362248
-      m5_2: -2436547088525956995
+      pm0_0: 2013516368848096846
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

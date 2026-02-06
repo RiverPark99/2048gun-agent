@@ -786,13 +786,11 @@ MonoBehaviour:
   bossSpawnDelay: 1
   attackMotionDuration: 0.5
   bossSprites:
-  - {fileID: 21300000, guid: 539b8e8f9fce24f45beb7fcbe396ed94, type: 3}
-  - {fileID: 21300000, guid: 397f0feb32cd0aa4d9df32cf8de28178, type: 3}
-  - {fileID: 21300000, guid: 43b26ce154593254eb056b1e008d3af3, type: 3}
-  - {fileID: 21300000, guid: 830d69f905fb7774fae3b4a3250b0593, type: 3}
-  - {fileID: 21300000, guid: 2236b4442914fd74aa33daef05711cf3, type: 3}
-  - {fileID: 21300000, guid: aa99a41f9241c5e4e883dc04a50931cb, type: 3}
-  - {fileID: 21300000, guid: 11bc5355a6dab68409e289a1ee15b1c8, type: 3}
+  - {fileID: 21300000, guid: 89971bf03c184224680112448d45e1dc, type: 3}
+  - {fileID: 21300000, guid: 8504754f06cbfb84d8311fef698551e3, type: 3}
+  - {fileID: 21300000, guid: bc3322a1bcca87b489ce9dc6f791f8dd, type: 3}
+  - {fileID: 21300000, guid: 609484ba9e2fd1041b2f0f165e8ae7ee, type: 3}
+  - {fileID: 21300000, guid: 3bf2d38a72821f045b10340111d3d72a, type: 3}
 --- !u!1 &207304595
 GameObject:
   m_ObjectHideFlags: 0
@@ -3899,7 +3897,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 40dc4dbb663128a4e9db37846245cf72, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 7c14312fc41ece142b01743c510d9a60, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
