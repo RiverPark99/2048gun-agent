@@ -72,7 +72,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int maxHeat = 100;
     [SerializeField] private int heatDecreasePerTurn = 5;
     [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
+    [SerializeField] private int bossDefeatHeatRecover = 999;
     [SerializeField] private int bossDefeatMaxHeatIncrease = 20;
+    [SerializeField] private int gunShotHeatRecover = 8;
     [SerializeField] private float heatAnimationDuration = 0.3f;
 
     [Header("색상 조합 보너스")]
@@ -106,6 +108,9 @@ public class GameManager : MonoBehaviour
     private bool isFeverMode = false;
     private int feverTurnsRemaining = 0;
     private int feverAtkBonus = 0; // ⭐ NEW: Fever 강화 보너스 (영구, Restart 시 초기화)
+    private int feverMergeAtkBonus = 0; // ⭐ NEW: Fever 머지 공격력 증가분 (영구, Restart 시 초기화)
+    private int feverEventCount = 0; // ⭐ NEW: Fever 진입/총 발사 누적 횟수
+    private long FeverMergeIncreaseAtk = 1; // ⭐ NEW: Fever 머지 시 증가량 (Fever 진입/총 발사 시 +1)
     private long permanentAttackPower = 0;
     private bool isGunMode = false;
     private bool feverBulletUsed = false; // 피버 중 총 사용 여부
@@ -221,6 +226,9 @@ public class GameManager : MonoBehaviour
         isFeverMode = false;      // 변경
         feverTurnsRemaining = 0;  // 추가
         feverAtkBonus = 0;        // ⭐ NEW: Fever 강화 보너스 초기화
+        feverMergeAtkBonus = 0;   // ⭐ NEW: Fever 머지 공격력 증가분 초기화
+        feverEventCount = 0;      // ⭐ NEW: Fever 이벤트 카운트 초기화
+        FeverMergeIncreaseAtk = 1; // ⭐ NEW: Fever 머지 증가량 초기화
         permanentAttackPower = 0; // 추가
         feverBulletUsed = false;
         currentHeat = maxHeat;
@@ -294,6 +302,9 @@ public class GameManager : MonoBehaviour
         maxHeat = 100;
         permanentAttackPower = 0; // ← 추가! (영구 공격력 초기화)
         feverAtkBonus = 0; // ⭐ NEW: Fever 강화 보너스 초기화
+        feverMergeAtkBonus = 0; // ⭐ NEW: Fever 머지 공격력 증가분 초기화
+        feverEventCount = 0; // ⭐ NEW: Fever 이벤트 카운트 초기화
+        FeverMergeIncreaseAtk = 1; // ⭐ NEW: Fever 머지 증가량 초기화
 
         StartGame();
 
@@ -368,6 +379,14 @@ public class GameManager : MonoBehaviour
                 hasBullet = false;
                 Debug.Log($"FEVER MODE! {FEVER_BASE_TURNS} turns granted!");
                 UpdateGunButtonAnimation(); // ⭐ NEW: 피버 시작 시 애니메이션 업데이트
+
+                // ⭐ NEW: Fever 진입 시마다 Fever ATK Bonus +1
+                feverAtkBonus++;
+                Debug.Log($"🔥 FEVER 진입! Fever ATK Bonus +1 (Total: {feverAtkBonus})");
+
+                // ⭐ NEW: Fever 진입 시마다 Fever 머지 증가량 +1
+                FeverMergeIncreaseAtk++;
+                Debug.Log($"🔥 FEVER 진입! Fever 머지 증가량 +1 (Now: {FeverMergeIncreaseAtk})");
             }
             else if (mergeGauge >= GAUGE_FOR_BULLET && !hasBullet)
             {
@@ -456,6 +475,13 @@ public class GameManager : MonoBehaviour
 
     void ToggleGunMode()
     {
+        // ⭐ NEW: 보스 공격 중에는 Gun Mode 전환 불가
+        if (isBossAttacking)
+        {
+            Debug.Log("보스 공격 중에는 Gun Mode 전환 불가!");
+            return;
+        }
+
         // ⭐ Gun Mode 중이면 즉시 취소 가능
         if (isGunMode)
         {
@@ -799,6 +825,10 @@ public class GameManager : MonoBehaviour
                 }
                 feverAtkBonus++; // Fever 강화 보너스 +1 (영구)
                 Debug.Log($"🔥 FEVER ATK BONUS +1! (Total: {feverAtkBonus})");
+
+                // ⭐ NEW: Fever 총 사용 시에도 Fever 머지 증가량 +1
+                FeverMergeIncreaseAtk++;
+                Debug.Log($"🔥 FEVER GUN! Fever 머지 증가량 +1 (Now: {FeverMergeIncreaseAtk})");
             }
             else
             {
@@ -1512,11 +1542,11 @@ public class GameManager : MonoBehaviour
                             // 전체 머지 카운트 (콤보용 - 모든 머지)
                             mergeCountThisTurn++;
 
-                            // 피버 중 머지 시 추가 공격력 +1
+                            // ⭐ Fever 중 머지 시 영구 공격력 증가 (FeverMergeIncreaseAtk만큼)
                             if (isFeverMode)
                             {
-                                permanentAttackPower++;
-                                Debug.Log($"FEVER MERGE! +ATK +1 (Total: {permanentAttackPower})");
+                                permanentAttackPower += FeverMergeIncreaseAtk;
+                                Debug.Log($"🔥 FEVER MERGE! +ATK +{FeverMergeIncreaseAtk} (Total: {permanentAttackPower})");
                             }
 
                             activeTiles.Remove(tile);
@@ -1582,6 +1612,13 @@ public class GameManager : MonoBehaviour
                 if (isFeverMode)
                 {
                     baseDamage = (long)(baseDamage * feverDamageMultiplier);
+                }
+
+                // ⭐ NEW: Fever 머지 시 공격력 증가분 적용
+                if (isFeverMode && feverMergeAtkBonus > 0)
+                {
+                    baseDamage += feverMergeAtkBonus;
+                    Debug.Log($"🔥 FEVER MERGE! 공격력 +{feverMergeAtkBonus}");
                 }
 
                 // ⭐ NEW: Fever ATK Bonus 적용

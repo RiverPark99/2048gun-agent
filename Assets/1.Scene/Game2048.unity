@@ -534,7 +534,9 @@ MonoBehaviour:
   maxHeat: 100
   heatDecreasePerTurn: 0
   comboHeatRecover: 0000000003000000060000000a0000000f0000001e000000
+  bossDefeatHeatRecover: 999
   bossDefeatMaxHeatIncrease: 1
+  gunShotHeatRecover: 8
   heatAnimationDuration: 0.3
   chocoMergeDamageMultiplier: 4
   berryMergeHealMultiplier: 4
@@ -778,12 +780,11 @@ MonoBehaviour:
   hpText: {fileID: 653140202}
   bossAttackInfoText: {fileID: 275876072}
   baseHP: 250
-  hpIncreasePerLevel: 250
+  hpIncreasePerLevel: 200
   baseTurnInterval: 6
   minTurnInterval: 4
-  baseDamage: 30
+  baseDamage: 28
   damageThreshold: 40
-  slowIncreaseRate: 4
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1
@@ -4049,7 +4050,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: a146ab9ebbbfd3d40ad12b9eb562a362, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 779a81a21bb7fba4ca9c7086381cd34a, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
