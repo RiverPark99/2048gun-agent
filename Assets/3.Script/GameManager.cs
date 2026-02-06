@@ -594,6 +594,19 @@ public class GameManager : MonoBehaviour
         if (!hasBullet && (!isFeverMode || feverBulletUsed))
         {
             isGunMode = false;
+
+            // ⭐ NEW: Gun Guide 정리
+            if (gunGuideAnimation != null)
+            {
+                gunGuideAnimation.Kill();
+                gunGuideAnimation = null;
+            }
+            if (gunModeGuideText != null)
+            {
+                gunModeGuideText.transform.localScale = Vector3.one;
+                gunModeGuideText.gameObject.SetActive(false);
+            }
+
             UpdateGunUI();
             return;
         }
@@ -602,6 +615,19 @@ public class GameManager : MonoBehaviour
         {
             Debug.Log("타일이 1개 이하일 때는 총을 쓸 수 없습니다!");
             isGunMode = false;
+
+            // ⭐ NEW: Gun Guide 정리
+            if (gunGuideAnimation != null)
+            {
+                gunGuideAnimation.Kill();
+                gunGuideAnimation = null;
+            }
+            if (gunModeGuideText != null)
+            {
+                gunModeGuideText.transform.localScale = Vector3.one;
+                gunModeGuideText.gameObject.SetActive(false);
+            }
+
             UpdateGunUI();
             return;
         }
@@ -783,6 +809,19 @@ public class GameManager : MonoBehaviour
             }
 
             isGunMode = false;
+
+            // ⭐ NEW: Gun Guide 정리
+            if (gunGuideAnimation != null)
+            {
+                gunGuideAnimation.Kill();
+                gunGuideAnimation = null;
+            }
+            if (gunModeGuideText != null)
+            {
+                gunModeGuideText.transform.localScale = Vector3.one;
+                gunModeGuideText.gameObject.SetActive(false);
+            }
+
             UpdateGunUI();
 
             if (!CanMove() && !hasBullet && !isFeverMode)
@@ -1346,6 +1385,7 @@ public class GameManager : MonoBehaviour
         int mergeCountThisTurn = 0;
 
         int chocoMergeCount = 0;
+        bool hadChocoMerge = false; // ⭐ NEW: 초코 머지 발생 여부
         int berryMergeCount = 0;
         bool hadBerryMerge = false; // ⭐ NEW: Berry 머지 발생 여부
 
@@ -1403,6 +1443,7 @@ public class GameManager : MonoBehaviour
                             if (color1 == TileColor.Choco && color2 == TileColor.Choco)
                             {
                                 chocoMergeCount++;
+                                hadChocoMerge = true; // ⭐ NEW: 초코 머지 발생
 
                                 int bonusDamage = mergedValue * (chocoMergeDamageMultiplier - 1);
                                 totalMergedValue += bonusDamage;
@@ -1525,7 +1566,17 @@ public class GameManager : MonoBehaviour
                 }
 
                 long baseDamage = (long)Mathf.Floor(totalMergedValue * comboMultiplier);
-                baseDamage += permanentAttackPower;
+
+                // ⭐ NEW: Choco merge가 있었으면 추가 ATK를 2배로 적용
+                if (hadChocoMerge && permanentAttackPower > 0)
+                {
+                    baseDamage += permanentAttackPower * 2; // 2배로 적용
+                    Debug.Log($"🍫 CHOCO MERGE! 추가 ATK 2배 적용: +{permanentAttackPower * 2}");
+                }
+                else
+                {
+                    baseDamage += permanentAttackPower; // 일반 적용
+                }
 
                 // ⭐ NEW: 피버 모드 데미지 1.5배
                 if (isFeverMode)
