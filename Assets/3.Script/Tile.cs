@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using DG.Tweening;
 
 public enum TileColor
 {
@@ -17,45 +18,48 @@ public class Tile : MonoBehaviour
     [SerializeField] private Image background;
     [SerializeField] private TextMeshProUGUI valueText;
     [SerializeField] private ParticleSystem mergeParticle;
-    private Coffee.UIExtensions.UIParticle uiParticle; // UIParticle 컴포넌트
+    private Coffee.UIExtensions.UIParticle uiParticle;
+
+    // ⭐ NEW: 보호 테두리
+    private Outline borderOutline;
+    private bool isProtected = false;
+    private Coroutine blinkCoroutine;
 
     private RectTransform rectTransform;
     private Vector2 targetPosition;
     private bool isMoving = false;
     private float moveSpeed = 12f;
 
-    // 검정/핑크 그라데이션 (2~4096까지 12단계)
-    // 검정 -> 초콜릿 계열로 변경 (흰색 -> 밝은 초콜릿 -> 초콜릿 -> 다크 초콜릿 -> 검정)
     private Color[] chocoGradient = new Color[]
     {
-        new Color(1f, 1f, 1f),                 // 2 - 완전 흰색
-        new Color(0.95f, 0.90f, 0.85f),        // 4 - 크림색
-        new Color(0.85f, 0.75f, 0.65f),        // 8 - 밝은 베이지
-        new Color(0.75f, 0.60f, 0.45f),        // 16 - 베이지
-        new Color(0.65f, 0.50f, 0.35f),        // 32 - 밝은 초콜릿
-        new Color(0.55f, 0.40f, 0.28f),        // 64 - 밀크 초콜릿
-        new Color(0.45f, 0.32f, 0.22f),        // 128 - 초콜릿
-        new Color(0.35f, 0.25f, 0.18f),        // 256 - 진한 초콜릿
-        new Color(0.28f, 0.20f, 0.14f),        // 512 - 다크 초콜릿
-        new Color(0.20f, 0.15f, 0.10f),        // 1024 - 매우 진한 다크 초콜릿
-        new Color(0.12f, 0.09f, 0.06f),        // 2048 - 거의 검정 초콜릿
-        new Color(0.0f, 0.0f, 0.0f),           // 4096 - 완전 검정
+        new Color(0.95f, 0.90f, 0.85f),
+        new Color(0.90f, 0.85f, 0.75f),
+        new Color(0.85f, 0.75f, 0.65f),
+        new Color(0.75f, 0.60f, 0.45f),
+        new Color(0.65f, 0.50f, 0.35f),
+        new Color(0.55f, 0.40f, 0.28f),
+        new Color(0.45f, 0.32f, 0.22f),
+        new Color(0.35f, 0.25f, 0.18f),
+        new Color(0.28f, 0.20f, 0.14f),
+        new Color(0.20f, 0.15f, 0.10f),
+        new Color(0.12f, 0.09f, 0.06f),
+        new Color(0.0f, 0.0f, 0.0f),
     };
 
     private Color[] berryGradient = new Color[]
     {
-        new Color(1f, 0.92f, 0.95f),     // 2
-        new Color(1f, 0.85f, 0.9f),      // 4
-        new Color(1f, 0.77f, 0.85f),     // 8
-        new Color(1f, 0.69f, 0.80f),     // 16
-        new Color(1f, 0.61f, 0.75f),     // 32
-        new Color(1f, 0.53f, 0.70f),     // 64
-        new Color(1f, 0.45f, 0.65f),     // 128
-        new Color(0.98f, 0.37f, 0.60f),  // 256
-        new Color(0.95f, 0.29f, 0.55f),  // 512
-        new Color(0.92f, 0.21f, 0.50f),  // 1024
-        new Color(0.88f, 0.13f, 0.45f),  // 2048
-        new Color(0.85f, 0.05f, 0.40f),  // 4096
+        new Color(1f, 0.80f, 0.85f),
+        new Color(1f, 0.75f, 0.82f),
+        new Color(1f, 0.70f, 0.79f),
+        new Color(1f, 0.65f, 0.76f),
+        new Color(1f, 0.60f, 0.73f),
+        new Color(1f, 0.55f, 0.70f),
+        new Color(1f, 0.50f, 0.67f),
+        new Color(1f, 0.45f, 0.64f),
+        new Color(0.98f, 0.40f, 0.61f),
+        new Color(0.95f, 0.35f, 0.58f),
+        new Color(0.92f, 0.25f, 0.52f),
+        new Color(0.88f, 0.15f, 0.46f),
     };
 
     private Color goldColor = new Color(1f, 0.84f, 0f);
@@ -64,9 +68,6 @@ public class Tile : MonoBehaviour
     void Awake()
     {
         rectTransform = GetComponent<RectTransform>();
-
-        // CreateParticleSystem() 제거!
-        // 파티클은 머지 시에만 독립적으로 생성
     }
 
     void Update()
@@ -87,21 +88,27 @@ public class Tile : MonoBehaviour
         }
     }
 
-    // 독립 파티클 생성 함수
+    void OnDestroy()
+    {
+        if (blinkCoroutine != null)
+        {
+            StopCoroutine(blinkCoroutine);
+            blinkCoroutine = null;
+        }
+    }
+
     void SpawnParticleAtPosition(Vector2 position, Color color, float size, float lifetime)
     {
         GameObject particleObj = new GameObject("MergeParticle");
 
-        // gridContainer의 자식으로 생성 (타일과 독립)
         Transform gridContainer = transform.parent;
         particleObj.transform.SetParent(gridContainer, false);
 
-        // RectTransform 설정
         RectTransform particleRect = particleObj.AddComponent<RectTransform>();
         particleRect.anchorMin = new Vector2(0.5f, 0.5f);
         particleRect.anchorMax = new Vector2(0.5f, 0.5f);
         particleRect.pivot = new Vector2(0.5f, 0.5f);
-        particleRect.anchoredPosition = position; // 지정된 위치
+        particleRect.anchoredPosition = position;
         particleRect.sizeDelta = Vector2.zero;
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
@@ -159,28 +166,30 @@ public class Tile : MonoBehaviour
         uiParticle.scale = 3f;
         uiParticle.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
 
-        // 재생 및 자동 삭제
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);
-
-        Debug.Log($"Independent particle spawned at {position}!");
     }
-
 
     public void SetValue(int newValue)
     {
         value = newValue;
         valueText.text = value.ToString();
 
-        valueText.outlineWidth = 0.3f;
-        valueText.outlineColor = new Color(0f, 0f, 0f, 0.8f);
+        // ⭐ UPDATED: TMP Outline 0.05 + Shadow
+        valueText.outlineWidth = 0.1f;
+        valueText.outlineColor = new Color(0f, 0f, 0f, 1f);
+        valueText.fontSharedMaterial.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.1f);
+        valueText.fontSharedMaterial.SetColor(ShaderUtilities.ID_OutlineColor, new Color(0f, 0f, 0f, 1f));
 
-        valueText.fontSharedMaterial.EnableKeyword("UNDERLAY_ON");
-        valueText.fontMaterial.SetColor("_UnderlayColor", new Color(0f, 0f, 0f, 0.5f));
-        valueText.fontMaterial.SetFloat("_UnderlayOffsetX", 0.5f);
-        valueText.fontMaterial.SetFloat("_UnderlayOffsetY", -0.5f);
-        valueText.fontMaterial.SetFloat("_UnderlayDilate", 0.3f);
-        valueText.fontMaterial.SetFloat("_UnderlaySoftness", 0.1f);
+        Shadow shadow = valueText.GetComponent<Shadow>();
+        if (shadow == null)
+        {
+            shadow = valueText.gameObject.AddComponent<Shadow>();
+        }
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
+        shadow.effectDistance = new Vector2(3f, -3f);
+
+        valueText.UpdateMeshPadding();
 
         UpdateAppearance();
     }
@@ -213,7 +222,6 @@ public class Tile : MonoBehaviour
     {
         SetValue(value * 2);
 
-        // 독립 파티클 생성 (타일 위치에 고정)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
             new Color(1f, 0.8f, 0.2f),
@@ -232,61 +240,81 @@ public class Tile : MonoBehaviour
 
     public void PlayChocoMergeEffect()
     {
-        Debug.Log("CHOCO particle!");
-
-        // 독립 파티클 생성
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.84f, 0f),
+            new Color(0.55f, 0.40f, 0.28f),
             100f,
             0.35f
         );
+
+        StartCoroutine(DelayedParticle(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(0.55f, 0.40f, 0.28f),
+            100f,
+            0.35f,
+            0.05f
+        ));
     }
 
     public void PlayBerryMergeEffect()
     {
-        Debug.Log("BERRY particle!");
-
-        // 독립 파티클 생성
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
-            new Color(0.3f, 1f, 0.3f),
+            new Color(1f, 0.5f, 0.65f),
             100f,
             0.35f
         );
+
+        StartCoroutine(DelayedParticle(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.5f, 0.65f),
+            100f,
+            0.35f,
+            0.05f
+        ));
     }
+
     public void PlayMixMergeEffect()
     {
-        Debug.Log("MIX particle!");
-
-        // ⭐ Mix 머지 파티클 (초코색 + 핑크색 혼합)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.65f, 0.65f),  // 초코+핑크 중간색 (밝은 코랄 핑크)
+            new Color(0.55f, 0.40f, 0.28f),
             100f,
             0.35f
         );
+
+        StartCoroutine(DelayedParticle(
+            GetComponent<RectTransform>().anchoredPosition,
+            new Color(1f, 0.5f, 0.65f),
+            100f,
+            0.35f,
+            0.05f
+        ));
     }
+
+    System.Collections.IEnumerator DelayedParticle(Vector2 position, Color color, float size, float lifetime, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        SpawnParticleAtPosition(position, color, size, lifetime);
+    }
+
     public void PlayGunDestroyEffect()
     {
-        Debug.Log("GUN DESTROY particle!");
-
-        // 총으로 부서질 때 특수 파티클 (금색 폭발)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.84f, 0f),  // 금색
-            120f,  // 더 큰 크기
-            0.4f   // 조금 더 긴 지속시간
+            new Color(1f, 0.84f, 0f),
+            120f,
+            0.4f
         );
 
-        // 추가 파티클 (흰색 섬광)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
             Color.white,
-            150f,  // 매우 큰 크기
-            0.2f   // 짧은 지속시간 (섬광 효과)
+            150f,
+            0.2f
         );
     }
+
     private System.Collections.IEnumerator PopAnimation()
     {
         float duration = 0.3f;
@@ -327,6 +355,87 @@ public class Tile : MonoBehaviour
         }
 
         transform.localScale = Vector3.one;
+    }
+
+    public void SetProtected(bool protected_, bool shouldBlink = false)
+    {
+        isProtected = protected_;
+
+        if (blinkCoroutine != null)
+        {
+            StopCoroutine(blinkCoroutine);
+            blinkCoroutine = null;
+        }
+
+        if (borderOutline == null)
+        {
+            borderOutline = background.gameObject.GetComponent<Outline>();
+            if (borderOutline == null)
+            {
+                borderOutline = background.gameObject.AddComponent<Outline>();
+            }
+        }
+
+        if (isProtected)
+        {
+            borderOutline.effectColor = new Color(0.8f, 0.8f, 0.9f, 1f);
+            borderOutline.effectDistance = new Vector2(8f, 8f);
+            borderOutline.enabled = true;
+        }
+        else if (shouldBlink)
+        {
+            borderOutline.effectColor = new Color(1f, 1f, 0.3f, 1f);
+            borderOutline.effectDistance = new Vector2(6f, 6f);
+            borderOutline.enabled = true;
+
+            blinkCoroutine = StartCoroutine(BlinkBorder());
+        }
+        else
+        {
+            borderOutline.enabled = false;
+        }
+    }
+
+    System.Collections.IEnumerator BlinkBorder()
+    {
+        if (borderOutline == null) yield break;
+
+        Color brightColor = new Color(1f, 1f, 0.3f, 1f);
+        Color dimColor = new Color(1f, 1f, 0.3f, 0.2f);
+        float duration = 0.6f;
+
+        while (true)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                if (borderOutline == null || !borderOutline.enabled)
+                {
+                    yield break;
+                }
+
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                borderOutline.effectColor = Color.Lerp(brightColor, dimColor, t);
+                
+                yield return null;
+            }
+
+            elapsed = 0f;
+            while (elapsed < duration)
+            {
+                if (borderOutline == null || !borderOutline.enabled)
+                {
+                    yield break;
+                }
+
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                borderOutline.effectColor = Color.Lerp(dimColor, brightColor, t);
+                
+                yield return null;
+            }
+        }
     }
 
     private void UpdateAppearance()

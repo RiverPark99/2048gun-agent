@@ -23,7 +23,7 @@ public class BossManager : MonoBehaviour
     [SerializeField] private int baseTurnInterval = 8;
     [SerializeField] private int minTurnInterval = 3;
     [SerializeField] private int baseDamage = 28;
-    [SerializeField] private int damageThreshold = 40; // 40 이상부터 천천히 증가
+    [SerializeField] private int damageThreshold = 40;
 
     private int currentTurnInterval;
     private int currentTurnCount = 0;
@@ -40,7 +40,7 @@ public class BossManager : MonoBehaviour
     [SerializeField] private float attackMotionDuration = 0.5f;
 
     [Header("Boss Images")]
-    [SerializeField] private List<Sprite> bossSprites = new List<Sprite>(); // 보스 이미지 리스트 (0번: 기본, 1~16번: 루프용)
+    [SerializeField] private List<Sprite> bossSprites = new List<Sprite>();
     private int currentBossIndex = 0;
 
     private bool isTransitioning = false;
@@ -48,6 +48,8 @@ public class BossManager : MonoBehaviour
     private Tweener bossIdleAnimation;
     private Sequence attackBlinkAnimation;
     private bool isFirstGame = true;
+
+    private bool isFrozen = false;
 
     void Start()
     {
@@ -61,27 +63,25 @@ public class BossManager : MonoBehaviour
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
+        if (bossLevel == 39)
+        {
+            maxHP = 2147483647;
+        }
+
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
-        // 공격력 계산: 공격력이 40 미만일 때는 레벨당 1씩, 40 이상부터는 8번마다 1씩 증가
-        // baseDamage = 28
-        // 레벨 1 = 28, 레벨 2 = 29, ..., 레벨 13 = 40
-        // 레벨 13~20: 40 (8번 고정)
-        // 레벨 21~28: 41 (8번 고정)
         int tempDamage = baseDamage + (bossLevel - 1);
         
         if (tempDamage < damageThreshold)
         {
-            // 공격력이 40 미만: 그대로 사용
             currentBossDamage = tempDamage;
         }
         else
         {
-            // 공격력이 40 이상: 40부터 8번마다 1씩 증가
-            int levelsOver40 = bossLevel - (damageThreshold - baseDamage); // 40 도달 레벨 계산
-            int slowIncreaseCount = levelsOver40 / 8; // 8번마다 1씩
+            int levelsOver40 = bossLevel - (damageThreshold - baseDamage);
+            int slowIncreaseCount = levelsOver40 / 8;
             currentBossDamage = damageThreshold + slowIncreaseCount;
         }
 
@@ -94,6 +94,12 @@ public class BossManager : MonoBehaviour
     public void TakeDamage(long damage)
     {
         if (isTransitioning) return;
+
+        if (bossLevel >= 40)
+        {
+            Debug.Log("40번째 적은 무적!");
+            return;
+        }
 
         int damageInt = (int)Mathf.Min(damage, int.MaxValue);
         currentHP -= damageInt;
@@ -116,6 +122,7 @@ public class BossManager : MonoBehaviour
     public void AddTurns(int turns)
     {
         if (isTransitioning) return;
+        if (isFrozen) return;
 
         currentTurnCount += turns;
         Debug.Log($"보스 공격 턴 +{turns} (현재: {currentTurnCount}턴 남음)");
@@ -125,6 +132,7 @@ public class BossManager : MonoBehaviour
     public void OnPlayerTurn()
     {
         if (isTransitioning) return;
+        if (isFrozen) return;
 
         currentTurnCount--;
         Debug.Log($"보스 공격까지 {currentTurnCount}턴 남음");
@@ -153,7 +161,7 @@ public class BossManager : MonoBehaviour
 
         if (bossAttackInfoText != null)
         {
-            bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: 0";
+            bossAttackInfoText.text = GetAttackTurnText(0);
 
             if (attackBlinkAnimation != null)
             {
@@ -237,10 +245,40 @@ public class BossManager : MonoBehaviour
 
         if (hpText != null)
         {
-            hpText.text = "HP: " + currentHP + " / " + maxHP;
+            if (bossLevel >= 40)
+            {
+                hpText.text = "HP: ∞";
+            }
+            else
+            {
+                hpText.text = "HP: " + currentHP + " / " + maxHP;
+            }
         }
 
         UpdateBossAttackUI();
+    }
+
+    // ⭐ UPDATED: 줄바꿈 + 특수문자 개수 = 공격 턴 수
+    string GetAttackTurnText(int remainingTurns)
+    {
+        string filledSymbol = "■";
+        string emptySymbol = "□";
+
+        int totalTurns = currentTurnInterval;
+        int filledCount = totalTurns - remainingTurns;
+
+        string symbols = "";
+        for (int i = 0; i < filledCount; i++)
+        {
+            symbols += filledSymbol;
+        }
+        for (int i = filledCount; i < totalTurns; i++)
+        {
+            symbols += emptySymbol;
+        }
+
+        // ⭐ 줄바꿈으로 변경
+        return $"ATK: {currentBossDamage}\nIn {symbols}";
     }
 
     void UpdateBossAttackUI()
@@ -263,13 +301,15 @@ public class BossManager : MonoBehaviour
             }
 
             bossAttackInfoText.color = textColor;
-            bossAttackInfoText.text = $"ATK: {currentBossDamage} | In: {currentTurnCount}";
+            bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
         }
     }
 
     IEnumerator OnBossDefeatedCoroutine()
     {
         isTransitioning = true;
+
+        // ⭐ UPDATED: Freeze 해제를 여기서 하지 않음 (Fever 유지)
 
         if (gameManager != null)
         {
@@ -314,11 +354,16 @@ public class BossManager : MonoBehaviour
 
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+
+        if (bossLevel == 39)
+        {
+            maxHP = 2147483647;
+        }
+
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
-        // 공격력 계산
         int tempDamage = baseDamage + (bossLevel - 1);
         
         if (tempDamage < damageThreshold)
@@ -336,7 +381,12 @@ public class BossManager : MonoBehaviour
 
         UpdateUI(true);
         SetBossUIActive(true);
-        StartBossIdleAnimation();
+        
+        // ⭐ UPDATED: Freeze 상태라면 애니메이션 시작 안 함
+        if (!isFrozen)
+        {
+            StartBossIdleAnimation();
+        }
 
         if (gameManager != null)
         {
@@ -351,6 +401,7 @@ public class BossManager : MonoBehaviour
         isFirstGame = false;
         bossLevel = 1;
         currentBossIndex = 0;
+        isFrozen = false;
 
         if (bossImageArea != null && bossSprites.Count > 0)
         {
@@ -390,24 +441,16 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            // 이미지 루프: 0~15 (16개)
-            // 레벨 1: 이미지 -1 (기본, bossSprites[0])
-            // 레벨 2~17: 이미지 0~15 (bossSprites[1~16])
-            // 레벨 18~33: 이미지 0~15 (bossSprites[1~16])
-            // ...반복
-
             int imageIndex;
             if (bossLevel == 1 && isFirstGame)
             {
-                // 첫 게임 첫 보스: 0번 이미지 (기본, -1번 역할)
                 imageIndex = 0;
             }
             else
             {
-                // 레벨 2부터 시작
-                int adjustedLevel = bossLevel - 2; // 레벨 2 = 0, 레벨 3 = 1, ...
-                int loopPosition = adjustedLevel % 16; // 0~15
-                imageIndex = loopPosition + 1; // bossSprites[1~16]
+                int adjustedLevel = bossLevel - 2;
+                int loopPosition = adjustedLevel % 16;
+                imageIndex = loopPosition + 1;
             }
 
             currentBossIndex = imageIndex;
@@ -429,31 +472,24 @@ public class BossManager : MonoBehaviour
     {
         if (bossImageArea == null) return;
 
-        // 루프 계산: 16개씩 루프
         int loopCount;
         if (bossLevel == 1 && isFirstGame)
         {
-            loopCount = 0; // 첫 보스는 루프 0
+            loopCount = 0;
         }
         else
         {
-            // 레벨 2~17: 루프 0
-            // 레벨 18~33: 루프 1
-            // 레벨 34~49: 루프 2
             int adjustedLevel = bossLevel - 2;
             loopCount = adjustedLevel / 16;
         }
 
         Color newColor;
-        // 루프 0: Berry(분홍), 루프 1: Choco(갈색), 루프 2: Berry, ...
         if (loopCount % 2 == 0)
         {
-            // Berry: 분홍 계열
             newColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
         }
         else
         {
-            // Choco: 갈색 계열
             newColor = new Color(0.75f, 0.55f, 0.35f, 1.0f);
         }
 
@@ -472,6 +508,8 @@ public class BossManager : MonoBehaviour
         {
             bossIdleAnimation.Kill();
         }
+
+        if (isFrozen) return;
 
         bossIdleAnimation = bossImageArea.transform.DOLocalRotate(
             new Vector3(0f, 0f, 5f),
@@ -509,6 +547,23 @@ public class BossManager : MonoBehaviour
             bossAttackInfoText.gameObject.SetActive(active);
     }
 
+    public void SetFrozen(bool frozen)
+    {
+        isFrozen = frozen;
+
+        if (frozen)
+        {
+            StopBossIdleAnimation();
+            Debug.Log("🧊 Boss Frozen!");
+        }
+        else
+        {
+            StartBossIdleAnimation();
+            Debug.Log("🔥 Boss Unfrozen!");
+        }
+    }
+
+    public bool IsFrozen() { return isFrozen; }
     public int GetCurrentHP() { return currentHP; }
     public int GetMaxHP() { return maxHP; }
     public int GetBossLevel() { return bossLevel; }
