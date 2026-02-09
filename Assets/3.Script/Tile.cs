@@ -175,21 +175,15 @@ public class Tile : MonoBehaviour
         value = newValue;
         valueText.text = value.ToString();
 
-        // ⭐ UPDATED: TMP Outline 0.05 + Shadow
-        valueText.outlineWidth = 0.1f;
-        valueText.outlineColor = new Color(0f, 0f, 0f, 1f);
-        valueText.fontSharedMaterial.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.1f);
-        valueText.fontSharedMaterial.SetColor(ShaderUtilities.ID_OutlineColor, new Color(0f, 0f, 0f, 1f));
-
+        // ⭐ UPDATED: Shadow 효과만 적용 (Outline 코드 제거)
         Shadow shadow = valueText.GetComponent<Shadow>();
         if (shadow == null)
         {
             shadow = valueText.gameObject.AddComponent<Shadow>();
         }
-        shadow.effectColor = new Color(0f, 0f, 0f, 0.9f);
-        shadow.effectDistance = new Vector2(3f, -3f);
-
-        valueText.UpdateMeshPadding();
+        shadow.effectColor = new Color(0f, 0f, 0f, 1f); // 완전 불투명
+        shadow.effectDistance = new Vector2(5f, -5f); // 더 확실한 그림자
+        shadow.useGraphicAlpha = true;
 
         UpdateAppearance();
     }

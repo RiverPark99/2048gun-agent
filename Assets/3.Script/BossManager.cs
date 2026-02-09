@@ -50,6 +50,8 @@ public class BossManager : MonoBehaviour
     private bool isFirstGame = true;
 
     private bool isFrozen = false;
+    private int bonusTurnsAdded = 0; // ⭐ NEW: Fever Gun으로 추가된 총 보너스 턴 수
+    private int bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴 수
 
     void Start()
     {
@@ -125,8 +127,10 @@ public class BossManager : MonoBehaviour
         if (isFrozen) return;
 
         currentTurnCount += turns;
-        Debug.Log($"보스 공격 턴 +{turns} (현재: {currentTurnCount}턴 남음)");
-        UpdateBossAttackUI();
+        bonusTurnsAdded += turns; // ⭐ NEW: 총 보너스 턴 수 기록
+        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스는 0부터 시작
+        Debug.Log($"⏰ 보스 공격 턴 +{turns} (현재: {currentTurnCount}턴 남음, 보너스: {bonusTurnsAdded}, 채워짐: {bonusTurnsFilled})");
+        UpdateBossAttackUI(); // ⭐ CRITICAL: 즉시 UI 업데이트
     }
 
     public void OnPlayerTurn()
@@ -135,11 +139,21 @@ public class BossManager : MonoBehaviour
         if (isFrozen) return;
 
         currentTurnCount--;
-        Debug.Log($"보스 공격까지 {currentTurnCount}턴 남음");
+        
+        // ⭐ NEW: 기본 턴이 다 차면 보너스 턴 채우기 시작
+        if (currentTurnCount < 0 && bonusTurnsFilled < bonusTurnsAdded)
+        {
+            bonusTurnsFilled++;
+            currentTurnCount = 0; // 기본 턴은 0 유지
+            Debug.Log($"⏰ 보너스 턴 채우는 중: {bonusTurnsFilled}/{bonusTurnsAdded}");
+        }
+        
+        Debug.Log($"보스 공격까지 {currentTurnCount}턴 남음 (보너스: {bonusTurnsFilled}/{bonusTurnsAdded})");
 
         UpdateBossAttackUI();
 
-        if (currentTurnCount <= 0)
+        // ⭐ NEW: 기본 턴 + 보너스 턴 모두 소진되면 공격
+        if (currentTurnCount <= 0 && bonusTurnsFilled >= bonusTurnsAdded)
         {
             AttackPlayer();
         }
@@ -212,9 +226,11 @@ public class BossManager : MonoBehaviour
         }
 
         currentTurnCount = currentTurnInterval;
+        bonusTurnsAdded = 0; // ⭐ NEW: 공격 후 보너스 턴 리셋
+        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
         UpdateBossAttackUI();
 
-        Debug.Log($"보스 공격 완료! 턴 초기화: {currentTurnCount}");
+        Debug.Log($"보스 공격 완료! 턴 초기화: {currentTurnCount}, 보너스 턴 리셋");
     }
 
     public void ResetTurnCount()
@@ -258,16 +274,20 @@ public class BossManager : MonoBehaviour
         UpdateBossAttackUI();
     }
 
-    // ⭐ UPDATED: 줄바꿈 + 특수문자 개수 = 공격 턴 수
+    // ⭐ UPDATED: 보너스 턴 빈 사각형(□) → 채워진 사각형(■) 방식
     string GetAttackTurnText(int remainingTurns)
     {
-        string filledSymbol = "■";
-        string emptySymbol = "□";
+        string filledSymbol = "●"; // 기본 턴: 채워진 원
+        string emptySymbol = "○";  // 기본 턴: 빈 원
+        string bonusFilledSymbol = "■";  // ⭐ NEW: 채워진 보너스 턴
+        string bonusEmptySymbol = "□";   // ⭐ NEW: 빈 보너스 턴
 
         int totalTurns = currentTurnInterval;
         int filledCount = totalTurns - remainingTurns;
 
         string symbols = "";
+        
+        // 기본 턴 표시
         for (int i = 0; i < filledCount; i++)
         {
             symbols += filledSymbol;
@@ -276,8 +296,17 @@ public class BossManager : MonoBehaviour
         {
             symbols += emptySymbol;
         }
+        
+        // ⭐ NEW: 보너스 턴 표시 (채워진 개수만큼 ■, 나머지는 □)
+        for (int i = 0; i < bonusTurnsFilled; i++)
+        {
+            symbols += bonusFilledSymbol;
+        }
+        for (int i = bonusTurnsFilled; i < bonusTurnsAdded; i++)
+        {
+            symbols += bonusEmptySymbol;
+        }
 
-        // ⭐ 줄바꿈으로 변경
         return $"ATK: {currentBossDamage}\nIn {symbols}";
     }
 
@@ -378,6 +407,8 @@ public class BossManager : MonoBehaviour
         }
 
         currentTurnCount = currentTurnInterval;
+        bonusTurnsAdded = 0; // ⭐ NEW: 보스 리스폰 시 보너스 턴 리셋
+        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
 
         UpdateUI(true);
         SetBossUIActive(true);
@@ -391,6 +422,7 @@ public class BossManager : MonoBehaviour
         if (gameManager != null)
         {
             gameManager.SetBossTransitioning(false);
+            gameManager.UpdateTurnUI(); // ⭐ NEW: Boss 리스폰 완료 후 Stage UI 업데이트
         }
 
         isTransitioning = false;
@@ -402,6 +434,8 @@ public class BossManager : MonoBehaviour
         bossLevel = 1;
         currentBossIndex = 0;
         isFrozen = false;
+        bonusTurnsAdded = 0; // ⭐ NEW: 보너스 턴 리셋
+        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
 
         if (bossImageArea != null && bossSprites.Count > 0)
         {

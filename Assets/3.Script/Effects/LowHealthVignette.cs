@@ -5,13 +5,12 @@ using DG.Tweening;
 public class LowHealthVignette : MonoBehaviour
 {
     [Header("Vignette Settings")]
-    [SerializeField] private Image vignetteImage;  // ºñ³×ÆÃ ÀÌ¹ÌÁö
-    [SerializeField] private Color vignetteColor = new Color(0.2f, 0.4f, 0.6f, 0f);  // Çª¸¥»ö (ÃÊ±â Åõ¸í)
-    [SerializeField] private float maxAlpha = 0.35f;  // ÃÖ´ë Åõ¸íµµ (0.6 -> 0.35)
+    [SerializeField] private Image vignetteImage;
+    [SerializeField] private Color vignetteColor = new Color(0.2f, 0.4f, 0.6f, 0f);
+    [SerializeField] private float maxAlpha = 0.35f;
 
     [Header("Thresholds")]
-    [SerializeField] private float startHealthPercent = 0.4f;  // 40% ÀÌÇÏºÎÅÍ È¿°ú ½ÃÀÛ
-    [SerializeField] private float maxEffectHealthPercent = 0.2f;  // 20% ÀÌÇÏ¸é ÃÖ´ë È¿°ú
+    [SerializeField] private float maxEffectHealthValue = 45f;  // â­ UPDATED: 45 HP ì´í•˜ë©´ ìµœëŒ€ íš¨ê³¼
 
     private float currentAlpha = 0f;
 
@@ -19,42 +18,33 @@ public class LowHealthVignette : MonoBehaviour
     {
         if (vignetteImage == null)
         {
-            Debug.LogError("Vignette Image°¡ ÇÒ´çµÇÁö ¾Ê¾Ò½À´Ï´Ù!");
+            Debug.LogError("Vignette Imageê°€ í• ë‹¹ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤!");
             return;
         }
 
-        // ÃÊ±â »ö»ó ¼³Á¤
         vignetteColor.a = 0f;
         vignetteImage.color = vignetteColor;
     }
 
-    // GameManager¿¡¼­ Ã¼·Â º¯È­ ½Ã È£Ãâ
+    // â­ UPDATED: HP 45 ê¸°ì¤€ìœ¼ë¡œ ë³€ê²½
     public void UpdateVignette(int currentHeat, int maxHeat)
     {
         if (vignetteImage == null) return;
 
-        float healthPercent = (float)currentHeat / maxHeat;
-
         float targetAlpha = 0f;
 
-        if (healthPercent <= maxEffectHealthPercent)
+        if (currentHeat <= maxEffectHealthValue)
         {
-            // 20% ÀÌÇÏ: ÃÖ´ë È¿°ú
+            // 45 HP ì´í•˜: ìµœëŒ€ íš¨ê³¼
             targetAlpha = maxAlpha;
-        }
-        else if (healthPercent <= startHealthPercent)
-        {
-            // 20%~40%: Á¡ÁøÀû È¿°ú
-            float t = 1f - ((healthPercent - maxEffectHealthPercent) / (startHealthPercent - maxEffectHealthPercent));
-            targetAlpha = t * maxAlpha;
         }
         else
         {
-            // 40% ÀÌ»ó: È¿°ú ¾øÀ½
+            // 45 HP ì´ˆê³¼: íš¨ê³¼ ì—†ìŒ
             targetAlpha = 0f;
         }
 
-        // ºÎµå·´°Ô º¯È­
+        // ë¶€ë“œëŸ½ê²Œ ë³€í™”
         DOTween.Kill(vignetteImage);
         vignetteImage.DOKill();
 
@@ -66,23 +56,22 @@ public class LowHealthVignette : MonoBehaviour
         currentAlpha = targetAlpha;
     }
 
-    // Áï½Ã ¾÷µ¥ÀÌÆ® (°ÔÀÓ ½ÃÀÛ ½Ã)
+    // â­ UPDATED: HP 45 ê¸°ì¤€ìœ¼ë¡œ ë³€ê²½
     public void UpdateVignetteInstant(int currentHeat, int maxHeat)
     {
         if (vignetteImage == null) return;
 
-        float healthPercent = (float)currentHeat / maxHeat;
-
         float targetAlpha = 0f;
 
-        if (healthPercent <= maxEffectHealthPercent)
+        if (currentHeat <= maxEffectHealthValue)
         {
+            // 45 HP ì´í•˜: ìµœëŒ€ íš¨ê³¼
             targetAlpha = maxAlpha;
         }
-        else if (healthPercent <= startHealthPercent)
+        else
         {
-            float t = 1f - ((healthPercent - maxEffectHealthPercent) / (startHealthPercent - maxEffectHealthPercent));
-            targetAlpha = t * maxAlpha;
+            // 45 HP ì´ˆê³¼: íš¨ê³¼ ì—†ìŒ
+            targetAlpha = 0f;
         }
 
         Color targetColor = vignetteColor;
