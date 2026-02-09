@@ -816,8 +816,17 @@ public class GameManager : MonoBehaviour
                 return;
             }
 
+            int oldHeat = currentHeat;
             currentHeat = maxHeat;
-            UpdateHeatUI(true);
+            UpdateHeatUI(false); // ⭐ UPDATED: 애니메이션 적용 (instant=false)
+            
+            // ⭐ NEW: 체력 회복 표시
+            int recovery = currentHeat - oldHeat;
+            if (recovery > 0)
+            {
+                ShowHeatChangeText(recovery);
+            }
+            
             Debug.Log("💚 총 발사! 체력 전부 회복!");
 
             Vector3 tilePos = targetTile.transform.position;
@@ -836,7 +845,8 @@ public class GameManager : MonoBehaviour
                 hasBullet = false;
                 Debug.Log("FEVER SHOT! Bullet used, cannot shoot again");
 
-                if (bossManager != null && !bossManager.IsFrozen())
+                // ⭐ CRITICAL: Frozen 체크 제거 - Fever Gun은 항상 턴 추가
+                if (bossManager != null)
                 {
                     bossManager.AddTurns(3);
                     Debug.Log("🔥 FEVER SHOT! 보스 공격 턴 +3");
@@ -1093,7 +1103,8 @@ public class GameManager : MonoBehaviour
 
         if (gunButton != null)
         {
-            gunButton.interactable = !isGameOver && (hasBullet || (isFeverMode && !feverBulletUsed)) && activeTiles.Count > 1;
+            // ⭐ UPDATED: Boss 리스폰 중에도 Gun 버튼 비활성화
+            gunButton.interactable = !isGameOver && !isBossTransitioning && (hasBullet || (isFeverMode && !feverBulletUsed)) && activeTiles.Count > 1;
         }
 
         // bulletCountDisplay 제거됨
@@ -1139,6 +1150,14 @@ public class GameManager : MonoBehaviour
             gunButtonHeartbeat = null;
         }
 
+        // ⭐ CRITICAL: alpha 보호
+        if (gunButtonImage != null)
+        {
+            Color c = gunButtonImage.color;
+            c.a = 1f;
+            gunButtonImage.color = c;
+        }
+
         gunButton.transform.localScale = Vector3.one;
 
         if (isGunMode)
@@ -1167,6 +1186,14 @@ public class GameManager : MonoBehaviour
         {
             gunButtonHeartbeat.Kill();
             gunButtonHeartbeat = null;
+        }
+
+        // ⭐ CRITICAL: alpha 보호
+        if (gunButtonImage != null)
+        {
+            Color c = gunButtonImage.color;
+            c.a = 1f;
+            gunButtonImage.color = c;
         }
 
         gunButton.transform.localScale = Vector3.one;
@@ -1987,6 +2014,13 @@ public class GameManager : MonoBehaviour
         // BossManager의 bossSpawnDelay는 기본 1.0초
         yield return new WaitForSeconds(1.5f); // 0.5 (fade) + 1.0 (delay)
 
+        // ⭐ CRITICAL: Fever 상태 재확인 (Fever가 끝났으면 Freeze 복원 안함)
+        if (!isFeverMode)
+        {
+            Debug.Log("🧊 Fever 모드가 종료되어 Freeze 이미지 복원 안함");
+            yield break;
+        }
+
         // Boss가 나타날 때 Freeze도 함께 나타남 (0.5초)
         if (freezeImage1 != null)
         {
@@ -2006,6 +2040,22 @@ public class GameManager : MonoBehaviour
     {
         isBossTransitioning = transitioning;
         Debug.Log($"보스 리스폰 상태: {transitioning}");
+        
+        // ⭐ CRITICAL: Boss 리스폰 완료 시 Gun 버튼 alpha 복원 + UI 업데이트
+        if (!transitioning)
+        {
+            if (gunButtonImage != null)
+            {
+                Color c = gunButtonImage.color;
+                c.a = 1f;
+                gunButtonImage.color = c;
+                Debug.Log("🔫 Gun 버튼 alpha 복원: 1.0");
+            }
+            
+            // ⭐ CRITICAL: Gun UI 업데이트하여 버튼 상태 즉시 반영
+            UpdateGunUI();
+            Debug.Log("🔫 Gun UI 업데이트 완료! 버튼 활성화 상태 반영");
+        }
     }
 
     public void TakeBossAttack(int damage)

@@ -65,7 +65,7 @@ public class BossManager : MonoBehaviour
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
-        if (bossLevel == 39)
+        if (bossLevel == 40)
         {
             maxHP = 2147483647;
         }
@@ -124,7 +124,8 @@ public class BossManager : MonoBehaviour
     public void AddTurns(int turns)
     {
         if (isTransitioning) return;
-        if (isFrozen) return;
+        // ⭐ CRITICAL: Frozen 체크 제거 - Fever Gun은 Frozen 상태에서도 턴 추가 가능
+        // if (isFrozen) return; // 제거
 
         currentTurnCount += turns;
         bonusTurnsAdded += turns; // ⭐ NEW: 총 보너스 턴 수 기록
@@ -274,13 +275,13 @@ public class BossManager : MonoBehaviour
         UpdateBossAttackUI();
     }
 
-    // ⭐ UPDATED: 보너스 턴 빈 사각형(□) → 채워진 사각형(■) 방식
+    // ⭐ UPDATED: 보너스 턴 빈 네모(□) → 채워진 네모(■) 방식
     string GetAttackTurnText(int remainingTurns)
     {
         string filledSymbol = "●"; // 기본 턴: 채워진 원
         string emptySymbol = "○";  // 기본 턴: 빈 원
-        string bonusFilledSymbol = "■";  // ⭐ NEW: 채워진 보너스 턴
-        string bonusEmptySymbol = "□";   // ⭐ NEW: 빈 보너스 턴
+        string bonusFilledSymbol = "■";  // ⭐ NEW: 채워진 보너스 턴 (검은 네모)
+        string bonusEmptySymbol = "□";   // ⭐ NEW: 빈 보너스 턴 (흰 네모)
 
         int totalTurns = currentTurnInterval;
         int filledCount = totalTurns - remainingTurns;
@@ -330,7 +331,14 @@ public class BossManager : MonoBehaviour
             }
 
             bossAttackInfoText.color = textColor;
-            bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
+            string attackText = GetAttackTurnText(currentTurnCount);
+            bossAttackInfoText.text = attackText;
+            
+            // ⭐ DEBUG: 보너스 턴 UI 텍스트 확인
+            if (bonusTurnsAdded > 0)
+            {
+                Debug.Log($"💎 UI 업데이트: {attackText} (보너스: {bonusTurnsFilled}/{bonusTurnsAdded})");
+            }
         }
     }
 
@@ -384,7 +392,7 @@ public class BossManager : MonoBehaviour
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
-        if (bossLevel == 39)
+        if (bossLevel == 40)
         {
             maxHP = 2147483647;
         }
@@ -412,6 +420,10 @@ public class BossManager : MonoBehaviour
 
         UpdateUI(true);
         SetBossUIActive(true);
+        
+        // ⭐ CRITICAL: Boss 리스폰 완료 후 UI 다시 업데이트 (보너스 턴 초기화 확인)
+        UpdateBossAttackUI();
+        Debug.Log($"🔄 Boss 리스폰 완료! UI 업데이트: 기본 턴 {currentTurnCount}/{currentTurnInterval}, 보너스: {bonusTurnsFilled}/{bonusTurnsAdded}");
         
         // ⭐ UPDATED: Freeze 상태라면 애니메이션 시작 안 함
         if (!isFrozen)
@@ -475,6 +487,7 @@ public class BossManager : MonoBehaviour
         }
         else
         {
+            // ⭐ UPDATED: 루프 제거, 순서대로 계속 이어지기
             int imageIndex;
             if (bossLevel == 1 && isFirstGame)
             {
@@ -482,9 +495,14 @@ public class BossManager : MonoBehaviour
             }
             else
             {
-                int adjustedLevel = bossLevel - 2;
-                int loopPosition = adjustedLevel % 16;
-                imageIndex = loopPosition + 1;
+                // 순환 없이 계속 증가
+                imageIndex = bossLevel - 1;
+                
+                // 이미지가 부족하면 마지막 이미지 유지
+                if (imageIndex >= bossSprites.Count)
+                {
+                    imageIndex = bossSprites.Count - 1;
+                }
             }
 
             currentBossIndex = imageIndex;
@@ -506,32 +524,14 @@ public class BossManager : MonoBehaviour
     {
         if (bossImageArea == null) return;
 
-        int loopCount;
-        if (bossLevel == 1 && isFirstGame)
-        {
-            loopCount = 0;
-        }
-        else
-        {
-            int adjustedLevel = bossLevel - 2;
-            loopCount = adjustedLevel / 16;
-        }
-
-        Color newColor;
-        if (loopCount % 2 == 0)
-        {
-            newColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
-        }
-        else
-        {
-            newColor = new Color(0.75f, 0.55f, 0.35f, 1.0f);
-        }
+        // ⭐ UPDATED: 루프 제거, 항상 핑크색 고정
+        Color pinkColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
 
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", newColor);
+        mat.SetColor("_Color", pinkColor);
         bossImageArea.material = mat;
 
-        Debug.Log($"Boss Level {bossLevel}, Loop {loopCount}, Image {currentBossIndex}, Color: {(loopCount % 2 == 0 ? "Berry(분홍)" : "Choco(갈색)")}");
+        Debug.Log($"Boss Level {bossLevel}, Image {currentBossIndex}, Color: Berry(핑크 고정)");
     }
 
     void StartBossIdleAnimation()
