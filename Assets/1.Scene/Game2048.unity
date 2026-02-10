@@ -6114,7 +6114,7 @@ GameObject:
   - component: {fileID: 1919218128}
   - component: {fileID: 1919218127}
   m_Layer: 0
-  m_Name: Text (1)
+  m_Name: AD
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6698,7 +6698,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &2114919309
 MonoBehaviour:
   m_ObjectHideFlags: 0
