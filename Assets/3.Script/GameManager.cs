@@ -1,21 +1,20 @@
 // =====================================================
-// GameManager.cs - UPDATED VERSION v4.0
-// Date: 2026-02-08
+// GameManager.cs - UPDATED VERSION v5.0
+// Date: 2026-02-10
 // 
-// 수정사항 v4.0:
-// 1. 스코프 이미지 제거
-// 2. Game Over UI: Quit/Restart/Continue 버튼 추가
-// 3. Continue 시 체력 전부 회복 + 피버 10턴 즉시 진입
-// 4. 피격 시 1프레임 이미지 플래시 효과
-// 5. Heat Slider 기본 색상 핑크로 변경
-// 6. 블록 색상 조정
-// 7. 총 발사 시 보너스 제거 + 체력 전부 회복
-// 8. Fever 중 Enemy 정지 + Freeze 이미지
-// 9. Berry 회복 레이저 파티클
-// 10. 턴/스테이지 표시 UI
-// 11. 39/40번째 적 특수 처리
-// 12. 적 공격 턴 UI 기호 변경
-// 13. 블록 텍스트 Outline
+// 수정사항 v5.0:
+// 1. Gun Mode: 초음파 효과 (안쪽→테두리 지속 웨이브)
+// 2. 공격력 44부터 시작, 5 stage마다 1씩 증가
+// 3. 피버 불길 레이어 → 가이드 아래로
+// 4. 레이저 공격: monsterImage transform 확실히 가져오기
+// 5. 21억 HP 표시 한 stage 앞당기기 (stage 39)
+// 6. 피버 공격턴 반영 버그 수정
+// 7. 피버때 텍스트 표시 (damage*1.8!\nmerge and get atk!)
+// 8. Stage 40 infinite + Enemy bar 밝은붉은색 + 20회마다 공격력증가
+// 9. Stage 39 clear시 최대체력 증가량 2
+// 10. Fever때 GunButton→Enemy 얼음색 레이저
+// 11. Gun 20이상일때 파스텔 민트색
+// 12. Gun Mode 해제/총쏘면 효과 OFF
 // =====================================================
 
 using UnityEngine;
@@ -38,8 +37,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI bestScoreText;
     [SerializeField] private GameObject gameOverPanel;
     [SerializeField] private Button restartButton;
-    [SerializeField] private Button quitButton; // ⭐ NEW
-    [SerializeField] private Button continueButton; // ⭐ NEW
+    [SerializeField] private Button quitButton;
+    [SerializeField] private Button continueButton;
 
     [Header("Gun System")]
     [SerializeField] private Button gunButton;
@@ -51,7 +50,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Image gunButtonImage;
     [SerializeField] private RectTransform progressBarFill;
 
-    // ⭐ 스코프 관련 코드 제거
     private Tweener gunGuideAnimation;
     private bool isBossAttacking = false;
     private GameObject activeFeverParticle;
@@ -60,8 +58,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Transform feverParticleSpawnPoint;
     [SerializeField] private GameObject feverParticlePrefab;
     [SerializeField] private Image feverBackgroundImage;
-    [SerializeField] private Image freezeImage1; // ⭐ NEWexpectedDamageText : Fever 중 Freeze 이미지 1
-    [SerializeField] private Image freezeImage2; // ⭐ NEW: Fever 중 Freeze 이미지 2
+    [SerializeField] private Image freezeImage1;
+    [SerializeField] private Image freezeImage2;
 
     [Header("Boss System")]
     [SerializeField] private BossManager bossManager;
@@ -89,12 +87,12 @@ public class GameManager : MonoBehaviour
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
 
-    [Header("피격 플래시 효과")] // ⭐ NEW
-    [SerializeField] private Image damageFlashImage; // 1프레임 플래시용 이미지
+    [Header("피격 플래시 효과")]
+    [SerializeField] private Image damageFlashImage;
 
-    [Header("Turn & Stage UI")] // ⭐ NEW
-    [SerializeField] private TextMeshProUGUI turnText; // 턴 표시
-    [SerializeField] private TextMeshProUGUI stageText; // 스테이지 표시 (Stage 1/40)
+    [Header("Turn & Stage UI")]
+    [SerializeField] private TextMeshProUGUI turnText;
+    [SerializeField] private TextMeshProUGUI stageText;
 
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
@@ -116,7 +114,6 @@ public class GameManager : MonoBehaviour
     private int feverTurnsRemaining = 0;
     private int feverAtkBonus = 0;
     private int feverMergeAtkBonus = 0;
-    // feverEventCount 제거됨 (사용하지 않음)
     private long FeverMergeIncreaseAtk = 1;
     private long permanentAttackPower = 0;
     private bool isGunMode = false;
@@ -140,13 +137,20 @@ public class GameManager : MonoBehaviour
     private ProjectileManager projectileManager;
     private Vector3 lastMergedTilePosition;
 
-    private int currentTurn = 0; // ⭐ NEW: 턴 카운트
+    private int currentTurn = 0;
 
     private float heatTextOriginalY = 0f;
     private bool heatTextInitialized = false;
     private int lastCurrentHeat = 0;
     
-    private bool justEndedFeverWithoutShot = false; // ⭐ NEW: Fever 종료 후 Payback 표시 여부
+    private bool justEndedFeverWithoutShot = false;
+
+    // ⭐ v5.0: 무한대 보스 전용 변수
+    private int infiniteBossMoveCount = 0;
+
+    // ⭐ v5.1: 가이드 텍스트 상태 추적
+    private bool isShowingFeverGuide = false;
+    private bool isShowingLowHPGuide = false;
 
     void Start()
     {
@@ -169,7 +173,7 @@ public class GameManager : MonoBehaviour
             heatSlider.value = maxHeat;
         }
 
-        // ⭐ Freeze 이미지 자동 설정 및 초기화
+        // Freeze 이미지 자동 설정 및 초기화
         if (freezeImage1 == null)
         {
             GameObject freezeObj1 = GameObject.Find("infoFreeze");
@@ -190,32 +194,24 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Freeze 이미지 색상 및 Alpha 초기화 (Unity는 0~1 범위 사용)
         if (freezeImage1 != null)
         {
-            // RGB: 255/255 = 1.0 (흰색), Alpha: 70/255 = 0.2745 (약 27% 투명도)
             float alphaValue = 70f / 255f;
             freezeImage1.color = new Color(1f, 1f, 1f, alphaValue);
             freezeImage1.gameObject.SetActive(false);
-            Debug.Log($"🎨 freezeImage1 색상 설정: RGB(255,255,255), Alpha=70/255={alphaValue:F3}");
         }
 
         if (freezeImage2 != null)
         {
-            // RGB: 255/255 = 1.0 (흰색), Alpha: 70/255 = 0.2745 (약 27% 투명도)
             float alphaValue = 70f / 255f;
             freezeImage2.color = new Color(1f, 1f, 1f, alphaValue);
             freezeImage2.gameObject.SetActive(false);
-            Debug.Log($"🎨 freezeImage2 색상 설정: RGB(255,255,255), Alpha=70/255={alphaValue:F3}");
         }
 
-        // Damage Flash 이미지 Alpha 초기화 (190/255 = 0.745)
         if (damageFlashImage != null)
         {
-            float initialAlpha = 190f / 255f;
             damageFlashImage.color = new Color(damageFlashImage.color.r, damageFlashImage.color.g, damageFlashImage.color.b, 0f);
             damageFlashImage.gameObject.SetActive(false);
-            Debug.Log($"🎨 damageFlashImage Alpha 초기화 완료 (Flash Alpha: {initialAlpha:F3})");
         }
 
         InitializeGrid();
@@ -224,7 +220,6 @@ public class GameManager : MonoBehaviour
         if (restartButton != null)
             restartButton.onClick.AddListener(RestartGame);
 
-        // ⭐ NEW: Continue/Quit 버튼
         if (continueButton != null)
             continueButton.onClick.AddListener(ContinueGame);
 
@@ -235,7 +230,7 @@ public class GameManager : MonoBehaviour
             gunButton.onClick.AddListener(ToggleGunMode);
 
         UpdateGunUI();
-        UpdateTurnUI(); // ⭐ NEW
+        UpdateTurnUI();
     }
 
     void Update()
@@ -288,7 +283,6 @@ public class GameManager : MonoBehaviour
         feverTurnsRemaining = 0;
         feverAtkBonus = 0;
         feverMergeAtkBonus = 0;
-        // feverEventCount 제거
         FeverMergeIncreaseAtk = 1;
         permanentAttackPower = 0;
         feverBulletUsed = false;
@@ -296,7 +290,8 @@ public class GameManager : MonoBehaviour
         isGunMode = false;
         isBossTransitioning = false;
         isGameOver = false;
-        currentTurn = 0; // ⭐ NEW
+        currentTurn = 0;
+        infiniteBossMoveCount = 0; // ⭐ v5.0
 
         if (gunButtonHeartbeat != null)
         {
@@ -314,22 +309,13 @@ public class GameManager : MonoBehaviour
             gunModeGuideText.gameObject.SetActive(false);
         }
 
-        // ⭐ NEW: Freeze 이미지 비활성화
-        if (freezeImage1 != null)
-        {
-            freezeImage1.gameObject.SetActive(false);
-            Debug.Log("❄️ Freeze Image 1 비활성화!");
-        }
-        if (freezeImage2 != null)
-        {
-            freezeImage2.gameObject.SetActive(false);
-            Debug.Log("❄️ Freeze Image 2 비활성화!");
-        }
+        if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
+        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
 
         UpdateScoreUI();
         UpdateGunUI();
         UpdateHeatUI(true);
-        UpdateTurnUI(); // ⭐ NEW
+        UpdateTurnUI();
         SpawnTile();
         SpawnTile();
         if (gameOverPanel != null)
@@ -357,13 +343,20 @@ public class GameManager : MonoBehaviour
         permanentAttackPower = 0;
         feverAtkBonus = 0;
         feverMergeAtkBonus = 0;
-        // feverEventCount 제거
         FeverMergeIncreaseAtk = 1;
+        infiniteBossMoveCount = 0;
+
+        // ⭐ v5.1: 비네트 보너스 리셋
+        if (lowHealthVignette != null)
+        {
+            lowHealthVignette.ResetInfiniteBossBonus();
+        }
+        isShowingFeverGuide = false;
+        isShowingLowHPGuide = false;
 
         StartGame();
     }
 
-    // ⭐ NEW: Continue 기능
     void ContinueGame()
     {
         if (!isGameOver) return;
@@ -371,18 +364,15 @@ public class GameManager : MonoBehaviour
         isGameOver = false;
         isProcessing = false;
 
-        // 체력 전부 회복
         currentHeat = maxHeat;
         UpdateHeatUI(true);
 
-        // 피버 10턴 즉시 진입
         isFeverMode = true;
         feverTurnsRemaining = 10;
         feverBulletUsed = false;
         mergeGauge = 0;
         hasBullet = false;
 
-        // 피버 이펙트 활성화
         SpawnFeverParticle();
 
         if (feverBackgroundImage != null)
@@ -398,44 +388,28 @@ public class GameManager : MonoBehaviour
                 .SetLoops(-1, LoopType.Yoyo);
         }
 
-        // ⭐ UPDATED: Freeze 이미지 활성화 + 상세 로그
-        if (freezeImage1 != null)
-        {
-            Debug.Log($"🧊 Freeze Image 1 활성화 전 상태: {freezeImage1.gameObject.activeSelf}");
-            freezeImage1.gameObject.SetActive(true);
-            Debug.Log($"🧊 Freeze Image 1 활성화 후 상태: {freezeImage1.gameObject.activeSelf}, Alpha: {freezeImage1.color.a}");
-        }
-        else
-        {
-            Debug.LogError("❌ freezeImage1이 null입니다! 인스펙터 연결을 확인하세요!");
-        }
+        if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
+        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(true);
 
-        if (freezeImage2 != null)
-        {
-            Debug.Log($"🧊 Freeze Image 2 활성화 전 상태: {freezeImage2.gameObject.activeSelf}");
-            freezeImage2.gameObject.SetActive(true);
-            Debug.Log($"🧊 Freeze Image 2 활성화 후 상태: {freezeImage2.gameObject.activeSelf}, Alpha: {freezeImage2.color.a}");
-        }
-        else
-        {
-            Debug.LogError("❌ freezeImage2가 null입니다! 인스펙터 연결을 확인하세요!");
-        }
-
-        // ⭐ NEW: Enemy 정지
         if (bossManager != null)
         {
             bossManager.SetFrozen(true);
         }
+
+        // ⭐ v5.0: Fever 시작 시 얼음 레이저 연출
+        FireFeverFreezeLaser();
 
         UpdateGunUI();
 
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
 
+        // ⭐ v5.1: Continue로 Fever 진입 시 가이드 표시
+        UpdateGuideText();
+
         Debug.Log("🎮 CONTINUE! 체력 전부 회복 + 피버 10턴 진입!");
     }
 
-    // ⭐ NEW: Quit 기능
     void QuitGame()
     {
         Debug.Log("게임 종료");
@@ -444,6 +418,21 @@ public class GameManager : MonoBehaviour
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
+    }
+
+    // ⭐ v5.0: Fever 시작 시 GunButton → Enemy로 얼음색 레이저 발사
+    void FireFeverFreezeLaser()
+    {
+        if (projectileManager == null || gunButton == null || bossManager == null || bossManager.bossImageArea == null) return;
+
+        // ⭐ v5.0: monsterImage의 RectTransform에서 world position 확실히 가져오기
+        Vector3 startPos = gunButton.transform.position;
+        RectTransform monsterRect = bossManager.bossImageArea.GetComponent<RectTransform>();
+        Vector3 targetPos = monsterRect.position; // world position
+
+        Color iceColor = new Color(0.5f, 0.85f, 1f, 0.9f); // 얼음색
+        projectileManager.FireFreezeLaser(startPos, targetPos, iceColor, null);
+        Debug.Log("🧊 Fever Freeze Laser 발사! GunButton → Enemy");
     }
 
     void CheckGaugeAndFever()
@@ -465,11 +454,9 @@ public class GameManager : MonoBehaviour
                     feverBackgroundImage.gameObject.SetActive(false);
                 }
 
-                // ⭐ NEW: Freeze 이미지 비활성화
                 if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
                 if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
 
-                // ⭐ NEW: Enemy 정지 해제
                 if (bossManager != null)
                 {
                     bossManager.SetFrozen(false);
@@ -481,17 +468,21 @@ public class GameManager : MonoBehaviour
                 {
                     mergeGauge = 0;
                     hasBullet = false;
-                    justEndedFeverWithoutShot = false; // Payback 아님
+                    justEndedFeverWithoutShot = false;
                     Debug.Log("FEVER END! Shot used, reset to 0/40");
                 }
                 else
                 {
                     mergeGauge = 20;
                     hasBullet = true;
-                    justEndedFeverWithoutShot = true; // ⭐ NEW: Payback 활성화
+                    justEndedFeverWithoutShot = true;
                     Debug.Log("FEVER END! No shot, keep 20/40 - PAYBACK!");
                 }
                 feverBulletUsed = false;
+
+                // ⭐ v5.1: Fever 종료 후 가이드 텍스트 업데이트 (LowHP 표시 등)
+                isShowingFeverGuide = false;
+                UpdateGuideText();
             }
         }
         else
@@ -514,34 +505,16 @@ public class GameManager : MonoBehaviour
                         .SetLoops(-1, LoopType.Yoyo);
                 }
 
-                // ⭐ UPDATED: Freeze 이미지 활성화 + 상세 로그
-                if (freezeImage1 != null)
-                {
-                    Debug.Log($"🧊 Fever 시작! Freeze Image 1 활성화 전: {freezeImage1.gameObject.activeSelf}");
-                    freezeImage1.gameObject.SetActive(true);
-                    Debug.Log($"🧊 Fever 시작! Freeze Image 1 활성화 후: {freezeImage1.gameObject.activeSelf}, Alpha: {freezeImage1.color.a}");
-                }
-                else
-                {
-                    Debug.LogError("❌ freezeImage1이 null입니다! 인스펙터 연결을 확인하세요!");
-                }
+                if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
+                if (freezeImage2 != null) freezeImage2.gameObject.SetActive(true);
 
-                if (freezeImage2 != null)
-                {
-                    Debug.Log($"🧊 Fever 시작! Freeze Image 2 활성화 전: {freezeImage2.gameObject.activeSelf}");
-                    freezeImage2.gameObject.SetActive(true);
-                    Debug.Log($"🧊 Fever 시작! Freeze Image 2 활성화 후: {freezeImage2.gameObject.activeSelf}, Alpha: {freezeImage2.color.a}");
-                }
-                else
-                {
-                    Debug.LogError("❌ freezeImage2가 null입니다! 인스펙터 연결을 확인하세요!");
-                }
-
-                // ⭐ NEW: Enemy 정지
                 if (bossManager != null)
                 {
                     bossManager.SetFrozen(true);
                 }
+
+                // ⭐ v5.0: Fever 시작 시 얼음 레이저 연출
+                FireFeverFreezeLaser();
 
                 isFeverMode = true;
                 feverBulletUsed = false;
@@ -555,6 +528,9 @@ public class GameManager : MonoBehaviour
 
                 FeverMergeIncreaseAtk++;
                 Debug.Log($"🔥 FEVER 진입! Fever 머지 증가량 +1 (Now: {FeverMergeIncreaseAtk})");
+
+                // ⭐ v5.1: Fever 시작 시 가이드 텍스트 표시
+                UpdateGuideText();
             }
             else if (mergeGauge >= GAUGE_FOR_BULLET && !hasBullet)
             {
@@ -628,7 +604,7 @@ public class GameManager : MonoBehaviour
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
-        renderer.sortingOrder = 5;
+        renderer.sortingOrder = 1; // ⭐ v5.0: 레이어 낮추기 (5→1), 가이드 아래로
 
         var uiParticle = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
         uiParticle.scale = 2f;
@@ -661,7 +637,7 @@ public class GameManager : MonoBehaviour
                 gunModeGuideText.gameObject.SetActive(false);
             }
 
-            // ⭐ CRITICAL: Gun 모드 종료 시 모든 타일 테두리 제거
+            // ⭐ v5.0: Gun 모드 종료 시 모든 타일 테두리 + 초음파 효과 제거
             foreach (var tile in activeTiles)
             {
                 if (tile != null)
@@ -670,6 +646,8 @@ public class GameManager : MonoBehaviour
                 }
             }
 
+            // ⭐ v5.1: Gun 모드 종료 후 Fever/LowHP 가이드 복원
+            UpdateGuideText();
             UpdateGunUI();
             return;
         }
@@ -688,15 +666,17 @@ public class GameManager : MonoBehaviour
         {
             gunModeGuideText.gameObject.SetActive(true);
             
-            // ⭐ NEW: Fever 모드일 때 다른 텍스트 표시
             if (isFeverMode)
             {
+                // ⭐ v5.1: Fever Gun Mode 텍스트
                 gunModeGuideText.text = "Tap Glowing Tile\nto Blast & Heal!\nFever bonus\n3 Turn Delay!";
             }
             else
             {
                 gunModeGuideText.text = "Tap Glowing Tile\nto Blast & Heal!";
             }
+            isShowingFeverGuide = false; // gun mode에서는 fever guide 상태 해제
+            isShowingLowHPGuide = false;
 
             if (gunGuideAnimation != null)
             {
@@ -709,7 +689,7 @@ public class GameManager : MonoBehaviour
                 .SetLoops(-1, LoopType.Yoyo);
         }
 
-        // ⭐ Gun 모드 진입 시 타일 테두리 표시
+        // Gun 모드 진입 시 타일 테두리 표시
         UpdateTileBorders();
 
         UpdateGunUI();
@@ -732,7 +712,6 @@ public class GameManager : MonoBehaviour
                 gunModeGuideText.gameObject.SetActive(false);
             }
 
-            // ⭐ 모든 테두리 제거
             foreach (var tile in activeTiles)
             {
                 if (tile != null)
@@ -745,7 +724,6 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // ⭐ CRITICAL: 총 발사 직전에 큰 수 2종류를 다시 확인 (버그 수정)
         var topTwoValues = GetTopTwoTileValues();
         if (activeTiles.Count <= 2 || (topTwoValues.Item1 == 0 && topTwoValues.Item2 == 0))
         {
@@ -763,7 +741,6 @@ public class GameManager : MonoBehaviour
                 gunModeGuideText.gameObject.SetActive(false);
             }
 
-            // ⭐ 모든 테두리 제거
             foreach (var tile in activeTiles)
             {
                 if (tile != null)
@@ -806,8 +783,6 @@ public class GameManager : MonoBehaviour
 
         if (targetTile != null)
         {
-            // ⭐ CRITICAL: 클릭한 타일이 보호된 타일인지 다시 확인 (버그 수정)
-            // 현재 타일들의 최신 상태를 기반으로 판단
             var currentTopTwo = GetTopTwoTileValues();
             
             if (targetTile.value == currentTopTwo.Item1 || targetTile.value == currentTopTwo.Item2)
@@ -818,9 +793,8 @@ public class GameManager : MonoBehaviour
 
             int oldHeat = currentHeat;
             currentHeat = maxHeat;
-            UpdateHeatUI(false); // ⭐ UPDATED: 애니메이션 적용 (instant=false)
+            UpdateHeatUI(false);
             
-            // ⭐ NEW: 체력 회복 표시
             int recovery = currentHeat - oldHeat;
             if (recovery > 0)
             {
@@ -845,7 +819,6 @@ public class GameManager : MonoBehaviour
                 hasBullet = false;
                 Debug.Log("FEVER SHOT! Bullet used, cannot shoot again");
 
-                // ⭐ CRITICAL: Frozen 체크 제거 - Fever Gun은 항상 턴 추가
                 if (bossManager != null)
                 {
                     bossManager.AddTurns(3);
@@ -877,7 +850,7 @@ public class GameManager : MonoBehaviour
                 gunModeGuideText.gameObject.SetActive(false);
             }
 
-            // ⭐ CRITICAL: 총 발사 후 모든 테두리 제거
+            // ⭐ v5.0: 총 발사 후 모든 테두리 + 초음파 효과 제거
             foreach (var tile in activeTiles)
             {
                 if (tile != null)
@@ -1007,7 +980,6 @@ public class GameManager : MonoBehaviour
             }
             else
             {
-                // ⭐ NEW: Fever Payback 표시 (mergeGauge == 20일 때만)
                 if (justEndedFeverWithoutShot && mergeGauge == 20)
                 {
                     turnsUntilBulletText.text = "20/40 Fever Payback!";
@@ -1015,10 +987,6 @@ public class GameManager : MonoBehaviour
                 else if (mergeGauge == 0)
                 {
                     turnsUntilBulletText.text = "0/40";
-                }
-                else if (mergeGauge < GAUGE_FOR_BULLET)
-                {
-                    turnsUntilBulletText.text = $"{mergeGauge}/40";
                 }
                 else
                 {
@@ -1096,18 +1064,23 @@ public class GameManager : MonoBehaviour
             else if (isFeverMode)
                 gunButtonImage.color = new Color(1f, 0.3f, 0f);
             else if (hasBullet)
-                gunButtonImage.color = new Color(0.2f, 1f, 0.2f);
+            {
+                // ⭐ v5.0: mergeGauge 20이상일 때 파스텔 민트색
+                if (mergeGauge >= 20)
+                    gunButtonImage.color = new Color(0.6f, 0.95f, 0.85f); // 파스텔 민트
+                else
+                    gunButtonImage.color = new Color(0.6f, 0.95f, 0.85f); // hasBullet이면 항상 20이상
+            }
             else
+            {
                 gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f);
+            }
         }
 
         if (gunButton != null)
         {
-            // ⭐ UPDATED: Boss 리스폰 중에도 Gun 버튼 비활성화
             gunButton.interactable = !isGameOver && !isBossTransitioning && (hasBullet || (isFeverMode && !feverBulletUsed)) && activeTiles.Count > 1;
         }
-
-        // bulletCountDisplay 제거됨
 
         bool shouldAnimate = hasBullet || (isFeverMode && !feverBulletUsed);
         UpdateGunButtonAnimationIfNeeded(shouldAnimate);
@@ -1150,7 +1123,6 @@ public class GameManager : MonoBehaviour
             gunButtonHeartbeat = null;
         }
 
-        // ⭐ CRITICAL: alpha 보호
         if (gunButtonImage != null)
         {
             Color c = gunButtonImage.color;
@@ -1188,7 +1160,6 @@ public class GameManager : MonoBehaviour
             gunButtonHeartbeat = null;
         }
 
-        // ⭐ CRITICAL: alpha 보호
         if (gunButtonImage != null)
         {
             Color c = gunButtonImage.color;
@@ -1245,28 +1216,23 @@ public class GameManager : MonoBehaviour
 
             lastCurrentHeat = currentHeat;
 
-            // ⭐ NEW: 핑크 색상으로 변경
             float heatPercent = (float)currentHeat / maxHeat;
             Color heatColor;
 
             if (heatPercent <= 0.2f)
             {
-                // 매우 낮음: 연한 핑크
                 heatColor = new Color(1f, 0.6f, 0.7f);
             }
             else if (heatPercent <= 0.4f)
             {
-                // 낮음: 핑크
                 heatColor = new Color(1f, 0.5f, 0.65f);
             }
             else if (heatPercent <= 0.6f)
             {
-                // 중간: 진한 핑크
                 heatColor = new Color(1f, 0.4f, 0.6f);
             }
             else
             {
-                // 높음: 매우 진한 핑크
                 heatColor = new Color(1f, 0.3f, 0.55f);
             }
 
@@ -1307,8 +1273,6 @@ public class GameManager : MonoBehaviour
             }
         }
     }
-
-    // DecreaseHeat 함수 제거됨 (더 이상 사용하지 않음)
 
     void RecoverHeat(int amount)
     {
@@ -1490,12 +1454,11 @@ public class GameManager : MonoBehaviour
                                 currentHeat += bonusHeal;
                                 if (currentHeat > maxHeat) currentHeat = maxHeat;
 
-                                // ⭐ NEW: Berry 회복 레이저 파티클
                                 if (projectileManager != null && heatText != null)
                                 {
                                     Vector3 berryPos = targetTile.transform.position;
                                     Vector3 heatUIPos = heatText.transform.position;
-                                    Color berryColor = new Color(1f, 0.4f, 0.6f); // 핑크색
+                                    Color berryColor = new Color(1f, 0.4f, 0.6f);
 
                                     projectileManager.FireKnifeProjectile(berryPos, heatUIPos, berryColor, null);
                                 }
@@ -1580,9 +1543,28 @@ public class GameManager : MonoBehaviour
 
         if (moved)
         {
-            // ⭐ NEW: 턴 증가
             currentTurn++;
             UpdateTurnUI();
+
+            // ⭐ v5.0: 무한대 보스(stage 40)에서 20회 이동마다 공격력 증가
+            if (bossManager != null && bossManager.IsInfiniteBoss())
+            {
+                infiniteBossMoveCount++;
+                if (infiniteBossMoveCount % 20 == 0)
+                {
+                    bossManager.IncreaseInfiniteBossDamage();
+
+                    // ⭐ v5.1: 비네트 효과도 같이 증가
+                    if (lowHealthVignette != null)
+                    {
+                        lowHealthVignette.IncreaseInfiniteBossBonus();
+                        lowHealthVignette.UpdateVignette(currentHeat, maxHeat);
+                        UpdateGuideText(); // LowHP 가이드 업데이트
+                    }
+
+                    Debug.Log($"⚠️ 무한대 보스: {infiniteBossMoveCount}회 이동! 공격력 + 비네트 증가!");
+                }
+            }
 
             comboCount = mergeCountThisTurn;
 
@@ -1626,9 +1608,11 @@ public class GameManager : MonoBehaviour
 
                 long damage = baseDamage;
 
+                // ⭐ v5.0: monsterImage RectTransform에서 world position 확실히 가져오기
                 if (projectileManager != null && bossManager != null && bossManager.bossImageArea != null)
                 {
-                    Vector3 bossPos = bossManager.bossImageArea.transform.position;
+                    RectTransform monsterRect = bossManager.bossImageArea.GetComponent<RectTransform>();
+                    Vector3 bossPos = monsterRect.position; // ⭐ RectTransform.position 사용
 
                     Color laserColor = Color.white;
                     if (isFeverMode)
@@ -1661,8 +1645,6 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            // 턴 종료 시 히트 감소 제거됨 (이제 안 씀)
-
             if (mergeCountThisTurn > 0)
             {
                 int comboIndex = Mathf.Min(mergeCountThisTurn, comboHeatRecover.Length - 1);
@@ -1694,7 +1676,6 @@ public class GameManager : MonoBehaviour
                 int gaugeIncrease = 1;
                 mergeGauge += gaugeIncrease;
                 
-                // ⭐ NEW: Payback 상태에서 머지하면 Payback 해제
                 if (justEndedFeverWithoutShot && mergeGauge > 20)
                 {
                     justEndedFeverWithoutShot = false;
@@ -1818,7 +1799,7 @@ public class GameManager : MonoBehaviour
 
         CheckGaugeAndFever();
 
-        // ⭐ Fever 중이 아닐 때만 보스 턴 진행
+        // Fever 중이 아닐 때만 보스 턴 진행
         if (bossManager != null && !isFeverMode && !bossManager.IsFrozen())
         {
             bossManager.OnPlayerTurn();
@@ -1886,11 +1867,9 @@ public class GameManager : MonoBehaviour
             feverBackgroundImage.gameObject.SetActive(false);
         }
 
-        // ⭐ NEW: Freeze 이미지 비활성화
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
         if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
 
-        // ⭐ NEW: Enemy 정지 해제
         if (bossManager != null)
         {
             bossManager.SetFrozen(false);
@@ -1930,7 +1909,89 @@ public class GameManager : MonoBehaviour
             bestScoreText.text = bestScore.ToString();
     }
 
-    // ⭐ UPDATED: 턴/스테이지 UI 업데이트 (40 이하/Endless 분기)
+    // ⭐ v5.1: 가이드 텍스트 통합 관리
+    void UpdateGuideText()
+    {
+        if (gunModeGuideText == null) return;
+
+        // Gun Mode 중이면 gun mode 전용 텍스트가 우선 (ToggleGunMode에서 직접 설정)
+        if (isGunMode) return;
+
+        if (isFeverMode)
+        {
+            // Fever 모드: Fever 가이드 표시
+            if (!isShowingFeverGuide)
+            {
+                isShowingFeverGuide = true;
+                isShowingLowHPGuide = false;
+                gunModeGuideText.gameObject.SetActive(true);
+                gunModeGuideText.text = $"Fever! Damage*{feverDamageMultiplier:F1}!\nmerge and get atk!!";
+
+                if (gunGuideAnimation != null) gunGuideAnimation.Kill();
+                gunModeGuideText.transform.localScale = Vector3.one;
+                gunGuideAnimation = gunModeGuideText.transform.DOScale(1.1f, 0.6f)
+                    .SetEase(Ease.InOutQuad)
+                    .SetLoops(-1, LoopType.Yoyo);
+            }
+        }
+        else
+        {
+            // Fever 종료
+            if (isShowingFeverGuide)
+            {
+                isShowingFeverGuide = false;
+            }
+
+            // Low HP 체크 (비네트 효과 최대일 경우)
+            bool shouldShowLowHP = !isFeverMode && lowHealthVignette != null && lowHealthVignette.IsVignetteAtMax(currentHeat);
+
+            if (shouldShowLowHP)
+            {
+                if (!isShowingLowHPGuide)
+                {
+                    isShowingLowHPGuide = true;
+                    gunModeGuideText.gameObject.SetActive(true);
+                    gunModeGuideText.text = "Low HP!\nMerge 2 pink Block\nor use Gun or\nEnter Fever Mode!";
+
+                    if (gunGuideAnimation != null) gunGuideAnimation.Kill();
+                    gunModeGuideText.transform.localScale = Vector3.one;
+                    gunGuideAnimation = gunModeGuideText.transform.DOScale(1.05f, 0.8f)
+                        .SetEase(Ease.InOutQuad)
+                        .SetLoops(-1, LoopType.Yoyo);
+                }
+            }
+            else
+            {
+                // Low HP도 아니고 Fever도 아니면 가이드 숨기기
+                if (isShowingLowHPGuide || isShowingFeverGuide)
+                {
+                    isShowingLowHPGuide = false;
+                    isShowingFeverGuide = false;
+                    if (gunGuideAnimation != null)
+                    {
+                        gunGuideAnimation.Kill();
+                        gunGuideAnimation = null;
+                    }
+                    gunModeGuideText.transform.localScale = Vector3.one;
+                    gunModeGuideText.gameObject.SetActive(false);
+                }
+                // 아무것도 표시하지 않는 상태일 때도 비활성화
+                if (!gunModeGuideText.gameObject.activeSelf) { /* 이미 께져있음 */ }
+                else if (!isShowingLowHPGuide && !isShowingFeverGuide)
+                {
+                    if (gunGuideAnimation != null)
+                    {
+                        gunGuideAnimation.Kill();
+                        gunGuideAnimation = null;
+                    }
+                    gunModeGuideText.transform.localScale = Vector3.one;
+                    gunModeGuideText.gameObject.SetActive(false);
+                }
+            }
+        }
+    }
+
+    // ⭐ v5.0 UPDATED: Stage UI (stage 40 = infinite, stage 40 hpBar color)
     public void UpdateTurnUI()
     {
         if (turnText != null)
@@ -1949,6 +2010,28 @@ public class GameManager : MonoBehaviour
             else
             {
                 stageText.text = "Endless";
+            }
+        }
+
+        // ⭐ v5.0: 무한대 보스(stage 40)일 때 Enemy bar 밝은 붉은색
+        if (bossManager != null && bossManager.IsInfiniteBoss())
+        {
+            UpdateInfiniteBossEnemyBarColor();
+        }
+    }
+
+    // ⭐ v5.0: 무한대 보스 Enemy HP bar 색상 변경
+    void UpdateInfiniteBossEnemyBarColor()
+    {
+        if (bossManager == null) return;
+        
+        // HP slider의 fill 이미지 색상을 밝은 붉은색으로
+        if (bossManager.hpSlider != null)
+        {
+            Image fillImage = bossManager.hpSlider.fillRect?.GetComponent<Image>();
+            if (fillImage != null)
+            {
+                fillImage.color = new Color(1f, 0.25f, 0.25f); // 밝은 붉은색
             }
         }
     }
@@ -1971,10 +2054,25 @@ public class GameManager : MonoBehaviour
         Debug.Log($"Boss attacking: {attacking}");
     }
 
+    public bool IsBossAttacking()
+    {
+        return isBossAttacking;
+    }
+
     public void OnBossDefeated()
     {
-        maxHeat += BOSS_DEFEAT_MAX_HEAT_INCREASE;
-        Debug.Log($"보스 처치! 최대 히트 +{BOSS_DEFEAT_MAX_HEAT_INCREASE}: {maxHeat}");
+        int currentStage = bossManager != null ? bossManager.GetBossLevel() : 0;
+        
+        // ⭐ v5.0: Stage 39 clear시(=stage 40 진입 직전) 최대체력 증가량 2
+        int heatIncrease = BOSS_DEFEAT_MAX_HEAT_INCREASE;
+        if (currentStage == 39)
+        {
+            heatIncrease = 2;
+            Debug.Log("⭐ Stage 39 클리어! 최대 체력 +2!");
+        }
+        
+        maxHeat += heatIncrease;
+        Debug.Log($"보스 처치! 최대 히트 +{heatIncrease}: {maxHeat}");
 
         int oldHeat = currentHeat;
         currentHeat = maxHeat;
@@ -1987,20 +2085,20 @@ public class GameManager : MonoBehaviour
             ShowHeatChangeText(recovery);
         }
 
-        // ⭐ UPDATED: Stage UI는 Boss 리스폰 후에 업데이트 (여기선 안함)
-        // UpdateTurnUI(); 제거
-
-        // ⭐ NEW: Freeze 이미지 Boss와 함께 사라지고 나타나기
         if (isFeverMode)
         {
             StartCoroutine(SyncFreezeWithBossRespawn());
         }
+        
+        // ⭐ v5.0: 무한대 보스 진입 시 이동 카운트 초기화
+        if (currentStage == 39)
+        {
+            infiniteBossMoveCount = 0;
+        }
     }
 
-    // ⭐ NEW: Freeze 이미지를 Boss 리스폰과 동기화
     System.Collections.IEnumerator SyncFreezeWithBossRespawn()
     {
-        // Boss가 사라질 때 Freeze도 함께 사라짐 (0.5초)
         if (freezeImage1 != null)
         {
             freezeImage1.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
@@ -2010,18 +2108,14 @@ public class GameManager : MonoBehaviour
             freezeImage2.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
         }
 
-        // Boss 사라짐 + 대기 시간 (0.5초 + bossSpawnDelay)
-        // BossManager의 bossSpawnDelay는 기본 1.0초
-        yield return new WaitForSeconds(1.5f); // 0.5 (fade) + 1.0 (delay)
+        yield return new WaitForSeconds(1.5f);
 
-        // ⭐ CRITICAL: Fever 상태 재확인 (Fever가 끝났으면 Freeze 복원 안함)
         if (!isFeverMode)
         {
             Debug.Log("🧊 Fever 모드가 종료되어 Freeze 이미지 복원 안함");
             yield break;
         }
 
-        // Boss가 나타날 때 Freeze도 함께 나타남 (0.5초)
         if (freezeImage1 != null)
         {
             float targetAlpha = 70f / 255f;
@@ -2041,7 +2135,6 @@ public class GameManager : MonoBehaviour
         isBossTransitioning = transitioning;
         Debug.Log($"보스 리스폰 상태: {transitioning}");
         
-        // ⭐ CRITICAL: Boss 리스폰 완료 시 Gun 버튼 alpha 복원 + UI 업데이트
         if (!transitioning)
         {
             if (gunButtonImage != null)
@@ -2052,7 +2145,6 @@ public class GameManager : MonoBehaviour
                 Debug.Log("🔫 Gun 버튼 alpha 복원: 1.0");
             }
             
-            // ⭐ CRITICAL: Gun UI 업데이트하여 버튼 상태 즉시 반영
             UpdateGunUI();
             Debug.Log("🔫 Gun UI 업데이트 완료! 버튼 활성화 상태 반영");
         }
@@ -2068,19 +2160,12 @@ public class GameManager : MonoBehaviour
         if (currentHeat < 0)
             currentHeat = 0;
 
-        // ⭐ 체력바 애니메이션 (회복되는 것처럼)
-        UpdateHeatUI(false); // instant=false로 애니메이션 적용
+        UpdateHeatUI(false);
         StartCoroutine(FlashOrangeOnDamage());
 
-        // ⭐ CRITICAL: Damage Flash 효과 - 매 피격마다 호출
         if (damageFlashImage != null)
         {
-            Debug.Log("💥 FlashDamageImage 코루틴 시작!");
             StartCoroutine(FlashDamageImage());
-        }
-        else
-        {
-            Debug.LogError("❌❌❌ damageFlashImage가 null입니다! ❌❌❌");
         }
 
         int actualDamage = oldHeat - currentHeat;
@@ -2112,7 +2197,7 @@ public class GameManager : MonoBehaviour
         }
 
         List<int> sortedValues = new List<int>(uniqueValues);
-        sortedValues.Sort((a, b) => b.CompareTo(a)); // 내림차순
+        sortedValues.Sort((a, b) => b.CompareTo(a));
 
         int firstValue = sortedValues.Count > 0 ? sortedValues[0] : 0;
         int secondValue = sortedValues.Count > 1 ? sortedValues[1] : 0;
@@ -2133,36 +2218,22 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // ⭐ UPDATED: Damage Flash 효과 (Alpha 190/255에서 시작 + 0.05초 페이드 아웃)
     System.Collections.IEnumerator FlashDamageImage()
     {
-        if (damageFlashImage == null)
-        {
-            Debug.LogError("❌ damageFlashImage가 null입니다! 인스펙터 연결을 확인하세요!");
-            yield break;
-        }
+        if (damageFlashImage == null) yield break;
 
-        Debug.Log("💥💥💥 Damage Flash 시작! 💥💥💥");
-
-        // 이미지 활성화
         damageFlashImage.gameObject.SetActive(true);
         
-        // 기존 트윈 정리
         damageFlashImage.DOKill();
         
-        // ⭐ Alpha 190/255 = 0.745로 시작
         float startAlpha = 190f / 255f;
         Color flashColor = damageFlashImage.color;
         damageFlashImage.color = new Color(flashColor.r, flashColor.g, flashColor.b, startAlpha);
         
-        Debug.Log($"💥 Flash Alpha 설정: {startAlpha:F3} (190/255), 색상: R={flashColor.r}, G={flashColor.g}, B={flashColor.b}");
-        
-        // ⭐ 0.05초에 걸쳐 페이드 아웃
         damageFlashImage.DOFade(0f, 0.05f).SetEase(Ease.OutCubic).OnComplete(() => {
             if (damageFlashImage != null)
             {
                 damageFlashImage.gameObject.SetActive(false);
-                Debug.Log("💥 Damage Flash 효과 완료! (0.05초)");
             }
         });
         

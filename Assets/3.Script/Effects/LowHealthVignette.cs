@@ -10,9 +10,12 @@ public class LowHealthVignette : MonoBehaviour
     [SerializeField] private float maxAlpha = 0.35f;
 
     [Header("Thresholds")]
-    [SerializeField] private float maxEffectHealthValue = 45f;  // ⭐ UPDATED: 45 HP 이하면 최대 효과
+    [SerializeField] private float maxEffectHealthValue = 45f;
 
     private float currentAlpha = 0f;
+
+    // ⭐ v5.1: 무한대 보스 비네트 강화
+    private int infiniteBossVignetteBonus = 0;
 
     void Start()
     {
@@ -26,25 +29,22 @@ public class LowHealthVignette : MonoBehaviour
         vignetteImage.color = vignetteColor;
     }
 
-    // ⭐ UPDATED: HP 45 기준으로 변경
     public void UpdateVignette(int currentHeat, int maxHeat)
     {
         if (vignetteImage == null) return;
 
+        float effectiveThreshold = maxEffectHealthValue + infiniteBossVignetteBonus;
         float targetAlpha = 0f;
 
-        if (currentHeat <= maxEffectHealthValue)
+        if (currentHeat <= effectiveThreshold)
         {
-            // 45 HP 이하: 최대 효과
             targetAlpha = maxAlpha;
         }
         else
         {
-            // 45 HP 초과: 효과 없음
             targetAlpha = 0f;
         }
 
-        // 부드럽게 변화
         DOTween.Kill(vignetteImage);
         vignetteImage.DOKill();
 
@@ -56,21 +56,19 @@ public class LowHealthVignette : MonoBehaviour
         currentAlpha = targetAlpha;
     }
 
-    // ⭐ UPDATED: HP 45 기준으로 변경
     public void UpdateVignetteInstant(int currentHeat, int maxHeat)
     {
         if (vignetteImage == null) return;
 
+        float effectiveThreshold = maxEffectHealthValue + infiniteBossVignetteBonus;
         float targetAlpha = 0f;
 
-        if (currentHeat <= maxEffectHealthValue)
+        if (currentHeat <= effectiveThreshold)
         {
-            // 45 HP 이하: 최대 효과
             targetAlpha = maxAlpha;
         }
         else
         {
-            // 45 HP 초과: 효과 없음
             targetAlpha = 0f;
         }
 
@@ -79,5 +77,29 @@ public class LowHealthVignette : MonoBehaviour
         vignetteImage.color = targetColor;
 
         currentAlpha = targetAlpha;
+    }
+
+    // ⭐ v5.1: 무한대 보스 비네트 강화 (20move마다 +1, 최대 +35)
+    public void IncreaseInfiniteBossBonus()
+    {
+        if (infiniteBossVignetteBonus < 35)
+        {
+            infiniteBossVignetteBonus++;
+            Debug.Log($"🔴 비네트 강화! threshold: {maxEffectHealthValue} + {infiniteBossVignetteBonus} = {maxEffectHealthValue + infiniteBossVignetteBonus}");
+        }
+    }
+
+    // ⭐ v5.1: 리셋
+    public void ResetInfiniteBossBonus()
+    {
+        infiniteBossVignetteBonus = 0;
+        Debug.Log("🔴 비네트 보너스 리셋");
+    }
+
+    // ⭐ v5.1: 현재 비네트가 최대인지 (guide text 표시용)
+    public bool IsVignetteAtMax(int currentHeat)
+    {
+        float effectiveThreshold = maxEffectHealthValue + infiniteBossVignetteBonus;
+        return currentHeat <= effectiveThreshold;
     }
 }

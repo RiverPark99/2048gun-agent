@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using DG.Tweening;
+using System.Collections.Generic;
 
 public enum TileColor
 {
@@ -20,10 +21,15 @@ public class Tile : MonoBehaviour
     [SerializeField] private ParticleSystem mergeParticle;
     private Coffee.UIExtensions.UIParticle uiParticle;
 
-    // ⭐ NEW: 보호 테두리
+    // 보호 테두리
     private Outline borderOutline;
     private bool isProtected = false;
     private Coroutine blinkCoroutine;
+
+    // ⭐ v5.0: 초음파 웨이브 효과
+    private Coroutine ultrasonicCoroutine;
+    private bool isUltrasonicActive = false;
+    private List<GameObject> activeWaveObjects = new List<GameObject>();
 
     private RectTransform rectTransform;
     private Vector2 targetPosition;
@@ -95,6 +101,7 @@ public class Tile : MonoBehaviour
             StopCoroutine(blinkCoroutine);
             blinkCoroutine = null;
         }
+        StopUltrasonicEffect();
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float size, float lifetime)
@@ -175,14 +182,13 @@ public class Tile : MonoBehaviour
         value = newValue;
         valueText.text = value.ToString();
 
-        // ⭐ UPDATED: Shadow 효과만 적용 (Outline 코드 제거)
         Shadow shadow = valueText.GetComponent<Shadow>();
         if (shadow == null)
         {
             shadow = valueText.gameObject.AddComponent<Shadow>();
         }
-        shadow.effectColor = new Color(0f, 0f, 0f, 1f); // 완전 불투명
-        shadow.effectDistance = new Vector2(5f, -5f); // 더 확실한 그림자
+        shadow.effectColor = new Color(0f, 0f, 0f, 1f);
+        shadow.effectDistance = new Vector2(5f, -5f);
         shadow.useGraphicAlpha = true;
 
         UpdateAppearance();
@@ -375,18 +381,108 @@ public class Tile : MonoBehaviour
             borderOutline.effectColor = new Color(0.8f, 0.8f, 0.9f, 1f);
             borderOutline.effectDistance = new Vector2(8f, 8f);
             borderOutline.enabled = true;
+            StopUltrasonicEffect(); // 보호 타일은 초음파 효과 없음
         }
         else if (shouldBlink)
         {
+            // ⭐ v5.0: 테두리 깜빡임 대신 초음파 웨이브 효과
             borderOutline.effectColor = new Color(1f, 1f, 0.3f, 1f);
             borderOutline.effectDistance = new Vector2(6f, 6f);
             borderOutline.enabled = true;
 
             blinkCoroutine = StartCoroutine(BlinkBorder());
+            StartUltrasonicEffect(); // ⭐ 초음파 효과 시작
         }
         else
         {
             borderOutline.enabled = false;
+            StopUltrasonicEffect(); // ⭐ 효과 정지
+        }
+    }
+
+    // ⭐ v5.0: 초음파 웨이브 효과 시작
+    void StartUltrasonicEffect()
+    {
+        if (isUltrasonicActive) return;
+        isUltrasonicActive = true;
+        ultrasonicCoroutine = StartCoroutine(UltrasonicWaveCoroutine());
+    }
+
+    // ⭐ v5.0: 초음파 웨이브 효과 정지 + 잔상 완전 제거
+    void StopUltrasonicEffect()
+    {
+        isUltrasonicActive = false;
+        if (ultrasonicCoroutine != null)
+        {
+            StopCoroutine(ultrasonicCoroutine);
+            ultrasonicCoroutine = null;
+        }
+        // 모든 활성 웨이브 오브젝트 즉시 제거
+        for (int i = activeWaveObjects.Count - 1; i >= 0; i--)
+        {
+            if (activeWaveObjects[i] != null)
+            {
+                Destroy(activeWaveObjects[i]);
+            }
+        }
+        activeWaveObjects.Clear();
+    }
+
+    // ⭐ v5.0: 안쪽에서 바깥으로 퍼지는 초음파 웨이브 코루틴
+    System.Collections.IEnumerator UltrasonicWaveCoroutine()
+    {
+        while (isUltrasonicActive)
+        {
+            // 새 웨이브 생성
+            GameObject waveObj = new GameObject("UltrasonicWave");
+            waveObj.transform.SetParent(background.transform, false);
+            activeWaveObjects.Add(waveObj); // 추적 리스트에 등록
+
+            Image waveImg = waveObj.AddComponent<Image>();
+            waveImg.color = new Color(1f, 1f, 0.3f, 0.15f);
+
+            RectTransform waveRect = waveObj.GetComponent<RectTransform>();
+            waveRect.anchorMin = new Vector2(0.5f, 0.5f);
+            waveRect.anchorMax = new Vector2(0.5f, 0.5f);
+            waveRect.pivot = new Vector2(0.5f, 0.5f);
+            waveRect.anchoredPosition = Vector2.zero;
+            
+            float startSize = 10f;
+            RectTransform bgRect = background.GetComponent<RectTransform>();
+            float endSize = Mathf.Max(bgRect.rect.width, bgRect.rect.height);
+            waveRect.sizeDelta = new Vector2(startSize, startSize);
+
+            Outline waveOutline = waveObj.AddComponent<Outline>();
+            waveOutline.effectColor = new Color(1f, 1f, 0.3f, 0.6f);
+            waveOutline.effectDistance = new Vector2(3f, 3f);
+
+            float waveDuration = 0.8f;
+            float elapsed = 0f;
+
+            while (elapsed < waveDuration && isUltrasonicActive)
+            {
+                if (waveObj == null) break;
+                
+                elapsed += Time.deltaTime;
+                float t = elapsed / waveDuration;
+
+                float currentSize = Mathf.Lerp(startSize, endSize, t);
+                waveRect.sizeDelta = new Vector2(currentSize, currentSize);
+
+                float alpha = Mathf.Lerp(0.4f, 0f, t);
+                waveImg.color = new Color(1f, 1f, 0.3f, alpha * 0.3f);
+                waveOutline.effectColor = new Color(1f, 1f, 0.3f, alpha);
+
+                yield return null;
+            }
+
+            if (waveObj != null)
+            {
+                activeWaveObjects.Remove(waveObj);
+                Destroy(waveObj);
+            }
+
+            yield return new WaitForSeconds(0.15f);
         }
     }
 

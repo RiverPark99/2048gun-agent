@@ -7,7 +7,8 @@ public class Projectile : MonoBehaviour
     public enum ProjectileType
     {
         Knife,      // 칼 공격 (레이저)
-        Bullet      // 총알 (레이저)
+        Bullet,     // 총알 (레이저)
+        Freeze      // ⭐ v5.0: 얼음 레이저 (Fever Freeze 연출)
     }
 
     private ProjectileType type;
@@ -18,7 +19,6 @@ public class Projectile : MonoBehaviour
 
     void Awake()
     {
-        // Image 컴포넌트
         lineImage = GetComponent<Image>();
         if (lineImage == null)
         {
@@ -47,12 +47,18 @@ public class Projectile : MonoBehaviour
         // 타입에 따른 굵기 설정
         if (type == ProjectileType.Bullet)
         {
-            lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f); // 총알 레이저
+            lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f);
             rect.sizeDelta = new Vector2(0f, 8f); // 굵기 8
+        }
+        else if (type == ProjectileType.Freeze)
+        {
+            // ⭐ v5.0: Freeze 레이저 - 더 두꺼운 얼음색
+            lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.85f);
+            rect.sizeDelta = new Vector2(0f, 18f); // 굵기 18 (일반 12보다 두꺼움)
         }
         else // Knife
         {
-            lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f); // 칼 레이저
+            lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f);
             rect.sizeDelta = new Vector2(0f, 12f); // 굵기 12
         }
 
@@ -64,25 +70,42 @@ public class Projectile : MonoBehaviour
         // 레이저 위치와 회전 설정
         rect.position = startPosition;
         rect.rotation = Quaternion.Euler(0, 0, angle);
-        rect.pivot = new Vector2(0f, 0.5f); // 왼쪽 중앙이 피벗
+        rect.pivot = new Vector2(0f, 0.5f);
 
-        // 레이저 길이 애니메이션 (빠르게 늘어남)
-        rect.DOSizeDelta(new Vector2(distance, rect.sizeDelta.y), 0.05f)
-            .SetEase(Ease.OutQuad)
-            .OnComplete(() =>
-            {
-                // 레이저 페이드아웃
-                lineImage.DOFade(0f, 0.15f)
-                    .OnComplete(() =>
-                    {
-                        Destroy(gameObject);
-                    });
-            });
+        if (type == ProjectileType.Freeze)
+        {
+            // ⭐ v5.0: Freeze 레이저는 살짝 느리게 + 더 오래 유지
+            rect.DOSizeDelta(new Vector2(distance, rect.sizeDelta.y), 0.08f)
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() =>
+                {
+                    // 잠깐 유지 후 페이드아웃
+                    lineImage.DOFade(0f, 0.3f)
+                        .SetDelay(0.1f)
+                        .OnComplete(() =>
+                        {
+                            Destroy(gameObject);
+                        });
+                });
+        }
+        else
+        {
+            // 기존 레이저 동작
+            rect.DOSizeDelta(new Vector2(distance, rect.sizeDelta.y), 0.05f)
+                .SetEase(Ease.OutQuad)
+                .OnComplete(() =>
+                {
+                    lineImage.DOFade(0f, 0.15f)
+                        .OnComplete(() =>
+                        {
+                            Destroy(gameObject);
+                        });
+                });
+        }
     }
 
     void OnDestroy()
     {
-        // DOTween kill
         transform.DOKill();
     }
 }

@@ -22,8 +22,8 @@ public class BossManager : MonoBehaviour
     [Header("보스 공격 시스템")]
     [SerializeField] private int baseTurnInterval = 8;
     [SerializeField] private int minTurnInterval = 3;
-    [SerializeField] private int baseDamage = 28;
-    [SerializeField] private int damageThreshold = 40;
+    [SerializeField] private int baseDamage = 28; // ⭐ 원래값 유지
+    [SerializeField] private int damageThreshold = 40; // ⭐ 원래값 유지: stage 1~40 동안 28→최대 40까지 1씩 증가
 
     private int currentTurnInterval;
     private int currentTurnCount = 0;
@@ -50,8 +50,13 @@ public class BossManager : MonoBehaviour
     private bool isFirstGame = true;
 
     private bool isFrozen = false;
-    private int bonusTurnsAdded = 0; // ⭐ NEW: Fever Gun으로 추가된 총 보너스 턴 수
-    private int bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴 수
+    private int bonusTurnsAdded = 0;
+    private int bonusTurnsFilled = 0;
+
+    // ⭐ v5.0: 무한대 보스 전용 - 20회 이동마다 공격력 증가
+    private int infiniteBossExtraDamage = 0;
+    private const int MAX_TOTAL_DAMAGE = 70;
+    private bool pendingDamageIncrease = false; // ⭐ v5.1: 공격 완료 후 증가 대기
 
     void Start()
     {
@@ -65,27 +70,41 @@ public class BossManager : MonoBehaviour
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
-        if (bossLevel == 40)
+        // ⭐ v5.0: 한 stage 앞당김
+        // stage 39 = HP 2,147,483,647 (쓰러뜨릴 수 있음)
+        // stage 40 = 무한대 (무적)
+        if (bossLevel == 39)
         {
             maxHP = 2147483647;
+        }
+        else if (bossLevel >= 40)
+        {
+            maxHP = 2147483647; // 내부적으로 int.MaxValue, UI는 ∞ 표시
         }
 
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
+        // ⭐ 원래 공격력 로직 복원:
+        // stage 1~(damageThreshold-baseDamage+1): baseDamage(28) + (bossLevel-1), 즉 매 스테이지 1씩 증가
+        // threshold(40) 도달 후: 5스테이지마다 1씩 증가 (기존 8 → 5로 변경)
         int tempDamage = baseDamage + (bossLevel - 1);
         
-        if (tempDamage < damageThreshold)
+        if (tempDamage <= damageThreshold)
         {
             currentBossDamage = tempDamage;
         }
         else
         {
-            int levelsOver40 = bossLevel - (damageThreshold - baseDamage);
-            int slowIncreaseCount = levelsOver40 / 8;
+            // damageThreshold를 넘은 이후 5스테이지마다 1씩 증가
+            int levelsOverThreshold = bossLevel - (damageThreshold - baseDamage + 1);
+            int slowIncreaseCount = levelsOverThreshold / 5; // ⭐ 8 → 5로 변경
             currentBossDamage = damageThreshold + slowIncreaseCount;
         }
+
+        // ⭐ v5.0: 무한대 보스 추가 데미지 초기화
+        infiniteBossExtraDamage = 0;
 
         currentTurnCount = currentTurnInterval;
 
@@ -93,10 +112,77 @@ public class BossManager : MonoBehaviour
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, 공격 주기: {currentTurnInterval}턴, 공격력: {currentBossDamage}");
     }
 
+    // ⭐ v5.1: 무한대 보스 - 20회 이동마다 공격력 1 증가 (최대 70까지)
+    // 보스가 공격 중이면 대기 후 공격 완료 후 처리
+    public void IncreaseInfiniteBossDamage()
+    {
+        if (bossLevel < 40) return;
+        
+        int currentTotal = currentBossDamage + infiniteBossExtraDamage;
+        if (currentTotal >= MAX_TOTAL_DAMAGE)
+        {
+            Debug.Log($"⚠️ 무한대 보스 공격력 이미 최대: {currentTotal}/{MAX_TOTAL_DAMAGE}");
+            return;
+        }
+
+        // 보스가 공격 중이면 대기
+        if (gameManager != null && gameManager.IsBossAttacking())
+        {
+            pendingDamageIncrease = true;
+            Debug.Log("⚠️ 보스 공격 중 - 공격력 증가 대기");
+            return;
+        }
+
+        ApplyDamageIncrease();
+    }
+
+    private void ApplyDamageIncrease()
+    {
+        int currentTotal = currentBossDamage + infiniteBossExtraDamage;
+        if (currentTotal >= MAX_TOTAL_DAMAGE) return;
+
+        infiniteBossExtraDamage++;
+        Debug.Log($"⚠️ 무한대 보스 공격력 증가! base:{currentBossDamage} + extra:{infiniteBossExtraDamage} = {GetEffectiveDamage()}/{MAX_TOTAL_DAMAGE}");
+        UpdateBossAttackUI();
+        FlashAttackTextBlue();
+    }
+
+    // ⭐ v5.1: 공격 완료 후 대기중인 데미지 증가 처리
+    public void ProcessPendingDamageIncrease()
+    {
+        if (pendingDamageIncrease)
+        {
+            pendingDamageIncrease = false;
+            ApplyDamageIncrease();
+        }
+    }
+
+    // ⭐ v5.1: ATK 텍스트 푸른색 플래시
+    void FlashAttackTextBlue()
+    {
+        if (bossAttackInfoText == null) return;
+
+        Color originalColor = bossAttackInfoText.color;
+        Color blueColor = new Color(0.3f, 0.6f, 1f);
+
+        bossAttackInfoText.color = blueColor;
+
+        DOTween.Sequence()
+            .AppendInterval(0.3f)
+            .Append(bossAttackInfoText.DOColor(originalColor, 0.4f).SetEase(Ease.OutQuad));
+    }
+
+    private int GetEffectiveDamage()
+    {
+        int total = currentBossDamage + infiniteBossExtraDamage;
+        return Mathf.Min(total, MAX_TOTAL_DAMAGE);
+    }
+
     public void TakeDamage(long damage)
     {
         if (isTransitioning) return;
 
+        // ⭐ v5.0: stage 40만 무적 (39는 HP 2,147,483,647이지만 쓰러뜨릴 수 있음)
         if (bossLevel >= 40)
         {
             Debug.Log("40번째 적은 무적!");
@@ -124,14 +210,12 @@ public class BossManager : MonoBehaviour
     public void AddTurns(int turns)
     {
         if (isTransitioning) return;
-        // ⭐ CRITICAL: Frozen 체크 제거 - Fever Gun은 Frozen 상태에서도 턴 추가 가능
-        // if (isFrozen) return; // 제거
 
         currentTurnCount += turns;
-        bonusTurnsAdded += turns; // ⭐ NEW: 총 보너스 턴 수 기록
-        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스는 0부터 시작
+        bonusTurnsAdded += turns;
+        bonusTurnsFilled = 0;
         Debug.Log($"⏰ 보스 공격 턴 +{turns} (현재: {currentTurnCount}턴 남음, 보너스: {bonusTurnsAdded}, 채워짐: {bonusTurnsFilled})");
-        UpdateBossAttackUI(); // ⭐ CRITICAL: 즉시 UI 업데이트
+        UpdateBossAttackUI();
     }
 
     public void OnPlayerTurn()
@@ -141,11 +225,10 @@ public class BossManager : MonoBehaviour
 
         currentTurnCount--;
         
-        // ⭐ NEW: 기본 턴이 다 차면 보너스 턴 채우기 시작
         if (currentTurnCount < 0 && bonusTurnsFilled < bonusTurnsAdded)
         {
             bonusTurnsFilled++;
-            currentTurnCount = 0; // 기본 턴은 0 유지
+            currentTurnCount = 0;
             Debug.Log($"⏰ 보너스 턴 채우는 중: {bonusTurnsFilled}/{bonusTurnsAdded}");
         }
         
@@ -153,7 +236,6 @@ public class BossManager : MonoBehaviour
 
         UpdateBossAttackUI();
 
-        // ⭐ NEW: 기본 턴 + 보너스 턴 모두 소진되면 공격
         if (currentTurnCount <= 0 && bonusTurnsFilled >= bonusTurnsAdded)
         {
             AttackPlayer();
@@ -210,8 +292,9 @@ public class BossManager : MonoBehaviour
 
         if (gameManager != null)
         {
-            Debug.Log($"⚠️ 보스 공격! {currentBossDamage} 데미지!");
-            gameManager.TakeBossAttack(currentBossDamage);
+            int effectiveDamage = GetEffectiveDamage();
+            Debug.Log($"⚠️ 보스 공격! {effectiveDamage} 데미지!");
+            gameManager.TakeBossAttack(effectiveDamage);
             CameraShake.Instance?.ShakeMedium();
         }
 
@@ -227,11 +310,14 @@ public class BossManager : MonoBehaviour
         }
 
         currentTurnCount = currentTurnInterval;
-        bonusTurnsAdded = 0; // ⭐ NEW: 공격 후 보너스 턴 리셋
-        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
+        bonusTurnsAdded = 0;
+        bonusTurnsFilled = 0;
         UpdateBossAttackUI();
 
         Debug.Log($"보스 공격 완료! 턴 초기화: {currentTurnCount}, 보너스 턴 리셋");
+
+        // ⭐ v5.1: 공격 완료 후 대기중인 데미지 증가 처리
+        ProcessPendingDamageIncrease();
     }
 
     public void ResetTurnCount()
@@ -262,6 +348,7 @@ public class BossManager : MonoBehaviour
 
         if (hpText != null)
         {
+            // ⭐ v5.0: stage 40만 ∞, stage 39는 숫자 표시
             if (bossLevel >= 40)
             {
                 hpText.text = "HP: ∞";
@@ -275,20 +362,18 @@ public class BossManager : MonoBehaviour
         UpdateBossAttackUI();
     }
 
-    // ⭐ UPDATED: 보너스 턴 빈 네모(□) → 채워진 네모(■) 방식
     string GetAttackTurnText(int remainingTurns)
     {
-        string filledSymbol = "●"; // 기본 턴: 채워진 원
-        string emptySymbol = "○";  // 기본 턴: 빈 원
-        string bonusFilledSymbol = "■";  // ⭐ NEW: 채워진 보너스 턴 (검은 네모)
-        string bonusEmptySymbol = "□";   // ⭐ NEW: 빈 보너스 턴 (흰 네모)
+        string filledSymbol = "●";
+        string emptySymbol = "○";
+        string bonusFilledSymbol = "■";
+        string bonusEmptySymbol = "□";
 
         int totalTurns = currentTurnInterval;
         int filledCount = totalTurns - remainingTurns;
 
         string symbols = "";
         
-        // 기본 턴 표시
         for (int i = 0; i < filledCount; i++)
         {
             symbols += filledSymbol;
@@ -298,7 +383,6 @@ public class BossManager : MonoBehaviour
             symbols += emptySymbol;
         }
         
-        // ⭐ NEW: 보너스 턴 표시 (채워진 개수만큼 ■, 나머지는 □)
         for (int i = 0; i < bonusTurnsFilled; i++)
         {
             symbols += bonusFilledSymbol;
@@ -308,7 +392,8 @@ public class BossManager : MonoBehaviour
             symbols += bonusEmptySymbol;
         }
 
-        return $"ATK: {currentBossDamage}\nIn {symbols}";
+        int effectiveDamage = GetEffectiveDamage();
+        return $"ATK: {effectiveDamage}\nIn {symbols}";
     }
 
     void UpdateBossAttackUI()
@@ -334,7 +419,6 @@ public class BossManager : MonoBehaviour
             string attackText = GetAttackTurnText(currentTurnCount);
             bossAttackInfoText.text = attackText;
             
-            // ⭐ DEBUG: 보너스 턴 UI 텍스트 확인
             if (bonusTurnsAdded > 0)
             {
                 Debug.Log($"💎 UI 업데이트: {attackText} (보너스: {bonusTurnsFilled}/{bonusTurnsAdded})");
@@ -345,8 +429,6 @@ public class BossManager : MonoBehaviour
     IEnumerator OnBossDefeatedCoroutine()
     {
         isTransitioning = true;
-
-        // ⭐ UPDATED: Freeze 해제를 여기서 하지 않음 (Fever 유지)
 
         if (gameManager != null)
         {
@@ -389,10 +471,15 @@ public class BossManager : MonoBehaviour
             yield return appearSeq.WaitForCompletion();
         }
 
+        // 새 보스 스탯 설정
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
-        if (bossLevel == 40)
+        if (bossLevel == 39)
+        {
+            maxHP = 2147483647;
+        }
+        else if (bossLevel >= 40)
         {
             maxHP = 2147483647;
         }
@@ -401,31 +488,31 @@ public class BossManager : MonoBehaviour
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
+        // 공격력 계산 (원래 로직 + 5스테이지 변경)
         int tempDamage = baseDamage + (bossLevel - 1);
         
-        if (tempDamage < damageThreshold)
+        if (tempDamage <= damageThreshold)
         {
             currentBossDamage = tempDamage;
         }
         else
         {
-            int levelsOver40 = bossLevel - (damageThreshold - baseDamage);
-            int slowIncreaseCount = levelsOver40 / 8;
+            int levelsOverThreshold = bossLevel - (damageThreshold - baseDamage + 1);
+            int slowIncreaseCount = levelsOverThreshold / 5;
             currentBossDamage = damageThreshold + slowIncreaseCount;
         }
 
+        infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
-        bonusTurnsAdded = 0; // ⭐ NEW: 보스 리스폰 시 보너스 턴 리셋
-        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
+        bonusTurnsAdded = 0;
+        bonusTurnsFilled = 0;
 
         UpdateUI(true);
         SetBossUIActive(true);
         
-        // ⭐ CRITICAL: Boss 리스폰 완료 후 UI 다시 업데이트 (보너스 턴 초기화 확인)
         UpdateBossAttackUI();
-        Debug.Log($"🔄 Boss 리스폰 완료! UI 업데이트: 기본 턴 {currentTurnCount}/{currentTurnInterval}, 보너스: {bonusTurnsFilled}/{bonusTurnsAdded}");
+        Debug.Log($"🔄 Boss 리스폰 완료! Level {bossLevel}, ATK: {currentBossDamage}, 턴: {currentTurnCount}/{currentTurnInterval}");
         
-        // ⭐ UPDATED: Freeze 상태라면 애니메이션 시작 안 함
         if (!isFrozen)
         {
             StartBossIdleAnimation();
@@ -434,7 +521,7 @@ public class BossManager : MonoBehaviour
         if (gameManager != null)
         {
             gameManager.SetBossTransitioning(false);
-            gameManager.UpdateTurnUI(); // ⭐ NEW: Boss 리스폰 완료 후 Stage UI 업데이트
+            gameManager.UpdateTurnUI();
         }
 
         isTransitioning = false;
@@ -446,8 +533,9 @@ public class BossManager : MonoBehaviour
         bossLevel = 1;
         currentBossIndex = 0;
         isFrozen = false;
-        bonusTurnsAdded = 0; // ⭐ NEW: 보너스 턴 리셋
-        bonusTurnsFilled = 0; // ⭐ NEW: 채워진 보너스 턴도 리셋
+        bonusTurnsAdded = 0;
+        bonusTurnsFilled = 0;
+        infiniteBossExtraDamage = 0;
 
         if (bossImageArea != null && bossSprites.Count > 0)
         {
@@ -487,7 +575,6 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            // ⭐ UPDATED: 루프 제거, 순서대로 계속 이어지기
             int imageIndex;
             if (bossLevel == 1 && isFirstGame)
             {
@@ -495,10 +582,8 @@ public class BossManager : MonoBehaviour
             }
             else
             {
-                // 순환 없이 계속 증가
                 imageIndex = bossLevel - 1;
                 
-                // 이미지가 부족하면 마지막 이미지 유지
                 if (imageIndex >= bossSprites.Count)
                 {
                     imageIndex = bossSprites.Count - 1;
@@ -524,7 +609,6 @@ public class BossManager : MonoBehaviour
     {
         if (bossImageArea == null) return;
 
-        // ⭐ UPDATED: 루프 제거, 항상 핑크색 고정
         Color pinkColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
 
         Material mat = new Material(Shader.Find("UI/Default"));
@@ -603,5 +687,6 @@ public class BossManager : MonoBehaviour
     public int GetBossLevel() { return bossLevel; }
     public int GetTurnCount() { return currentTurnCount; }
     public int GetTurnInterval() { return currentTurnInterval; }
-    public int GetBossDamage() { return currentBossDamage; }
+    public int GetBossDamage() { return GetEffectiveDamage(); }
+    public bool IsInfiniteBoss() { return bossLevel >= 40; } // ⭐ v5.0
 }
