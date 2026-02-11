@@ -21,12 +21,10 @@ public class Tile : MonoBehaviour
     [SerializeField] private ParticleSystem mergeParticle;
     private Coffee.UIExtensions.UIParticle uiParticle;
 
-    // 보호 테두리
     private Outline borderOutline;
     private bool isProtected = false;
     private Coroutine blinkCoroutine;
 
-    // ⭐ v5.0: 초음파 웨이브 효과
     private Coroutine ultrasonicCoroutine;
     private bool isUltrasonicActive = false;
     private List<GameObject> activeWaveObjects = new List<GameObject>();
@@ -52,24 +50,28 @@ public class Tile : MonoBehaviour
         new Color(0.0f, 0.0f, 0.0f),
     };
 
+    // v6.0: Berry gradient -> mint
     private Color[] berryGradient = new Color[]
     {
-        new Color(1f, 0.80f, 0.85f),
-        new Color(1f, 0.75f, 0.82f),
-        new Color(1f, 0.70f, 0.79f),
-        new Color(1f, 0.65f, 0.76f),
-        new Color(1f, 0.60f, 0.73f),
-        new Color(1f, 0.55f, 0.70f),
-        new Color(1f, 0.50f, 0.67f),
-        new Color(1f, 0.45f, 0.64f),
-        new Color(0.98f, 0.40f, 0.61f),
-        new Color(0.95f, 0.35f, 0.58f),
-        new Color(0.92f, 0.25f, 0.52f),
-        new Color(0.88f, 0.15f, 0.46f),
+        new Color(0.85f, 0.96f, 0.93f),  // 2
+        new Color(0.75f, 0.93f, 0.88f),  // 4
+        new Color(0.65f, 0.90f, 0.83f),  // 8
+        new Color(0.55f, 0.87f, 0.78f),  // 16
+        new Color(0.45f, 0.84f, 0.73f),  // 32
+        new Color(0.35f, 0.80f, 0.68f),  // 64
+        new Color(0.25f, 0.75f, 0.62f),  // 128
+        new Color(0.15f, 0.70f, 0.56f),  // 256
+        new Color(0.08f, 0.65f, 0.50f),  // 512
+        new Color(0.02f, 0.58f, 0.44f),  // 1024
+        new Color(0.00f, 0.50f, 0.38f),  // 2048
+        new Color(0.00f, 0.42f, 0.32f),  // 4096
     };
 
     private Color goldColor = new Color(1f, 0.84f, 0f);
-    private Color silverColor = new Color(0.9f, 0.9f, 0.95f);
+    // v6.0: Berry text -> dark chocolate
+    private Color berryTextColor = new Color(0.25f, 0.15f, 0.10f);
+    // v6.0: Berry merge particle -> HP bar mint color
+    private readonly Color berryParticleColor = new Color(0.0f, 0.65f, 0.55f);
 
     void Awake()
     {
@@ -104,7 +106,29 @@ public class Tile : MonoBehaviour
         StopUltrasonicEffect();
     }
 
-    void SpawnParticleAtPosition(Vector2 position, Color color, float size, float lifetime)
+    // v6.0: particle size based on tile RectTransform (resolution-adaptive)
+    float GetAdaptiveParticleSize(float baseRatio)
+    {
+        if (rectTransform == null) return 100f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        return tileSize * baseRatio;
+    }
+
+    float GetAdaptiveShapeRadius()
+    {
+        if (rectTransform == null) return 50f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        return tileSize * 0.35f;
+    }
+
+    float GetAdaptiveSpeed()
+    {
+        if (rectTransform == null) return 300f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        return tileSize * 2.0f;
+    }
+
+    void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
     {
         GameObject particleObj = new GameObject("MergeParticle");
 
@@ -120,10 +144,15 @@ public class Tile : MonoBehaviour
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
 
+        // v6.0: adaptive sizing
+        float adaptiveSize = GetAdaptiveParticleSize(sizeRatio);
+        float adaptiveSpeed = GetAdaptiveSpeed();
+        float adaptiveRadius = GetAdaptiveShapeRadius();
+
         var main = ps.main;
         main.startLifetime = lifetime;
-        main.startSpeed = 300f;
-        main.startSize = size;
+        main.startSpeed = adaptiveSpeed;
+        main.startSize = adaptiveSize;
         main.startColor = color;
         main.maxParticles = 80;
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
@@ -139,7 +168,7 @@ public class Tile : MonoBehaviour
 
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius = 50f;
+        shape.radius = adaptiveRadius;
 
         var colorOverLifetime = ps.colorOverLifetime;
         colorOverLifetime.enabled = true;
@@ -169,9 +198,9 @@ public class Tile : MonoBehaviour
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
-        var uiParticle = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiParticle.scale = 3f;
-        uiParticle.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
+        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
+        uiP.scale = 3f;
+        uiP.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);
@@ -200,35 +229,25 @@ public class Tile : MonoBehaviour
         UpdateAppearance();
     }
 
-    public void SetGridPosition(Vector2Int pos)
-    {
-        gridPosition = pos;
-    }
+    public void SetGridPosition(Vector2Int pos) { gridPosition = pos; }
 
     public void MoveTo(Vector2 position, bool animate = true)
     {
         targetPosition = position;
-        if (animate)
-        {
-            isMoving = true;
-        }
-        else
-        {
-            rectTransform.anchoredPosition = position;
-        }
+        if (animate) isMoving = true;
+        else rectTransform.anchoredPosition = position;
     }
 
     public void MergeWith(Tile other)
     {
         SetValue(value * 2);
-
+        // v6.0: ratio-based size (was hardcoded 80f)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
             new Color(1f, 0.8f, 0.2f),
-            80f,
+            0.6f, // ~60% of tile size
             0.3f
         );
-
         StartCoroutine(PopAnimation());
     }
 
@@ -240,79 +259,37 @@ public class Tile : MonoBehaviour
 
     public void PlayChocoMergeEffect()
     {
-        SpawnParticleAtPosition(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(0.55f, 0.40f, 0.28f),
-            100f,
-            0.35f
-        );
-
-        StartCoroutine(DelayedParticle(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(0.55f, 0.40f, 0.28f),
-            100f,
-            0.35f,
-            0.05f
-        ));
+        Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
+        SpawnParticleAtPosition(pos, new Color(0.55f, 0.40f, 0.28f), 0.75f, 0.35f);
+        StartCoroutine(DelayedParticle(pos, new Color(0.55f, 0.40f, 0.28f), 0.75f, 0.35f, 0.05f));
     }
 
+    // v6.0: Berry merge particle -> HP bar mint color
     public void PlayBerryMergeEffect()
     {
-        SpawnParticleAtPosition(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.5f, 0.65f),
-            100f,
-            0.35f
-        );
-
-        StartCoroutine(DelayedParticle(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.5f, 0.65f),
-            100f,
-            0.35f,
-            0.05f
-        ));
+        Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
+        SpawnParticleAtPosition(pos, berryParticleColor, 0.75f, 0.35f);
+        StartCoroutine(DelayedParticle(pos, berryParticleColor, 0.75f, 0.35f, 0.05f));
     }
 
     public void PlayMixMergeEffect()
     {
-        SpawnParticleAtPosition(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(0.55f, 0.40f, 0.28f),
-            100f,
-            0.35f
-        );
-
-        StartCoroutine(DelayedParticle(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.5f, 0.65f),
-            100f,
-            0.35f,
-            0.05f
-        ));
+        Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
+        SpawnParticleAtPosition(pos, new Color(0.55f, 0.40f, 0.28f), 0.75f, 0.35f);
+        StartCoroutine(DelayedParticle(pos, berryParticleColor, 0.75f, 0.35f, 0.05f));
     }
 
-    System.Collections.IEnumerator DelayedParticle(Vector2 position, Color color, float size, float lifetime, float delay)
+    System.Collections.IEnumerator DelayedParticle(Vector2 position, Color color, float sizeRatio, float lifetime, float delay)
     {
         yield return new WaitForSeconds(delay);
-        SpawnParticleAtPosition(position, color, size, lifetime);
+        SpawnParticleAtPosition(position, color, sizeRatio, lifetime);
     }
 
     public void PlayGunDestroyEffect()
     {
-        SpawnParticleAtPosition(
-            GetComponent<RectTransform>().anchoredPosition,
-            new Color(1f, 0.84f, 0f),
-            120f,
-            0.4f
-        );
-
-        SpawnParticleAtPosition(
-            GetComponent<RectTransform>().anchoredPosition,
-            Color.white,
-            150f,
-            0.2f
-        );
+        Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
+        SpawnParticleAtPosition(pos, new Color(1f, 0.84f, 0f), 0.9f, 0.4f);
+        SpawnParticleAtPosition(pos, Color.white, 1.1f, 0.2f);
     }
 
     private System.Collections.IEnumerator PopAnimation()
@@ -330,7 +307,6 @@ public class Tile : MonoBehaviour
         }
 
         elapsed = 0f;
-
         float popDuration = duration * 0.4f;
         while (elapsed < popDuration)
         {
@@ -344,7 +320,6 @@ public class Tile : MonoBehaviour
         }
 
         elapsed = 0f;
-
         float returnDuration = duration * 0.3f;
         while (elapsed < returnDuration)
         {
@@ -361,19 +336,12 @@ public class Tile : MonoBehaviour
     {
         isProtected = protected_;
 
-        if (blinkCoroutine != null)
-        {
-            StopCoroutine(blinkCoroutine);
-            blinkCoroutine = null;
-        }
+        if (blinkCoroutine != null) { StopCoroutine(blinkCoroutine); blinkCoroutine = null; }
 
         if (borderOutline == null)
         {
             borderOutline = background.gameObject.GetComponent<Outline>();
-            if (borderOutline == null)
-            {
-                borderOutline = background.gameObject.AddComponent<Outline>();
-            }
+            if (borderOutline == null) borderOutline = background.gameObject.AddComponent<Outline>();
         }
 
         if (isProtected)
@@ -381,26 +349,23 @@ public class Tile : MonoBehaviour
             borderOutline.effectColor = new Color(0.8f, 0.8f, 0.9f, 1f);
             borderOutline.effectDistance = new Vector2(8f, 8f);
             borderOutline.enabled = true;
-            StopUltrasonicEffect(); // 보호 타일은 초음파 효과 없음
+            StopUltrasonicEffect();
         }
         else if (shouldBlink)
         {
-            // ⭐ v5.0: 테두리 깜빡임 대신 초음파 웨이브 효과
             borderOutline.effectColor = new Color(1f, 1f, 0.3f, 1f);
             borderOutline.effectDistance = new Vector2(6f, 6f);
             borderOutline.enabled = true;
-
             blinkCoroutine = StartCoroutine(BlinkBorder());
-            StartUltrasonicEffect(); // ⭐ 초음파 효과 시작
+            StartUltrasonicEffect();
         }
         else
         {
             borderOutline.enabled = false;
-            StopUltrasonicEffect(); // ⭐ 효과 정지
+            StopUltrasonicEffect();
         }
     }
 
-    // ⭐ v5.0: 초음파 웨이브 효과 시작
     void StartUltrasonicEffect()
     {
         if (isUltrasonicActive) return;
@@ -408,35 +373,24 @@ public class Tile : MonoBehaviour
         ultrasonicCoroutine = StartCoroutine(UltrasonicWaveCoroutine());
     }
 
-    // ⭐ v5.0: 초음파 웨이브 효과 정지 + 잔상 완전 제거
     void StopUltrasonicEffect()
     {
         isUltrasonicActive = false;
-        if (ultrasonicCoroutine != null)
-        {
-            StopCoroutine(ultrasonicCoroutine);
-            ultrasonicCoroutine = null;
-        }
-        // 모든 활성 웨이브 오브젝트 즉시 제거
+        if (ultrasonicCoroutine != null) { StopCoroutine(ultrasonicCoroutine); ultrasonicCoroutine = null; }
         for (int i = activeWaveObjects.Count - 1; i >= 0; i--)
         {
-            if (activeWaveObjects[i] != null)
-            {
-                Destroy(activeWaveObjects[i]);
-            }
+            if (activeWaveObjects[i] != null) Destroy(activeWaveObjects[i]);
         }
         activeWaveObjects.Clear();
     }
 
-    // ⭐ v5.0: 안쪽에서 바깥으로 퍼지는 초음파 웨이브 코루틴
     System.Collections.IEnumerator UltrasonicWaveCoroutine()
     {
         while (isUltrasonicActive)
         {
-            // 새 웨이브 생성
             GameObject waveObj = new GameObject("UltrasonicWave");
             waveObj.transform.SetParent(background.transform, false);
-            activeWaveObjects.Add(waveObj); // 추적 리스트에 등록
+            activeWaveObjects.Add(waveObj);
 
             Image waveImg = waveObj.AddComponent<Image>();
             waveImg.color = new Color(1f, 1f, 0.3f, 0.15f);
@@ -462,26 +416,17 @@ public class Tile : MonoBehaviour
             while (elapsed < waveDuration && isUltrasonicActive)
             {
                 if (waveObj == null) break;
-                
                 elapsed += Time.deltaTime;
                 float t = elapsed / waveDuration;
-
                 float currentSize = Mathf.Lerp(startSize, endSize, t);
                 waveRect.sizeDelta = new Vector2(currentSize, currentSize);
-
                 float alpha = Mathf.Lerp(0.4f, 0f, t);
                 waveImg.color = new Color(1f, 1f, 0.3f, alpha * 0.3f);
                 waveOutline.effectColor = new Color(1f, 1f, 0.3f, alpha);
-
                 yield return null;
             }
 
-            if (waveObj != null)
-            {
-                activeWaveObjects.Remove(waveObj);
-                Destroy(waveObj);
-            }
-
+            if (waveObj != null) { activeWaveObjects.Remove(waveObj); Destroy(waveObj); }
             yield return new WaitForSeconds(0.15f);
         }
     }
@@ -489,42 +434,15 @@ public class Tile : MonoBehaviour
     System.Collections.IEnumerator BlinkBorder()
     {
         if (borderOutline == null) yield break;
-
         Color brightColor = new Color(1f, 1f, 0.3f, 1f);
         Color dimColor = new Color(1f, 1f, 0.3f, 0.2f);
         float duration = 0.6f;
-
         while (true)
         {
             float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                if (borderOutline == null || !borderOutline.enabled)
-                {
-                    yield break;
-                }
-
-                elapsed += Time.deltaTime;
-                float t = elapsed / duration;
-                borderOutline.effectColor = Color.Lerp(brightColor, dimColor, t);
-                
-                yield return null;
-            }
-
+            while (elapsed < duration) { if (borderOutline == null || !borderOutline.enabled) yield break; elapsed += Time.deltaTime; borderOutline.effectColor = Color.Lerp(brightColor, dimColor, elapsed/duration); yield return null; }
             elapsed = 0f;
-            while (elapsed < duration)
-            {
-                if (borderOutline == null || !borderOutline.enabled)
-                {
-                    yield break;
-                }
-
-                elapsed += Time.deltaTime;
-                float t = elapsed / duration;
-                borderOutline.effectColor = Color.Lerp(dimColor, brightColor, t);
-                
-                yield return null;
-            }
+            while (elapsed < duration) { if (borderOutline == null || !borderOutline.enabled) yield break; elapsed += Time.deltaTime; borderOutline.effectColor = Color.Lerp(dimColor, brightColor, elapsed/duration); yield return null; }
         }
     }
 
@@ -539,8 +457,9 @@ public class Tile : MonoBehaviour
         }
         else
         {
+            // v6.0: Berry -> mint background, dark chocolate text
             background.color = berryGradient[colorIndex];
-            valueText.color = silverColor;
+            valueText.color = berryTextColor;
         }
 
         if (mergeParticle != null)
