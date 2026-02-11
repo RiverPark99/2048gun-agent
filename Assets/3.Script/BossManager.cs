@@ -138,25 +138,25 @@ public class BossManager : MonoBehaviour
 
         StopGuardColorAnimation();
 
-        Color pinkColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
-        Color guardRedColor = new Color(1f, 0.25f, 0.25f, 1.0f); // 무적 HP bar 색상
+        Color pastelBlueColor = new Color(0.55f, 0.75f, 0.95f, 1.0f);  // 푸른 파스텔톤
+        Color warmOrangeColor = new Color(1.0f, 0.65f, 0.3f, 1.0f);    // 주황색 계열
 
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", pinkColor);
+        mat.SetColor("_Color", pastelBlueColor);
         bossImageArea.material = mat;
 
         guardColorSequence = DOTween.Sequence();
         guardColorSequence.Append(
-            DOTween.To(() => pinkColor, x => {
+            DOTween.To(() => pastelBlueColor, x => {
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
-            }, guardRedColor, 1.0f).SetEase(Ease.InOutSine)
+            }, warmOrangeColor, 1.0f).SetEase(Ease.InOutSine)
         );
         guardColorSequence.Append(
-            DOTween.To(() => guardRedColor, x => {
+            DOTween.To(() => warmOrangeColor, x => {
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
-            }, pinkColor, 1.0f).SetEase(Ease.InOutSine)
+            }, pastelBlueColor, 1.0f).SetEase(Ease.InOutSine)
         );
         guardColorSequence.SetLoops(-1, LoopType.Restart);
 

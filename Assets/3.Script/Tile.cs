@@ -50,28 +50,25 @@ public class Tile : MonoBehaviour
         new Color(0.0f, 0.0f, 0.0f),
     };
 
-    // v6.0: Berry gradient -> mint
     private Color[] berryGradient = new Color[]
     {
-        new Color(0.85f, 0.96f, 0.93f),  // 2
-        new Color(0.75f, 0.93f, 0.88f),  // 4
-        new Color(0.65f, 0.90f, 0.83f),  // 8
-        new Color(0.55f, 0.87f, 0.78f),  // 16
-        new Color(0.45f, 0.84f, 0.73f),  // 32
-        new Color(0.35f, 0.80f, 0.68f),  // 64
-        new Color(0.25f, 0.75f, 0.62f),  // 128
-        new Color(0.15f, 0.70f, 0.56f),  // 256
-        new Color(0.08f, 0.65f, 0.50f),  // 512
-        new Color(0.02f, 0.58f, 0.44f),  // 1024
-        new Color(0.00f, 0.50f, 0.38f),  // 2048
-        new Color(0.00f, 0.42f, 0.32f),  // 4096
+        new Color(1f, 0.80f, 0.85f),
+        new Color(1f, 0.75f, 0.82f),
+        new Color(1f, 0.70f, 0.79f),
+        new Color(1f, 0.65f, 0.76f),
+        new Color(1f, 0.60f, 0.73f),
+        new Color(1f, 0.55f, 0.70f),
+        new Color(1f, 0.50f, 0.67f),
+        new Color(1f, 0.45f, 0.64f),
+        new Color(0.98f, 0.40f, 0.61f),
+        new Color(0.95f, 0.35f, 0.58f),
+        new Color(0.92f, 0.25f, 0.52f),
+        new Color(0.88f, 0.15f, 0.46f),
     };
 
     private Color goldColor = new Color(1f, 0.84f, 0f);
-    // v6.0: Berry text -> dark chocolate
-    private Color berryTextColor = new Color(0.25f, 0.15f, 0.10f);
-    // v6.0: Berry merge particle -> HP bar mint color
-    private readonly Color berryParticleColor = new Color(0.0f, 0.65f, 0.55f);
+    private Color silverColor = new Color(0.9f, 0.9f, 0.95f);
+    private Color berryParticleColor = new Color(1f, 0.5f, 0.65f);
 
     void Awake()
     {
@@ -264,7 +261,6 @@ public class Tile : MonoBehaviour
         StartCoroutine(DelayedParticle(pos, new Color(0.55f, 0.40f, 0.28f), 0.75f, 0.35f, 0.05f));
     }
 
-    // v6.0: Berry merge particle -> HP bar mint color
     public void PlayBerryMergeEffect()
     {
         Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
@@ -457,9 +453,8 @@ public class Tile : MonoBehaviour
         }
         else
         {
-            // v6.0: Berry -> mint background, dark chocolate text
             background.color = berryGradient[colorIndex];
-            valueText.color = berryTextColor;
+            valueText.color = silverColor;
         }
 
         if (mergeParticle != null)
