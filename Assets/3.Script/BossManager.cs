@@ -139,7 +139,7 @@ public class BossManager : MonoBehaviour
         StopGuardColorAnimation();
 
         Color pastelBlueColor = new Color(0.55f, 0.75f, 0.95f, 1.0f);  // 푸른 파스텔톤
-        Color warmOrangeColor = new Color(1.0f, 0.65f, 0.3f, 1.0f);    // 주황색 계열
+        Color pastelOrangeColor = new Color(1.0f, 0.75f, 0.5f, 1.0f);  // 파스텔 오렌지
 
         Material mat = new Material(Shader.Find("UI/Default"));
         mat.SetColor("_Color", pastelBlueColor);
@@ -150,10 +150,10 @@ public class BossManager : MonoBehaviour
             DOTween.To(() => pastelBlueColor, x => {
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
-            }, warmOrangeColor, 1.0f).SetEase(Ease.InOutSine)
+            }, pastelOrangeColor, 1.0f).SetEase(Ease.InOutSine)
         );
         guardColorSequence.Append(
-            DOTween.To(() => warmOrangeColor, x => {
+            DOTween.To(() => pastelOrangeColor, x => {
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
             }, pastelBlueColor, 1.0f).SetEase(Ease.InOutSine)
@@ -182,8 +182,8 @@ public class BossManager : MonoBehaviour
 
         StopGuardColorAnimation();
 
-        // Boss Image 핑크 고정
-        ApplyPinkColor();
+        // Boss Image 파스텔 오렌지 고정
+        ApplyOrangeColor();
 
         // HP를 21억으로 설정 (이제 쓰러뜨릴 수 있음)
         maxHP = 2147483647;
@@ -661,8 +661,8 @@ public class BossManager : MonoBehaviour
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
         }
 
-        // 핑크색 고정
-        ApplyPinkColor();
+        // 파스텔 오렌지색 고정
+        ApplyOrangeColor();
 
         // HP 21억
         maxHP = 2147483647;
@@ -753,7 +753,7 @@ public class BossManager : MonoBehaviour
             {
                 bossImageArea.sprite = bossSprites[0];
             }
-            ApplyPinkColor();
+            ApplyOrangeColor();
         }
         else
         {
@@ -790,22 +790,22 @@ public class BossManager : MonoBehaviour
                 Debug.LogWarning($"Boss sprite at index {currentBossIndex} is null or out of range!");
             }
 
-            // Guard 모드가 아닐 때만 핑크 고정
+            // Guard 모드가 아닐 때만 파스텔 오렌지 고정
             if (!isGuardMode)
             {
-                ApplyPinkColor();
+                ApplyOrangeColor();
             }
         }
     }
 
-    void ApplyPinkColor()
+    void ApplyOrangeColor()
     {
         if (bossImageArea == null) return;
 
-        Color pinkColor = new Color(1.0f, 0.4f, 0.6f, 1.0f);
+        Color pastelOrange = new Color(1.0f, 0.75f, 0.5f, 1.0f);
 
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", pinkColor);
+        mat.SetColor("_Color", pastelOrange);
         bossImageArea.material = mat;
     }
 
