@@ -103,26 +103,31 @@ public class Tile : MonoBehaviour
         StopUltrasonicEffect();
     }
 
-    // v6.0: particle size based on tile RectTransform (resolution-adaptive)
+    // v6.2: 해상도 독립적 크기 (RectTransform 기반)
     float GetAdaptiveParticleSize(float baseRatio)
     {
-        if (rectTransform == null) return 100f;
-        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * baseRatio;
+        if (rectTransform == null) return 50f;
+        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * baseRatio;
     }
 
     float GetAdaptiveShapeRadius()
     {
-        if (rectTransform == null) return 50f;
-        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * 0.35f;
+        if (rectTransform == null) return 30f;
+        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * 0.35f;
     }
 
     float GetAdaptiveSpeed()
     {
-        if (rectTransform == null) return 300f;
-        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * 2.0f;
+        if (rectTransform == null) return 200f;
+        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * 2.0f;
+    }
+
+    float GetCanvasScaleFactor()
+    {
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return 1f;
+        Canvas root = canvas.rootCanvas;
+        return root != null ? root.scaleFactor : 1f;
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
@@ -196,7 +201,9 @@ public class Tile : MonoBehaviour
         renderer.material = new Material(Shader.Find("UI/Default"));
 
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiP.scale = 3f;
+        // v6.2: Canvas scaleFactor 역수로 보정 → 해상도 독립적
+        float canvasScale = GetCanvasScaleFactor();
+        uiP.scale = 3f / canvasScale;
         uiP.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
 
         ps.Play();

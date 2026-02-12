@@ -197,7 +197,7 @@ public class GridManager : MonoBehaviour
                                 if (!gunSystem.IsFeverMode)
                                     gunSystem.AddMergeGauge(1);
 
-                                Debug.Log($"CHOCO MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"CHOCO MERGE! Gauge +1 ({gunSystem.MergeGauge}/32)");
                                 targetTile.PlayChocoMergeEffect();
                                 isColorBonus = true;
                             }
@@ -222,17 +222,22 @@ public class GridManager : MonoBehaviour
                                 if (!gunSystem.IsFeverMode)
                                     gunSystem.AddMergeGauge(1);
 
-                                Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/32)");
                                 targetTile.PlayBerryMergeEffect();
                                 isColorBonus = true;
                             }
                             else
                             {
+                                // MixMerge: HP +mergedValue*2 회복 + 공격력 2배 + gauge +1
+                                int mixHeal = mergedValue * 2;
+                                playerHP.AddHeat(mixHeal);
+                                totalMergedValue += mergedValue; // 2배 공격력
+
                                 if (!gunSystem.IsFeverMode)
-                                    gunSystem.AddMergeGauge(2);
+                                    gunSystem.AddMergeGauge(1);
 
                                 score += mergedValue;
-                                Debug.Log($"MIX MERGE! Gauge +2 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"MIX MERGE! HP+{mixHeal}, ATK x2, Gauge +1 ({gunSystem.MergeGauge}/32)");
                             }
 
                             if (isColorBonus)
@@ -261,6 +266,9 @@ public class GridManager : MonoBehaviour
                                     Debug.Log($"🔥 FEVER MERGE! +ATK +{gunSystem.FeverMergeIncreaseAtk} (Total: {gunSystem.PermanentAttackPower})");
                                 }
                             }
+
+                            // 머지마다 게이지 UI 즉시 업데이트 (Freeze 진입은 AfterMove에서)
+                            gunSystem.UpdateGaugeUIOnly();
 
                             activeTiles.Remove(tile);
                             Destroy(tile.gameObject);
@@ -386,7 +394,7 @@ public class GridManager : MonoBehaviour
             {
                 gunSystem.AddMergeGauge(1);
                 gunSystem.ClearFeverPaybackIfNeeded();
-                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/40)");
+                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/32)");
             }
 
             UpdateScoreUI();
