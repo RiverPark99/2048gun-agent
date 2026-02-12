@@ -684,7 +684,7 @@ MonoBehaviour:
   damageTextPrefab: {fileID: 1311700191204704399, guid: 48c271b2a8c328f4591d6af4df71751f, type: 3}
   damageTextParent: {fileID: 1215092114}
   chocoMergeDamageMultiplier: 4
-  feverDamageMultiplier: 1.5
+  feverDamageMultiplier: 2
   lowHealthVignette: {fileID: 275612701}
   gridManager: {fileID: 159172560}
   gunSystem: {fileID: 159172559}
