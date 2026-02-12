@@ -1,8 +1,8 @@
 // =====================================================
-// GunSystem.cs - v6.2
-// Gun 모드, Freeze, 게이지(0~32), ATK 보너스
-// Freeze: 32/32 → 이동 -2, 콤보 +2*n, 16/32 도달시 종료
-// Freeze Gun: 즉시 종료 아님, 자연 소진 후 0/32 (쏜경우) or 16/32 Payback
+// GunSystem.cs - v6.3
+// Gun 모드, Freeze, 게이지(0~40), ATK 보너스
+// Freeze: 40/40 → 이동 -2, 콤보 +2*n, 20/40 도달시 종료
+// Freeze Gun: 즉시 종료, gauge→0, ■ 채워야 재공격
 // =====================================================
 
 using UnityEngine;
@@ -29,8 +29,8 @@ public class GunSystem : MonoBehaviour
     [Header("Freeze(Fever) Effects")]
     [SerializeField] private Transform feverParticleSpawnPoint;
     [SerializeField] private Image feverBackgroundImage;
-    [SerializeField] private Image freezeImage1; // infoFreeze (불꽃 효과)
-    [SerializeField] private Image freezeImage2; // imageFreeze (얼음 이미지)
+    [SerializeField] private Image freezeImage1;
+    [SerializeField] private Image freezeImage2;
 
     [Header("References")]
     [SerializeField] private GridManager gridManager;
@@ -38,14 +38,14 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private BossBattleSystem bossBattle;
     [SerializeField] private BossManager bossManager;
 
-    // 상수 (게이지 0~32)
-    private const int GAUGE_MAX = 32;
-    private const int GAUGE_FOR_BULLET = 16;
-    private const int FREEZE_START_GAUGE = 32;
-    private const int FREEZE_END_GAUGE = 16;
+    // 상수 (게이지 0~40)
+    private const int GAUGE_MAX = 40;
+    private const int GAUGE_FOR_BULLET = 20;
+    private const int FREEZE_START_GAUGE = 40;
+    private const int FREEZE_END_GAUGE = 20;
     private const int FREEZE_MOVE_COST = 2;
     private const int FREEZE_COMBO_BONUS = 2;
-    private const int GUN_SHOT_COST = 16;
+    private const int GUN_SHOT_COST = 20;
 
     // Gauge & Fever 상태
     private int mergeGauge = 0;
@@ -68,20 +68,18 @@ public class GunSystem : MonoBehaviour
     private bool lastGunButtonAnimationState = false;
     private float turnsTextOriginalY = 0f;
     private bool turnsTextInitialized = false;
-
     private float attackTextOriginalY = 0f;
     private bool attackTextInitialized = false;
     private long lastPermanentAttackPower = 0;
     private int lastMergeGauge = -1;
 
-    // Progress bar 원래 색상
+    // Progress bar
     private Color progressBarOriginalColor;
     private bool progressBarColorSaved = false;
 
     // Fever 파티클
     private GameObject activeFeverParticle;
-
-    // Gun 연기 파티클 (Freeze중 사용시 유지)
+    // Gun 연기 파티클
     private GameObject activeGunSmoke;
 
     // === 프로퍼티 ===
@@ -97,16 +95,15 @@ public class GunSystem : MonoBehaviour
 
     public void Initialize()
     {
-        // Freeze 이미지 자동 설정
         if (freezeImage1 == null)
         {
             GameObject obj = GameObject.Find("infoFreeze");
-            if (obj != null) { freezeImage1 = obj.GetComponent<Image>(); Debug.Log("✅ freezeImage1 자동 연결: infoFreeze"); }
+            if (obj != null) freezeImage1 = obj.GetComponent<Image>();
         }
         if (freezeImage2 == null)
         {
             GameObject obj = GameObject.Find("imageFreeze");
-            if (obj != null) { freezeImage2 = obj.GetComponent<Image>(); Debug.Log("✅ freezeImage2 자동 연결: imageFreeze"); }
+            if (obj != null) freezeImage2 = obj.GetComponent<Image>();
         }
         if (freezeImage1 != null) { freezeImage1.color = new Color(1f, 1f, 1f, 70f / 255f); freezeImage1.gameObject.SetActive(false); }
         if (freezeImage2 != null) { freezeImage2.color = new Color(1f, 1f, 1f, 70f / 255f); freezeImage2.gameObject.SetActive(false); }
@@ -126,6 +123,7 @@ public class GunSystem : MonoBehaviour
         mergeGauge = 0; hasBullet = false; isFeverMode = false;
         feverAtkBonus = 0; feverMergeAtkBonus = 0; feverMergeIncreaseAtk = 1; permanentAttackPower = 0;
         feverBulletUsed = false; isGunMode = false; justEndedFeverWithoutShot = false;
+        lastPermanentAttackPower = 0; lastMergeGauge = -1;
 
         if (gunButtonHeartbeat != null) { gunButtonHeartbeat.Kill(); gunButtonHeartbeat = null; }
         if (gunModeGuideText != null) gunModeGuideText.gameObject.SetActive(false);
@@ -157,14 +155,13 @@ public class GunSystem : MonoBehaviour
 
     public void AddFeverMergeATK() { permanentAttackPower += feverMergeIncreaseAtk; }
 
-    // === Freeze 턴 처리 (AfterMove에서 호출) ===
+    // === Freeze 턴 처리 ===
     public void ProcessFreezeAfterMove(int comboCount)
     {
         if (!isFeverMode) return;
 
         int netChange = 0;
 
-        // 콤보 보너스 먼저 (연장 우선)
         if (comboCount >= 2)
         {
             int bonus = FREEZE_COMBO_BONUS * comboCount;
@@ -174,22 +171,19 @@ public class GunSystem : MonoBehaviour
             netChange += (mergeGauge - before);
         }
 
-        // 이동 비용
         mergeGauge -= FREEZE_MOVE_COST;
         netChange -= FREEZE_MOVE_COST;
 
-        // 합산된 변화량 1개만 표시
         if (netChange != 0) ShowGaugeChangeText(netChange);
 
         Debug.Log($"❄️ Freeze: gauge={mergeGauge}/{GAUGE_MAX} (net:{netChange:+#;-#;0})");
 
-        // 16/32 이하 도달시 종료
         if (mergeGauge <= FREEZE_END_GAUGE) EndFever();
 
         UpdateGunUI();
     }
 
-    // === Gauge & Fever 체크 (AfterMove 마지막에서만) ===
+    // === Gauge & Fever 체크 ===
     public void CheckGaugeAndFever()
     {
         if (isFeverMode) return;
@@ -199,8 +193,12 @@ public class GunSystem : MonoBehaviour
         else if (mergeGauge >= GAUGE_FOR_BULLET && !hasBullet)
         {
             hasBullet = true;
+            // ■ 채워졌으므로 연기 파티클 정리
+            if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
             Debug.Log($"Bullet ready! ({mergeGauge}/{GAUGE_MAX})");
             UpdateGunButtonAnimation();
+            // ⭐ v6.3: □→■ 채워지는 애니메이션
+            PlayBulletChargeEffect();
         }
 
         UpdateGunUI();
@@ -208,6 +206,9 @@ public class GunSystem : MonoBehaviour
 
     void StartFever()
     {
+        // 연기 파티클 정리
+        if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
+
         SpawnFeverParticle();
 
         if (feverBackgroundImage != null)
@@ -246,23 +247,46 @@ public class GunSystem : MonoBehaviour
         isFeverMode = false;
         RestoreProgressBarColor();
 
-        if (feverBulletUsed)
+        // ⭐ v6.3: feverBulletUsed 로컬 변수로 캐시 후 즉시 리셋 (보스 리스폰 중 재진입 방지)
+        bool wasGunUsed = feverBulletUsed;
+        feverBulletUsed = false;
+
+        Debug.Log($"❄️ EndFever: wasGunUsed={wasGunUsed}");
+
+        if (wasGunUsed)
         {
-            // Gun 사용했으면 → 0/32 (Payback 없음)
-            mergeGauge = 0;
+            // Gun 사용 → 환급 없음, bar 20→0 자연스럽게
+            mergeGauge = GAUGE_FOR_BULLET;
             hasBullet = false;
             justEndedFeverWithoutShot = false;
-            Debug.Log("FREEZE END! Gun used → 0/32");
+            UpdateGunUI();
+
+            if (progressBarFill != null)
+            {
+                progressBarFill.DOKill();
+                progressBarFill.DOSizeDelta(new Vector2(0f, progressBarFill.sizeDelta.y), 0.8f)
+                    .SetEase(Ease.InOutQuad)
+                    .OnComplete(() => {
+                        mergeGauge = 0;
+                        UpdateGunUI();
+                    });
+            }
+            else
+            {
+                mergeGauge = 0;
+                UpdateGunUI();
+            }
+
+            Debug.Log("FREEZE END! Gun used → bar 20→0 애니메이션, 환급 없음");
         }
         else
         {
-            // Gun 안 쏘면 → 16/32 Gun Payback
             mergeGauge = GAUGE_FOR_BULLET;
             hasBullet = true;
             justEndedFeverWithoutShot = true;
+            UpdateGunUI();
             Debug.Log($"FREEZE END! No shot → {GAUGE_FOR_BULLET}/{GAUGE_MAX} Gun Payback!");
         }
-        feverBulletUsed = false;
     }
 
     void SetProgressBarFreezeColor()
@@ -283,6 +307,8 @@ public class GunSystem : MonoBehaviour
     public void ContinueIntoFever()
     {
         isFeverMode = true; mergeGauge = FREEZE_START_GAUGE; feverBulletUsed = false; hasBullet = false;
+
+        if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
 
         SpawnFeverParticle();
         if (feverBackgroundImage != null)
@@ -316,18 +342,23 @@ public class GunSystem : MonoBehaviour
         if (feverParticleSpawnPoint == null) return;
         if (activeFeverParticle != null) Destroy(activeFeverParticle);
 
+        float canvasCorr = GetCanvasScaleCorrection();
+
         GameObject particleObj = new GameObject("FeverFlameParticle");
         particleObj.transform.SetParent(feverParticleSpawnPoint, false);
         particleObj.transform.localPosition = Vector3.zero;
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.startLifetime = 0.5f; main.startSpeed = 50f; main.startSize = 30f;
+        main.startLifetime = 0.5f;
+        main.startSpeed = 50f / canvasCorr;
+        main.startSize = 30f / canvasCorr;
         main.startColor = new Color(1f, 0.5f, 0f); main.maxParticles = 50;
         main.simulationSpace = ParticleSystemSimulationSpace.Local; main.playOnAwake = true; main.loop = true;
 
         var emission = ps.emission; emission.enabled = true; emission.rateOverTime = 20;
-        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 15f; shape.radius = 10f;
+        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 15f;
+        shape.radius = 10f / canvasCorr;
 
         var col = ps.colorOverLifetime; col.enabled = true;
         Gradient g = new Gradient();
@@ -337,42 +368,50 @@ public class GunSystem : MonoBehaviour
         );
         col.color = new ParticleSystem.MinMaxGradient(g);
 
-        var vel = ps.velocityOverLifetime; vel.enabled = true; vel.y = new ParticleSystem.MinMaxCurve(100f);
+        var vel = ps.velocityOverLifetime; vel.enabled = true;
+        vel.y = new ParticleSystem.MinMaxCurve(100f / canvasCorr);
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default")); renderer.sortingOrder = 1;
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        Canvas fCvs = feverParticleSpawnPoint.GetComponentInParent<Canvas>();
-        float fCanvasScale = (fCvs != null && fCvs.rootCanvas != null) ? fCvs.rootCanvas.scaleFactor : 1f;
-        uiP.scale = 2f / fCanvasScale;
-        uiP.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
+        uiP.scale = 3f;
 
         activeFeverParticle = particleObj;
     }
 
-    // === Freeze Sync (Boss 리스폰 시 DOTween 페이드) ===
+    // === Freeze Sync (Boss 리스폰 시) ===
     public IEnumerator SyncFreezeWithBossRespawn()
     {
         if (freezeImage1 != null) freezeImage1.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
         if (freezeImage2 != null) freezeImage2.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
-
         yield return new WaitForSeconds(1.5f);
-
-        if (!isFeverMode) { Debug.Log("🧊 Freeze 종료됨, 이미지 복원 안함"); yield break; }
-
+        if (!isFeverMode) yield break;
         float targetAlpha = 70f / 255f;
         if (freezeImage1 != null) freezeImage1.DOFade(targetAlpha, 0.5f).SetEase(Ease.OutQuad);
         if (freezeImage2 != null) freezeImage2.DOFade(targetAlpha, 0.5f).SetEase(Ease.OutQuad);
-        Debug.Log("🧊 Freeze 이미지 Boss 리스폰 싱크 완료!");
     }
 
-    // === Gun 발사 시 연기 파티클 (위로 피어오르는 재, loop) ===
+    // v6.3: Canvas Expand 모드 보정
+    float GetCanvasScaleCorrection()
+    {
+        Canvas canvas = gunButton.GetComponentInParent<Canvas>();
+        if (canvas == null) return 1f;
+        Canvas root = canvas.rootCanvas;
+        if (root == null) return 1f;
+        RectTransform canvasRect = root.GetComponent<RectTransform>();
+        if (canvasRect == null) return 1f;
+        return canvasRect.rect.width / 1290f;
+    }
+
+    // === Gun 연기 파티클 ===
     void SpawnGunSmokeParticle()
     {
         if (gunButton == null) return;
-
-        // 기존 연기 정리
         if (activeGunSmoke != null) Destroy(activeGunSmoke);
+
+        RectTransform btnRect = gunButton.GetComponent<RectTransform>();
+        float btnSize = Mathf.Max(btnRect.rect.width, btnRect.rect.height);
+        float canvasCorr = GetCanvasScaleCorrection();
 
         GameObject smokeObj = new GameObject("GunSmoke");
         smokeObj.transform.SetParent(gunButton.transform, false);
@@ -380,14 +419,9 @@ public class GunSystem : MonoBehaviour
 
         ParticleSystem ps = smokeObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.startLifetime = 1.2f;
-        // 버튼 크기 기준 적응형 파티클
-        RectTransform btnRect = gunButton.GetComponent<RectTransform>();
-        float btnSize = Mathf.Max(btnRect.rect.width, btnRect.rect.height);
-
         main.startLifetime = 1.5f;
-        main.startSpeed = new ParticleSystem.MinMaxCurve(btnSize * 0.25f, btnSize * 0.5f);
-        main.startSize = new ParticleSystem.MinMaxCurve(btnSize * 0.1f, btnSize * 0.22f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(btnSize * 0.25f / canvasCorr, btnSize * 0.5f / canvasCorr);
+        main.startSize = new ParticleSystem.MinMaxCurve(btnSize * 0.1f / canvasCorr, btnSize * 0.22f / canvasCorr);
         main.startColor = new Color(0.6f, 0.6f, 0.6f, 0.45f);
         main.maxParticles = 50;
         main.simulationSpace = ParticleSystemSimulationSpace.Local;
@@ -395,84 +429,52 @@ public class GunSystem : MonoBehaviour
         main.loop = true;
         main.gravityModifier = -0.15f;
 
-        var emission = ps.emission;
-        emission.enabled = true;
-        emission.rateOverTime = 8;
+        var emission = ps.emission; emission.enabled = true; emission.rateOverTime = 8;
 
-        // Cone 위쪽으로
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.angle = 15f;
-        shape.radius = btnSize * 0.08f;
+        shape.angle = 15f; shape.radius = btnSize * 0.08f / canvasCorr;
         shape.rotation = new Vector3(-90f, 0f, 0f);
 
-        // 커지면서 흐려짐
-        var sizeOL = ps.sizeOverLifetime;
-        sizeOL.enabled = true;
+        var sizeOL = ps.sizeOverLifetime; sizeOL.enabled = true;
         AnimationCurve curve = new AnimationCurve();
-        curve.AddKey(0f, 0.5f);
-        curve.AddKey(0.4f, 1.0f);
-        curve.AddKey(1f, 2.0f);
+        curve.AddKey(0f, 0.5f); curve.AddKey(0.4f, 1.0f); curve.AddKey(1f, 2.0f);
         sizeOL.size = new ParticleSystem.MinMaxCurve(1f, curve);
 
-        // 재 색상: 회색 → 연회색 → 투명
-        var colOL = ps.colorOverLifetime;
-        colOL.enabled = true;
+        var colOL = ps.colorOverLifetime; colOL.enabled = true;
         Gradient g = new Gradient();
         g.SetKeys(
-            new GradientColorKey[] {
-                new GradientColorKey(new Color(0.5f, 0.5f, 0.5f), 0f),
-                new GradientColorKey(new Color(0.65f, 0.65f, 0.65f), 0.3f),
-                new GradientColorKey(new Color(0.8f, 0.8f, 0.8f), 1f)
-            },
-            new GradientAlphaKey[] {
-                new GradientAlphaKey(0.45f, 0f),
-                new GradientAlphaKey(0.3f, 0.4f),
-                new GradientAlphaKey(0f, 1f)
-            }
+            new GradientColorKey[] { new GradientColorKey(new Color(0.5f, 0.5f, 0.5f), 0f), new GradientColorKey(new Color(0.65f, 0.65f, 0.65f), 0.3f), new GradientColorKey(new Color(0.8f, 0.8f, 0.8f), 1f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(0.45f, 0f), new GradientAlphaKey(0.3f, 0.4f), new GradientAlphaKey(0f, 1f) }
         );
         colOL.color = new ParticleSystem.MinMaxGradient(g);
 
-        // 소용돌이 느낌
-        var noise = ps.noise;
-        noise.enabled = true;
-        noise.strength = btnSize * 0.04f;
-        noise.frequency = 0.4f;
+        var noise = ps.noise; noise.enabled = true;
+        noise.strength = btnSize * 0.04f / canvasCorr; noise.frequency = 0.4f;
 
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
         var uiP = smokeObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        Canvas cvs = gunButton.GetComponentInParent<Canvas>();
-        float canvasScale = (cvs != null && cvs.rootCanvas != null) ? cvs.rootCanvas.scaleFactor : 1f;
-        uiP.scale = 2.5f / canvasScale;
-        uiP.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
+        uiP.scale = 3f;
 
         ps.Play();
         activeGunSmoke = smokeObj;
-        Debug.Log($"💨 Gun 연기 파티클 생성! (btnSize={btnSize}, canvasScale={canvasScale})");
     }
 
-    // === ATK 증가 Floating Text ===
+    // === ATK Floating Text ===
     void ShowATKChangeText(long increase)
     {
         if (damageTextPrefab == null || damageTextParent == null || attackPowerText == null) return;
-
         GameObject obj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI txt = obj.GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
-            txt.text = $"+{increase}";
-            txt.color = new Color(1f, 0.7f, 0.2f); // 금색
-            txt.fontSize = 32;
-
+            txt.text = $"+{increase}"; txt.color = new Color(1f, 0.7f, 0.2f); txt.fontSize = 32;
             RectTransform r = obj.GetComponent<RectTransform>();
             r.position = attackPowerText.GetComponent<RectTransform>().position;
-
-            CanvasGroup cg = obj.GetComponent<CanvasGroup>();
-            if (cg == null) cg = obj.AddComponent<CanvasGroup>();
-
+            CanvasGroup cg = obj.GetComponent<CanvasGroup>(); if (cg == null) cg = obj.AddComponent<CanvasGroup>();
             Sequence s = DOTween.Sequence();
             s.Append(r.DOAnchorPosY(r.anchoredPosition.y + 60f, 0.7f).SetEase(Ease.OutCubic));
             s.Join(cg.DOFade(0f, 0.7f).SetEase(Ease.InCubic));
@@ -480,6 +482,31 @@ public class GunSystem : MonoBehaviour
             s.Insert(0.1f, r.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
             s.OnComplete(() => { if (obj != null) Destroy(obj); });
         }
+    }
+
+    // ⭐ v6.3: □→■ 채워지는 효과
+    void PlayBulletChargeEffect()
+    {
+        if (attackPowerText == null) return;
+
+        // 텍스트를 ■으로 즉시 변경
+        attackPowerText.text = $"■ ATK+{permanentAttackPower}";
+
+        RectTransform tr = attackPowerText.GetComponent<RectTransform>();
+        tr.DOKill();
+
+        // 스케일 펼치 + 색상 플래시
+        Color originalColor = attackPowerText.color;
+        Sequence seq = DOTween.Sequence();
+
+        // ■ 글자가 커졌다 작아지는 펌프 효과
+        seq.Append(tr.DOScale(1.4f, 0.15f).SetEase(Ease.OutQuad));
+        seq.Join(attackPowerText.DOColor(new Color(0.3f, 1f, 0.6f), 0.15f)); // 밝은 녹색 플래시
+        seq.Append(tr.DOScale(1f, 0.2f).SetEase(Ease.OutBounce));
+        seq.Join(attackPowerText.DOColor(originalColor, 0.3f));
+        seq.OnComplete(() => {
+            if (tr != null) tr.localScale = Vector3.one;
+        });
     }
 
     // === Gun 모드 토글 ===
@@ -527,7 +554,6 @@ public class GunSystem : MonoBehaviour
         }
 
         if (targetTile == null) return;
-
         var curTop = gridManager.GetTopTwoTileValues();
         if (targetTile.value == curTop.Item1 || targetTile.value == curTop.Item2) return;
 
@@ -550,15 +576,14 @@ public class GunSystem : MonoBehaviour
 
         if (isFeverMode)
         {
-            // Freeze 중 Gun: 즉시 종료 아님! feverBulletUsed만 세팅
+            // ⭐ v6.3: Freeze Gun → Freeze 유지, 자연 종료 시 환급 없음
             feverBulletUsed = true;
             hasBullet = false;
 
             if (bossManager != null) bossManager.AddTurns(3);
-
             if (!bossManager.IsClearMode()) { feverAtkBonus++; feverMergeIncreaseAtk++; }
 
-            Debug.Log("🔫 FREEZE GUN! 연기 파티클 + Freeze 계속 진행 (종료 시 0/32)");
+            Debug.Log("🔫 FREEZE GUN! Freeze 유지, 자연 종료 시 0/40 (환급 없음)");
         }
         else
         {
@@ -574,7 +599,6 @@ public class GunSystem : MonoBehaviour
     void ShowGaugeChangeText(int change)
     {
         if (damageTextPrefab == null || damageTextParent == null || turnsUntilBulletText == null) return;
-
         GameObject obj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI txt = obj.GetComponent<TextMeshProUGUI>();
         if (txt != null)
@@ -582,13 +606,9 @@ public class GunSystem : MonoBehaviour
             txt.text = change > 0 ? $"+{change}" : change.ToString();
             txt.color = change > 0 ? new Color(0.9f, 0.2f, 0.2f) : new Color(0.6f, 0.6f, 0.6f);
             txt.fontSize = 36;
-
             RectTransform r = obj.GetComponent<RectTransform>();
             r.position = turnsUntilBulletText.GetComponent<RectTransform>().position;
-
-            CanvasGroup cg = obj.GetComponent<CanvasGroup>();
-            if (cg == null) cg = obj.AddComponent<CanvasGroup>();
-
+            CanvasGroup cg = obj.GetComponent<CanvasGroup>(); if (cg == null) cg = obj.AddComponent<CanvasGroup>();
             Sequence s = DOTween.Sequence();
             s.Append(r.DOAnchorPosY(r.anchoredPosition.y + 80f, 0.8f).SetEase(Ease.OutCubic));
             s.Join(cg.DOFade(0f, 0.8f).SetEase(Ease.InCubic));
@@ -660,15 +680,12 @@ public class GunSystem : MonoBehaviour
             {
                 long increase = permanentAttackPower - lastPermanentAttackPower;
                 lastPermanentAttackPower = permanentAttackPower;
-
-                // DOTween 바운스 + floating text 둘 다
                 RectTransform tr = attackPowerText.GetComponent<RectTransform>();
                 tr.DOKill();
                 Sequence seq = DOTween.Sequence();
                 seq.Append(tr.DOAnchorPosY(attackTextOriginalY + 10f, 0.15f).SetEase(Ease.OutQuad));
                 seq.Append(tr.DOAnchorPosY(attackTextOriginalY, 0.15f).SetEase(Ease.InQuad));
                 seq.OnComplete(() => { if (tr != null) tr.anchoredPosition = new Vector2(tr.anchoredPosition.x, attackTextOriginalY); });
-
                 ShowATKChangeText(increase);
             }
         }
@@ -704,7 +721,6 @@ public class GunSystem : MonoBehaviour
     {
         if (gunModeGuideText == null) return;
         if (isGunMode) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; return; }
-
         gunModeGuideText.gameObject.SetActive(true);
         if (isFeverMode) gunModeGuideText.text = "Freeze\nGun!";
         else if (hasBullet) gunModeGuideText.text = "Gun\nReady";

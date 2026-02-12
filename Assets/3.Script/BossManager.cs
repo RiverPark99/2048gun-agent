@@ -47,7 +47,7 @@ public class BossManager : MonoBehaviour
     private int currentBossIndex = 0;
 
     [Header("Freeze Visual")]
-    [SerializeField] private Image freezeImage; // 1개만 사용
+    [SerializeField] private Image freezeImage;
 
     private bool isTransitioning = false;
     private GameManager gameManager;
@@ -57,9 +57,7 @@ public class BossManager : MonoBehaviour
 
     private bool isFrozen = false;
     private int bonusTurnsAdded = 0;
-    private int bonusTurnsFilled = 0;
 
-    // Freeze 시 원래 색상 저장
     private Color originalAttackInfoColor = Color.white;
     private bool attackInfoColorSaved = false;
     private static readonly Color ICE_BLUE = new Color(0.5f, 0.8f, 1f);
@@ -78,9 +76,14 @@ public class BossManager : MonoBehaviour
     private Color originalGroundColor;
     private bool groundColorSaved = false;
 
+    // ⭐ v6.3: Guard 해제 후 HP bar 빛나는 효과
+    private Sequence hpBarGlowSequence;
+    private BossBattleSystem bossBattleSystem;
+
     void Start()
     {
         gameManager = FindAnyObjectByType<GameManager>();
+        bossBattleSystem = FindAnyObjectByType<BossBattleSystem>();
 
         if (bossPanelGroundImage != null && !groundColorSaved)
         {
@@ -97,10 +100,8 @@ public class BossManager : MonoBehaviour
         float exponent = Mathf.Pow(1.5f, bossLevel - 1);
         maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
 
-        if (bossLevel == 39)
-            maxHP = 2147483647;
-        else if (bossLevel >= 40)
-            maxHP = 2147483647;
+        if (bossLevel == 39) maxHP = 2147483647;
+        else if (bossLevel >= 40) maxHP = 2147483647;
 
         currentHP = maxHP;
 
@@ -112,8 +113,7 @@ public class BossManager : MonoBehaviour
         else
         {
             int levelsOverThreshold = bossLevel - (damageThreshold - baseDamage + 1);
-            int slowIncreaseCount = levelsOverThreshold / 5;
-            currentBossDamage = damageThreshold + slowIncreaseCount;
+            currentBossDamage = damageThreshold + levelsOverThreshold / 5;
         }
 
         infiniteBossExtraDamage = 0;
@@ -125,8 +125,16 @@ public class BossManager : MonoBehaviour
             StartGuardColorAnimation();
         }
 
+        // ⭐ v6.3: 41번째부터 Enemy 검정 + ATK 50 고정
+        if (bossLevel >= 41 && !isClearMode && !isGuardMode)
+        {
+            currentBossDamage = 50;
+            infiniteBossExtraDamage = 0;
+            ApplyBlackColor();
+        }
+
         UpdateUI(true);
-        Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, 공격 주기: {currentTurnInterval}턴, 공격력: {currentBossDamage}, Guard: {isGuardMode}, Clear: {isClearMode}");
+        Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, ATK: {GetEffectiveDamage()}, Guard: {isGuardMode}, Clear: {isClearMode}");
     }
 
     void StartGuardColorAnimation()
@@ -159,11 +167,30 @@ public class BossManager : MonoBehaviour
 
     void StopGuardColorAnimation()
     {
-        if (guardColorSequence != null)
-        {
-            guardColorSequence.Kill();
-            guardColorSequence = null;
-        }
+        if (guardColorSequence != null) { guardColorSequence.Kill(); guardColorSequence = null; }
+    }
+
+    // ⭐ v6.3: Guard 해제 후 HP bar 주황↔붉은 빛나는 루프
+    void StartHPBarGlowAnimation()
+    {
+        StopHPBarGlowAnimation();
+        if (hpSlider == null) return;
+        Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
+        if (fillImage == null) return;
+
+        Color orangeColor = new Color(1f, 0.6f, 0.15f);
+        Color redColor = new Color(0.9f, 0.2f, 0.15f);
+        fillImage.color = orangeColor;
+
+        hpBarGlowSequence = DOTween.Sequence();
+        hpBarGlowSequence.Append(fillImage.DOColor(redColor, 1.5f).SetEase(Ease.InOutSine));
+        hpBarGlowSequence.Append(fillImage.DOColor(orangeColor, 1.5f).SetEase(Ease.InOutSine));
+        hpBarGlowSequence.SetLoops(-1, LoopType.Restart);
+    }
+
+    void StopHPBarGlowAnimation()
+    {
+        if (hpBarGlowSequence != null) { hpBarGlowSequence.Kill(); hpBarGlowSequence = null; }
     }
 
     public void ExitGuardMode()
@@ -173,6 +200,9 @@ public class BossManager : MonoBehaviour
         isClearMode = true;
         StopGuardColorAnimation();
         ApplyOrangeColor();
+
+        // ⭐ v6.3: HP bar 빛나는 효과 시작
+        StartHPBarGlowAnimation();
 
         maxHP = 2147483647;
         currentHP = maxHP;
@@ -213,7 +243,8 @@ public class BossManager : MonoBehaviour
         infiniteBossExtraDamage++;
         Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{MAX_TOTAL_DAMAGE}");
         UpdateBossAttackUI();
-        FlashAttackTextBlue();
+        // ⭐ v6.3: 주황색 플래시
+        FlashAttackTextOrange();
         if (currentBossDamage + infiniteBossExtraDamage >= MAX_TOTAL_DAMAGE && isGuardMode)
             ExitGuardMode();
     }
@@ -227,11 +258,12 @@ public class BossManager : MonoBehaviour
         }
     }
 
-    void FlashAttackTextBlue()
+    // ⭐ v6.3: 주황색 플래시 (기존 파란색→주황색)
+    void FlashAttackTextOrange()
     {
         if (bossAttackInfoText == null) return;
         Color originalColor = bossAttackInfoText.color;
-        bossAttackInfoText.color = new Color(0.3f, 0.6f, 1f);
+        bossAttackInfoText.color = new Color(1f, 0.6f, 0.1f);
         DOTween.Sequence()
             .AppendInterval(0.3f)
             .Append(bossAttackInfoText.DOColor(originalColor, 0.4f).SetEase(Ease.OutQuad));
@@ -267,12 +299,10 @@ public class BossManager : MonoBehaviour
         UpdateUI(false);
     }
 
-    // ⭐ v6.1: AddTurns - 기본 턴 뒤에 보너스 턴만 추가 (독립적)
     public void AddTurns(int turns)
     {
         if (isTransitioning) return;
         bonusTurnsAdded += turns;
-        Debug.Log($"⏰ 보너스 턴 +{turns} (기본: {currentTurnCount}/{currentTurnInterval}, 보너스: □×{bonusTurnsAdded})");
         UpdateBossAttackUI();
     }
 
@@ -288,8 +318,7 @@ public class BossManager : MonoBehaviour
             if (bonusTurnsAdded > 0)
             {
                 bonusTurnsAdded--;
-                currentTurnCount = 0; // 보너스 턴 소진 중
-                Debug.Log($"⏰ 보너스 턴 소진: 남은 보너스 {bonusTurnsAdded}");
+                currentTurnCount = 0;
                 UpdateBossAttackUI();
                 return;
             }
@@ -301,7 +330,6 @@ public class BossManager : MonoBehaviour
         }
 
         UpdateBossAttackUI();
-        Debug.Log($"보스 공격까지 {currentTurnCount}턴 + 보너스 {bonusTurnsAdded}");
     }
 
     private void AttackPlayer()
@@ -334,9 +362,7 @@ public class BossManager : MonoBehaviour
             yield return attackSeq.WaitForCompletion();
         }
         else
-        {
             yield return new WaitForSeconds(attackMotionDuration);
-        }
 
         if (gameManager != null)
         {
@@ -346,15 +372,10 @@ public class BossManager : MonoBehaviour
 
         if (gameManager != null) gameManager.SetBossAttacking(false);
 
-        if (attackBlinkAnimation != null)
-        {
-            attackBlinkAnimation.Kill();
-            attackBlinkAnimation = null;
-        }
+        if (attackBlinkAnimation != null) { attackBlinkAnimation.Kill(); attackBlinkAnimation = null; }
 
         currentTurnCount = currentTurnInterval;
         bonusTurnsAdded = 0;
-        bonusTurnsFilled = 0;
         UpdateBossAttackUI();
         ProcessPendingDamageIncrease();
     }
@@ -368,7 +389,6 @@ public class BossManager : MonoBehaviour
     public void ResetBonusTurns()
     {
         bonusTurnsAdded = 0;
-        bonusTurnsFilled = 0;
         currentTurnCount = currentTurnInterval;
         UpdateBossAttackUI();
     }
@@ -385,16 +405,13 @@ public class BossManager : MonoBehaviour
 
         if (hpText != null)
         {
-            if (isGuardMode)
-                hpText.text = "HP: Guard";
-            else
-                hpText.text = "HP: " + currentHP + " / " + maxHP;
+            if (isGuardMode) hpText.text = "HP: Guard";
+            else hpText.text = "HP: " + currentHP + " / " + maxHP;
         }
 
         UpdateBossAttackUI();
     }
 
-    // ⭐ v6.1: "In" 제거, 기본턴 + 보너스턴 분리 표시
     string GetAttackTurnText(int remainingTurns)
     {
         string filledSymbol = "●";
@@ -405,40 +422,25 @@ public class BossManager : MonoBehaviour
         int filledCount = totalTurns - remainingTurns;
 
         string symbols = "";
+        for (int i = 0; i < filledCount; i++) symbols += filledSymbol;
+        for (int i = filledCount; i < totalTurns; i++) symbols += emptySymbol;
+        for (int i = 0; i < bonusTurnsAdded; i++) symbols += bonusSymbol;
 
-        // 기본 턴 표시: ●●○○
-        for (int i = 0; i < filledCount; i++)
-            symbols += filledSymbol;
-        for (int i = filledCount; i < totalTurns; i++)
-            symbols += emptySymbol;
-
-        // 보너스 턴 표시: □□□ (기본턴 뒤에 붙음)
-        for (int i = 0; i < bonusTurnsAdded; i++)
-            symbols += bonusSymbol;
-
-        int effectiveDamage = GetEffectiveDamage();
-        return $"ATK: {effectiveDamage}\n{symbols}";
+        return $"ATK: {GetEffectiveDamage()}\n{symbols}";
     }
 
     void UpdateBossAttackUI()
     {
         if (bossAttackInfoText != null)
         {
-            // Frozen 상태면 얼음색 유지
             if (isFrozen)
-            {
                 bossAttackInfoText.color = ICE_BLUE;
-            }
             else
             {
-                if (currentTurnCount <= 1)
-                    bossAttackInfoText.color = new Color(1f, 0.2f, 0.2f);
-                else if (currentTurnCount <= 3)
-                    bossAttackInfoText.color = new Color(1f, 0.8f, 0.2f);
-                else
-                    bossAttackInfoText.color = new Color(0.7f, 0.7f, 0.7f);
+                if (currentTurnCount <= 1) bossAttackInfoText.color = new Color(1f, 0.2f, 0.2f);
+                else if (currentTurnCount <= 3) bossAttackInfoText.color = new Color(1f, 0.8f, 0.2f);
+                else bossAttackInfoText.color = new Color(0.7f, 0.7f, 0.7f);
             }
-
             bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
         }
     }
@@ -447,10 +449,19 @@ public class BossManager : MonoBehaviour
     {
         isTransitioning = true;
 
+        // ⭐ v6.3: Guard 보스(40번째)를 쓰러뜨렸을 때 Challenge Clear
+        bool shouldShowClear = (bossLevel == 40 && isClearMode && !isGuardMode);
+
         if (gameManager != null)
         {
             gameManager.OnBossDefeated();
             gameManager.SetBossTransitioning(true);
+        }
+
+        if (shouldShowClear && bossBattleSystem != null)
+        {
+            // 보스 쓰러짐 연출 후 Clear UI 표시
+            StartCoroutine(ShowClearUIDelayed());
         }
 
         SetBossUIActive(false);
@@ -484,22 +495,26 @@ public class BossManager : MonoBehaviour
             if (tempDamage <= damageThreshold)
                 currentBossDamage = tempDamage;
             else
-            {
-                int levelsOverThreshold = bossLevel - (damageThreshold - baseDamage + 1);
-                currentBossDamage = damageThreshold + levelsOverThreshold / 5;
-            }
+                currentBossDamage = damageThreshold + (bossLevel - (damageThreshold - baseDamage + 1)) / 5;
 
             if (bossLevel >= 40 && !isClearMode)
             {
                 isGuardMode = true;
                 StartGuardColorAnimation();
             }
+
+            // ⭐ v6.3: 41번째부터 검정 + ATK 50
+            if (bossLevel >= 41 && !isClearMode && !isGuardMode)
+            {
+                currentBossDamage = 50;
+                infiniteBossExtraDamage = 0;
+                ApplyBlackColor();
+            }
         }
 
         infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
         bonusTurnsAdded = 0;
-        bonusTurnsFilled = 0;
 
         if (bossImageArea != null)
         {
@@ -537,10 +552,8 @@ public class BossManager : MonoBehaviour
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt(38 * 0.2f));
 
         int tempDamage = baseDamage + 38;
-        if (tempDamage <= damageThreshold)
-            currentBossDamage = tempDamage;
-        else
-            currentBossDamage = damageThreshold + (39 - (damageThreshold - baseDamage + 1)) / 5;
+        if (tempDamage <= damageThreshold) currentBossDamage = tempDamage;
+        else currentBossDamage = damageThreshold + (39 - (damageThreshold - baseDamage + 1)) / 5;
     }
 
     public void ResetBoss()
@@ -550,12 +563,12 @@ public class BossManager : MonoBehaviour
         currentBossIndex = 0;
         isFrozen = false;
         bonusTurnsAdded = 0;
-        bonusTurnsFilled = 0;
         infiniteBossExtraDamage = 0;
         isGuardMode = false;
         isClearMode = false;
         stage39SpriteIndex = -1;
         StopGuardColorAnimation();
+        StopHPBarGlowAnimation();
 
         if (bossPanelGroundImage != null && groundColorSaved)
         {
@@ -571,10 +584,11 @@ public class BossManager : MonoBehaviour
             bossImageArea.transform.localScale = Vector3.one;
         }
 
+        // ⭐ v6.3: HP bar 색상 초기화 (흰색이 아닌 원래 색으로)
         if (hpSlider != null)
         {
             Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
-            if (fillImage != null) fillImage.color = Color.white;
+            if (fillImage != null) fillImage.color = new Color(0.3f, 0.85f, 0.4f); // 기본 녹색
         }
 
         InitializeBoss();
@@ -595,8 +609,7 @@ public class BossManager : MonoBehaviour
 
         if (bossSprites.Count == 1)
         {
-            if (bossImageArea.sprite == null)
-                bossImageArea.sprite = bossSprites[0];
+            if (bossImageArea.sprite == null) bossImageArea.sprite = bossSprites[0];
             ApplyOrangeColor();
         }
         else
@@ -625,7 +638,15 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.1: Freeze 시 적 UI 얼음색 적용
+    // ⭐ v6.3: 41번째부터 Enemy 검정
+    void ApplyBlackColor()
+    {
+        if (bossImageArea == null) return;
+        Material mat = new Material(Shader.Find("UI/Default"));
+        mat.SetColor("_Color", new Color(0.05f, 0.05f, 0.05f, 1.0f));
+        bossImageArea.material = mat;
+    }
+
     public void SetFrozen(bool frozen)
     {
         isFrozen = frozen;
@@ -633,11 +654,7 @@ public class BossManager : MonoBehaviour
         if (frozen)
         {
             StopBossIdleAnimation();
-
-            // Freeze 이미지 표시
             if (freezeImage != null) freezeImage.gameObject.SetActive(true);
-
-            // 공격턴 텍스트 얼음색
             if (bossAttackInfoText != null)
             {
                 if (!attackInfoColorSaved)
@@ -647,21 +664,13 @@ public class BossManager : MonoBehaviour
                 }
                 bossAttackInfoText.color = ICE_BLUE;
             }
-
-            Debug.Log("🧊 Boss Frozen!");
         }
         else
         {
             StartBossIdleAnimation();
-
-            // Freeze 이미지 숨기기
             if (freezeImage != null) freezeImage.gameObject.SetActive(false);
-
-            // 색상 복원
             attackInfoColorSaved = false;
-            UpdateBossAttackUI(); // 색상 정상 복원
-
-            Debug.Log("🔥 Boss Unfrozen!");
+            UpdateBossAttackUI();
         }
     }
 
@@ -670,7 +679,6 @@ public class BossManager : MonoBehaviour
         if (bossImageArea == null) return;
         if (bossIdleAnimation != null) bossIdleAnimation.Kill();
         if (isFrozen) return;
-
         bossIdleAnimation = bossImageArea.transform.DOLocalRotate(new Vector3(0f, 0f, 5f), 2.0f)
             .SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo);
     }
@@ -686,6 +694,14 @@ public class BossManager : MonoBehaviour
         if (hpSlider != null) hpSlider.gameObject.SetActive(active);
         if (hpText != null) hpText.gameObject.SetActive(active);
         if (bossAttackInfoText != null) bossAttackInfoText.gameObject.SetActive(active);
+    }
+
+    // ⭐ v6.3: Challenge Clear UI 지연 표시
+    IEnumerator ShowClearUIDelayed()
+    {
+        yield return new WaitForSeconds(2.0f);
+        if (bossBattleSystem != null)
+            bossBattleSystem.ShowChallengeClearUI();
     }
 
     public bool IsFrozen() { return isFrozen; }

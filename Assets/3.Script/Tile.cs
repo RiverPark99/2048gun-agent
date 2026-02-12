@@ -103,31 +103,47 @@ public class Tile : MonoBehaviour
         StopUltrasonicEffect();
     }
 
-    // v6.2: 해상도 독립적 크기 (RectTransform 기반)
+    // v6.3: Canvas Expand 모드 보정
+    // Canvas Scaler Expand에서는 scaleFactor=1이지만 RectTransform 크기가 변함
+    // 파티클 startSize는 Canvas 로컬 단위이므로, 실제 Canvas 크기 대비 보정 필요
+    float GetCanvasScaleCorrection()
+    {
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return 1f;
+        Canvas root = canvas.rootCanvas;
+        if (root == null) return 1f;
+        RectTransform canvasRect = root.GetComponent<RectTransform>();
+        if (canvasRect == null) return 1f;
+        // Expand 모드: Canvas RectTransform 크기가 화면에 따라 변함
+        // 기준 해상도(1290) 대비 실제 Canvas 크기 비율
+        float canvasWidth = canvasRect.rect.width;
+        float refWidth = 1290f; // 기준 해상도
+        return canvasWidth / refWidth;
+    }
+
+    // v6.2: 해상도 독립적 크기 (RectTransform 기반 + Canvas 보정)
     float GetAdaptiveParticleSize(float baseRatio)
     {
         if (rectTransform == null) return 50f;
-        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * baseRatio;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        float canvasCorr = GetCanvasScaleCorrection();
+        return tileSize * baseRatio / canvasCorr;
     }
 
     float GetAdaptiveShapeRadius()
     {
         if (rectTransform == null) return 30f;
-        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * 0.35f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        float canvasCorr = GetCanvasScaleCorrection();
+        return tileSize * 0.35f / canvasCorr;
     }
 
     float GetAdaptiveSpeed()
     {
         if (rectTransform == null) return 200f;
-        return Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * 2.0f;
-    }
-
-    float GetCanvasScaleFactor()
-    {
-        Canvas canvas = GetComponentInParent<Canvas>();
-        if (canvas == null) return 1f;
-        Canvas root = canvas.rootCanvas;
-        return root != null ? root.scaleFactor : 1f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        float canvasCorr = GetCanvasScaleCorrection();
+        return tileSize * 2.0f / canvasCorr;
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
@@ -201,10 +217,7 @@ public class Tile : MonoBehaviour
         renderer.material = new Material(Shader.Find("UI/Default"));
 
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        // v6.2: Canvas scaleFactor 역수로 보정 → 해상도 독립적
-        float canvasScale = GetCanvasScaleFactor();
-        uiP.scale = 3f / canvasScale;
-        uiP.autoScalingMode = Coffee.UIExtensions.UIParticle.AutoScalingMode.None;
+        uiP.scale = 3f;
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);

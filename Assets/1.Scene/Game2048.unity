@@ -705,7 +705,7 @@ MonoBehaviour:
   heatSlider: {fileID: 1922981446}
   heatBarImage: {fileID: 853118026}
   maxHeat: 100
-  heatAnimationDuration: 0.3
+  heatAnimationDuration: 0.4
   comboHeatRecover: 01000000020000000300000004000000050000000a000000
   berryMergeHealMultiplier: 4
   berryMergeBaseHeal: 3

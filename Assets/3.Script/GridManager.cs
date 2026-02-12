@@ -52,7 +52,8 @@ public class GridManager : MonoBehaviour
     private int infiniteBossMoveCount = 0;
 
     // 상수
-    private const float COMBO_MULTIPLIER_BASE = 1.4f;
+    // ⭐ v6.3: 콤보 데미지 소폭 상향 (1.4→1.6)
+    private const float COMBO_MULTIPLIER_BASE = 1.6f;
 
     // === 프로퍼티 ===
     public Tile[,] Tiles => tiles;
@@ -197,7 +198,7 @@ public class GridManager : MonoBehaviour
                                 if (!gunSystem.IsFeverMode)
                                     gunSystem.AddMergeGauge(1);
 
-                                Debug.Log($"CHOCO MERGE! Gauge +1 ({gunSystem.MergeGauge}/32)");
+                                Debug.Log($"CHOCO MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
                                 targetTile.PlayChocoMergeEffect();
                                 isColorBonus = true;
                             }
@@ -222,7 +223,7 @@ public class GridManager : MonoBehaviour
                                 if (!gunSystem.IsFeverMode)
                                     gunSystem.AddMergeGauge(1);
 
-                                Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/32)");
+                                Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
                                 targetTile.PlayBerryMergeEffect();
                                 isColorBonus = true;
                             }
@@ -237,7 +238,7 @@ public class GridManager : MonoBehaviour
                                     gunSystem.AddMergeGauge(1);
 
                                 score += mergedValue;
-                                Debug.Log($"MIX MERGE! HP+{mixHeal}, ATK x2, Gauge +1 ({gunSystem.MergeGauge}/32)");
+                                Debug.Log($"MIX MERGE! HP+{mixHeal}, ATK x2, Gauge +1 ({gunSystem.MergeGauge}/40)");
                             }
 
                             if (isColorBonus)
@@ -394,7 +395,7 @@ public class GridManager : MonoBehaviour
             {
                 gunSystem.AddMergeGauge(1);
                 gunSystem.ClearFeverPaybackIfNeeded();
-                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/32)");
+                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/40)");
             }
 
             UpdateScoreUI();
