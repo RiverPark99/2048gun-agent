@@ -57,6 +57,8 @@ public class BossManager : MonoBehaviour
 
     private bool isFrozen = false;
     private int bonusTurnsAdded = 0;
+    private int bonusTurnsConsumed = 0; // □→■ 차오른 수
+    private int bonusTurnsTotal = 0;    // 총 보너스턴 수 (표시용)
 
     private Color originalAttackInfoColor = Color.white;
     private bool attackInfoColorSaved = false;
@@ -303,6 +305,14 @@ public class BossManager : MonoBehaviour
     {
         if (isTransitioning) return;
         bonusTurnsAdded += turns;
+        bonusTurnsTotal += turns;
+        bonusTurnsConsumed = 0;
+        UpdateBossAttackUI();
+    }
+
+    // ⭐ v6.3: □ 보너스턴 추가 시 UI 갱신
+    public void PlayBonusTurnEffect()
+    {
         UpdateBossAttackUI();
     }
 
@@ -311,25 +321,43 @@ public class BossManager : MonoBehaviour
         if (isTransitioning) return;
         if (isFrozen) return;
 
-        currentTurnCount--;
-
-        if (currentTurnCount <= 0)
+        // 보너스턴 소비 단계 (일반턴 다 찬 후)
+        if (currentTurnCount <= 0 && bonusTurnsAdded > 0)
         {
-            if (bonusTurnsAdded > 0)
+            bonusTurnsAdded--;
+            bonusTurnsConsumed++;
+            UpdateBossAttackUI();
+
+            if (bonusTurnsAdded <= 0)
             {
-                bonusTurnsAdded--;
-                currentTurnCount = 0;
-                UpdateBossAttackUI();
-                return;
+                StartCoroutine(AttackAfterBonusTurnsConsumed());
             }
-            else
-            {
-                AttackPlayer();
-                return;
-            }
+            return;
         }
 
+        currentTurnCount--;
+
+        if (currentTurnCount <= 0 && bonusTurnsAdded <= 0)
+        {
+            // 보너스턴 없으면 즉시 공격
+            AttackPlayer();
+            return;
+        }
+
+        // currentTurnCount가 0이 되었지만 보너스턴이 있으면 → 이번 턴은 일반턴 다 찬 것만 표시
         UpdateBossAttackUI();
+    }
+
+    IEnumerator AttackAfterBonusTurnsConsumed()
+    {
+        // ■■■ 다 차오른 상태 0.5초 표시
+        yield return new WaitForSeconds(0.5f);
+        // ■■■ 사라짐 (리셋)
+        bonusTurnsConsumed = 0;
+        bonusTurnsTotal = 0;
+        UpdateBossAttackUI();
+        // 공격
+        AttackPlayer();
     }
 
     private void AttackPlayer()
@@ -376,6 +404,8 @@ public class BossManager : MonoBehaviour
 
         currentTurnCount = currentTurnInterval;
         bonusTurnsAdded = 0;
+        bonusTurnsConsumed = 0;
+        bonusTurnsTotal = 0;
         UpdateBossAttackUI();
         ProcessPendingDamageIncrease();
     }
@@ -389,6 +419,8 @@ public class BossManager : MonoBehaviour
     public void ResetBonusTurns()
     {
         bonusTurnsAdded = 0;
+        bonusTurnsConsumed = 0;
+        bonusTurnsTotal = 0;
         currentTurnCount = currentTurnInterval;
         UpdateBossAttackUI();
     }
@@ -416,7 +448,6 @@ public class BossManager : MonoBehaviour
     {
         string filledSymbol = "●";
         string emptySymbol = "○";
-        string bonusSymbol = "□";
 
         int totalTurns = currentTurnInterval;
         int filledCount = totalTurns - remainingTurns;
@@ -424,7 +455,14 @@ public class BossManager : MonoBehaviour
         string symbols = "";
         for (int i = 0; i < filledCount; i++) symbols += filledSymbol;
         for (int i = filledCount; i < totalTurns; i++) symbols += emptySymbol;
-        for (int i = 0; i < bonusTurnsAdded; i++) symbols += bonusSymbol;
+
+        // ⭐ v6.3: 보너스턴 □/■ 표시 (소비된 것은 ■, 남은 것은 □)
+        int totalBonus = bonusTurnsConsumed + bonusTurnsAdded;
+        if (totalBonus > 0)
+        {
+            for (int i = 0; i < bonusTurnsConsumed; i++) symbols += "■";
+            for (int i = 0; i < bonusTurnsAdded; i++) symbols += "□";
+        }
 
         return $"ATK: {GetEffectiveDamage()}\n{symbols}";
     }
@@ -515,6 +553,8 @@ public class BossManager : MonoBehaviour
         infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
         bonusTurnsAdded = 0;
+        bonusTurnsConsumed = 0;
+        bonusTurnsTotal = 0;
 
         if (bossImageArea != null)
         {
@@ -563,6 +603,8 @@ public class BossManager : MonoBehaviour
         currentBossIndex = 0;
         isFrozen = false;
         bonusTurnsAdded = 0;
+        bonusTurnsConsumed = 0;
+        bonusTurnsTotal = 0;
         infiniteBossExtraDamage = 0;
         isGuardMode = false;
         isClearMode = false;

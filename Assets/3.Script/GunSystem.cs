@@ -197,8 +197,6 @@ public class GunSystem : MonoBehaviour
             if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
             Debug.Log($"Bullet ready! ({mergeGauge}/{GAUGE_MAX})");
             UpdateGunButtonAnimation();
-            // ⭐ v6.3: □→■ 채워지는 애니메이션
-            PlayBulletChargeEffect();
         }
 
         UpdateGunUI();
@@ -255,29 +253,13 @@ public class GunSystem : MonoBehaviour
 
         if (wasGunUsed)
         {
-            // Gun 사용 → 환급 없음, bar 20→0 자연스럽게
-            mergeGauge = GAUGE_FOR_BULLET;
+            // Gun 사용 → 환급 없음, 즉시 0/40
+            mergeGauge = 0;
             hasBullet = false;
             justEndedFeverWithoutShot = false;
             UpdateGunUI();
 
-            if (progressBarFill != null)
-            {
-                progressBarFill.DOKill();
-                progressBarFill.DOSizeDelta(new Vector2(0f, progressBarFill.sizeDelta.y), 0.8f)
-                    .SetEase(Ease.InOutQuad)
-                    .OnComplete(() => {
-                        mergeGauge = 0;
-                        UpdateGunUI();
-                    });
-            }
-            else
-            {
-                mergeGauge = 0;
-                UpdateGunUI();
-            }
-
-            Debug.Log("FREEZE END! Gun used → bar 20→0 애니메이션, 환급 없음");
+            Debug.Log("FREEZE END! Gun used → 0/40, 환급 없음");
         }
         else
         {
@@ -484,31 +466,6 @@ public class GunSystem : MonoBehaviour
         }
     }
 
-    // ⭐ v6.3: □→■ 채워지는 효과
-    void PlayBulletChargeEffect()
-    {
-        if (attackPowerText == null) return;
-
-        // 텍스트를 ■으로 즉시 변경
-        attackPowerText.text = $"■ ATK+{permanentAttackPower}";
-
-        RectTransform tr = attackPowerText.GetComponent<RectTransform>();
-        tr.DOKill();
-
-        // 스케일 펼치 + 색상 플래시
-        Color originalColor = attackPowerText.color;
-        Sequence seq = DOTween.Sequence();
-
-        // ■ 글자가 커졌다 작아지는 펌프 효과
-        seq.Append(tr.DOScale(1.4f, 0.15f).SetEase(Ease.OutQuad));
-        seq.Join(attackPowerText.DOColor(new Color(0.3f, 1f, 0.6f), 0.15f)); // 밝은 녹색 플래시
-        seq.Append(tr.DOScale(1f, 0.2f).SetEase(Ease.OutBounce));
-        seq.Join(attackPowerText.DOColor(originalColor, 0.3f));
-        seq.OnComplete(() => {
-            if (tr != null) tr.localScale = Vector3.one;
-        });
-    }
-
     // === Gun 모드 토글 ===
     public void ToggleGunMode()
     {
@@ -571,22 +528,28 @@ public class GunSystem : MonoBehaviour
         gridManager.ActiveTiles.Remove(targetTile);
         Destroy(targetTile.gameObject);
 
-        // 연기 파티클
-        SpawnGunSmokeParticle();
-
         if (isFeverMode)
         {
             // ⭐ v6.3: Freeze Gun → Freeze 유지, 자연 종료 시 환급 없음
             feverBulletUsed = true;
             hasBullet = false;
 
-            if (bossManager != null) bossManager.AddTurns(3);
+            // Freeze Gun 전용 연기 파티클
+            SpawnGunSmokeParticle();
+
+            if (bossManager != null)
+            {
+                bossManager.AddTurns(3);
+                // □ 추가 시 시각적 강조 애니메이션
+                bossManager.PlayBonusTurnEffect();
+            }
             if (!bossManager.IsClearMode()) { feverAtkBonus++; feverMergeIncreaseAtk++; }
 
             Debug.Log("🔫 FREEZE GUN! Freeze 유지, 자연 종료 시 0/40 (환급 없음)");
         }
         else
         {
+            // 일반 Gun: 연기 파티클 없음
             mergeGauge = Mathf.Max(0, mergeGauge - GUN_SHOT_COST);
             hasBullet = (mergeGauge >= GAUGE_FOR_BULLET);
         }
