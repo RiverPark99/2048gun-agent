@@ -244,6 +244,13 @@ public class BossBattleSystem : MonoBehaviour
         gunSystem.ContinueIntoFever();
 
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
+
+        // ⭐ v6.4: Continue 후 이동 불가면 긴급 깜빡임
+        if (!gridManager.CanMove())
+        {
+            bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
+            if (hasGun) gunSystem.SetEmergencyFlash(true);
+        }
     }
 
     // ⭐ v6.3: Restart → 0.6초 후 현재 Scene 재로드
@@ -279,12 +286,14 @@ public class BossBattleSystem : MonoBehaviour
     public void ShowChallengeClearUI()
     {
         isChallengeClearShown = true;
-        CreateChallengeClearPanel();
+        long clearScore = gridManager != null ? gridManager.Score : 0;
+        int clearTurn = gridManager != null ? gridManager.CurrentTurn : 0;
+        CreateChallengeClearPanel(clearScore, clearTurn);
         SpawnClearFirework();
         Debug.Log("🎉 Challenge Clear UI 표시!");
     }
 
-    void CreateChallengeClearPanel()
+    void CreateChallengeClearPanel(long clearScore, int clearTurn)
     {
         GameObject existing = GameObject.Find("ChallengeClearPanel");
         if (existing != null) Destroy(existing);
@@ -312,9 +321,21 @@ public class BossBattleSystem : MonoBehaviour
         titleText.fontSize = 60; titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = new Color(1f, 0.84f, 0f); titleText.fontStyle = FontStyles.Bold;
 
-        CreateClearButton(panelObj.transform, "ResumeBtn", "Resume", new Vector2(0.5f, 0.45f), OnClearResume);
-        CreateClearButton(panelObj.transform, "GoToTitleBtn", "Title", new Vector2(0.5f, 0.35f), OnClearGoToTitle);
-        CreateClearButton(panelObj.transform, "RestartBtn", "Restart", new Vector2(0.5f, 0.25f), OnClearRestart);
+        // ⭐ v6.4: Score / Turn 표시
+        GameObject statsObj = new GameObject("ClearStats");
+        statsObj.transform.SetParent(panelObj.transform, false);
+        RectTransform statsRect = statsObj.AddComponent<RectTransform>();
+        statsRect.anchorMin = new Vector2(0.5f, 0.53f); statsRect.anchorMax = new Vector2(0.5f, 0.53f);
+        statsRect.sizeDelta = new Vector2(500f, 80f);
+
+        TextMeshProUGUI statsText = statsObj.AddComponent<TextMeshProUGUI>();
+        statsText.text = $"Score: {clearScore:N0}\nTurn: {clearTurn}";
+        statsText.fontSize = 36; statsText.alignment = TextAlignmentOptions.Center;
+        statsText.color = new Color(0.9f, 0.9f, 0.9f);
+
+        CreateClearButton(panelObj.transform, "ResumeBtn", "Resume", new Vector2(0.5f, 0.42f), OnClearResume);
+        CreateClearButton(panelObj.transform, "GoToTitleBtn", "Title", new Vector2(0.5f, 0.32f), OnClearGoToTitle);
+        CreateClearButton(panelObj.transform, "RestartBtn", "Restart", new Vector2(0.5f, 0.22f), OnClearRestart);
     }
 
     void CreateClearButton(Transform parent, string name, string label, Vector2 anchor, UnityEngine.Events.UnityAction onClick)

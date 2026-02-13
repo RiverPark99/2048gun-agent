@@ -134,7 +134,7 @@ public class BossManager : MonoBehaviour
         {
             currentBossDamage = clearModeFixedAtk;
             infiniteBossExtraDamage = 0;
-            ApplyBlackColor();
+            ApplyDarkGrayColor();
         }
 
         // ⭐ v6.4: 비네트에 적 ATK 전달
@@ -150,27 +150,31 @@ public class BossManager : MonoBehaviour
         if (bossImageArea == null) return;
         StopGuardColorAnimation();
 
-        Color pastelBlueColor = new Color(0.55f, 0.75f, 0.95f, 1.0f);
+        // ⭐ v6.4: Guard 색상 주황↔붉은색 (푸른색 제거)
+        Color pastelRedColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);
         Color pastelOrangeColor = new Color(1.0f, 0.75f, 0.5f, 1.0f);
 
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", pastelBlueColor);
+        mat.SetColor("_Color", pastelOrangeColor);
         bossImageArea.material = mat;
 
         guardColorSequence = DOTween.Sequence();
         guardColorSequence.Append(
-            DOTween.To(() => pastelBlueColor, x => {
+            DOTween.To(() => pastelOrangeColor, x => {
+                if (bossImageArea != null && bossImageArea.material != null)
+                    bossImageArea.material.SetColor("_Color", x);
+            }, pastelRedColor, 1.0f).SetEase(Ease.InOutSine)
+        );
+        guardColorSequence.Append(
+            DOTween.To(() => pastelRedColor, x => {
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
             }, pastelOrangeColor, 1.0f).SetEase(Ease.InOutSine)
         );
-        guardColorSequence.Append(
-            DOTween.To(() => pastelOrangeColor, x => {
-                if (bossImageArea != null && bossImageArea.material != null)
-                    bossImageArea.material.SetColor("_Color", x);
-            }, pastelBlueColor, 1.0f).SetEase(Ease.InOutSine)
-        );
         guardColorSequence.SetLoops(-1, LoopType.Restart);
+
+        // ⭐ v6.4: Guard 상태에서 HP bar glow 시작
+        StartHPBarGlowAnimation();
     }
 
     void StopGuardColorAnimation()
@@ -226,6 +230,8 @@ public class BossManager : MonoBehaviour
     public void IncreaseInfiniteBossDamage()
     {
         if (bossLevel < 40) return;
+        // ⭐ v6.4: Clear 모드(41+) 에서는 ATK 증가 비활성화
+        if (isClearMode) return;
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
         if (currentTotal >= bossAtkMaxTotal)
         {
@@ -502,8 +508,8 @@ public class BossManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        // ⭐ v6.3: Guard 보스(40번째)를 쓰러뜨렸을 때 Challenge Clear
-        bool shouldShowClear = (bossLevel == 40 && isClearMode && !isGuardMode);
+        // ⭐ v6.4: Challenge Clear는 41번째(Clear 모드 첫 보스) 처치 시 표시
+        bool shouldShowClear = (bossLevel == 41 && isClearMode);
 
         if (gameManager != null)
         {
@@ -563,7 +569,7 @@ public class BossManager : MonoBehaviour
             {
                 currentBossDamage = clearModeFixedAtk;
                 infiniteBossExtraDamage = 0;
-                ApplyBlackColor();
+                ApplyDarkGrayColor();
             }
         }
 
@@ -697,12 +703,12 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.3: 41번째부터 Enemy 검정
-    void ApplyBlackColor()
+    // ⭐ v6.4: 41번째부터 Enemy 검회색
+    void ApplyDarkGrayColor()
     {
         if (bossImageArea == null) return;
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", new Color(0.05f, 0.05f, 0.05f, 1.0f));
+        mat.SetColor("_Color", new Color(0.25f, 0.25f, 0.25f, 1.0f));
         bossImageArea.material = mat;
     }
 

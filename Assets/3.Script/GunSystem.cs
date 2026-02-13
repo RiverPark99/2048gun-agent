@@ -508,7 +508,7 @@ public class GunSystem : MonoBehaviour
     void ExitGunMode()
     {
         isGunMode = false;
-        StopEmergencyFlash();
+        // ⭐ v6.4: cancel 후에도 이동 불가면 깜빡임 유지 (이동 가능이면 AfterMove에서 꺼짐)
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         gridManager.ClearAllTileBorders();
         gridManager.DimProtectedTiles(false);
@@ -752,23 +752,34 @@ public class GunSystem : MonoBehaviour
     // === ⭐ v6.4: 이동 불가 + Gun 있을 때 긴급 깜빡임 ===
     public void SetEmergencyFlash(bool shouldFlash)
     {
-        if (shouldFlash == isEmergencyFlashing) return;
-        isEmergencyFlashing = shouldFlash;
-
-        if (shouldFlash && gunButtonImage != null && !isGunMode)
+        if (shouldFlash && gunButtonImage != null)
         {
-            StopEmergencyFlash();
-            Color mintColor = new Color(0.6f, 0.95f, 0.85f);
-            Color redColor = new Color(1f, 0.25f, 0.25f);
-            emergencyGunFlash = DOTween.Sequence();
-            emergencyGunFlash.Append(gunButtonImage.DOColor(redColor, 0.3f).SetEase(Ease.InOutSine));
-            emergencyGunFlash.Append(gunButtonImage.DOColor(mintColor, 0.3f).SetEase(Ease.InOutSine));
-            emergencyGunFlash.SetLoops(-1, LoopType.Restart);
+            if (!isEmergencyFlashing)
+            {
+                isEmergencyFlashing = true;
+                StartEmergencyFlashLoop();
+            }
         }
         else
         {
             StopEmergencyFlash();
         }
+    }
+
+    void StartEmergencyFlashLoop()
+    {
+        if (gunButtonImage == null) return;
+        if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
+
+        // Freeze gun이면 하늘색↔붉은색, 일반 gun이면 민트↔붉은색
+        Color colorA = isFeverMode ? new Color(0.4f, 0.85f, 1f) : new Color(0.6f, 0.95f, 0.85f);
+        Color colorB = new Color(1f, 0.25f, 0.25f);
+
+        gunButtonImage.color = colorA;
+        emergencyGunFlash = DOTween.Sequence();
+        emergencyGunFlash.Append(gunButtonImage.DOColor(colorB, 0.35f).SetEase(Ease.InOutSine));
+        emergencyGunFlash.Append(gunButtonImage.DOColor(colorA, 0.35f).SetEase(Ease.InOutSine));
+        emergencyGunFlash.SetLoops(-1, LoopType.Restart);
     }
 
     void StopEmergencyFlash()

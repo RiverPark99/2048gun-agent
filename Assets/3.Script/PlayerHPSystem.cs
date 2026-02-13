@@ -254,25 +254,25 @@ public class PlayerHPSystem : MonoBehaviour
 
             lastCurrentHeat = currentHeat;
 
-            // ⭐ v6.4: HP bar 색상 % 기반 (핑크→푸른 연한색)
+            // ⭐ v6.4: HP bar 색상 % 기반 (핑크→연핑크)
             float hp = (float)currentHeat / maxHeat;
             Color hc;
             if (hp >= 0.8f)
                 hc = new Color(1f, 0.3f, 0.55f);        // 100~80%: 핑크
             else if (hp >= 0.4f)
             {
-                float t = (hp - 0.4f) / 0.4f; // 1.0 at 80%, 0.0 at 40%
+                float t = (hp - 0.4f) / 0.4f;
                 hc = Color.Lerp(
-                    new Color(0.55f, 0.7f, 0.9f),       // 40%: 푸른 연한색
+                    new Color(1f, 0.6f, 0.75f),          // 40%: 연핑크
                     new Color(1f, 0.3f, 0.55f),          // 80%: 핑크
                     t);
             }
             else
             {
-                float t = hp / 0.4f; // 1.0 at 40%, 0.0 at 0%
+                float t = hp / 0.4f;
                 hc = Color.Lerp(
-                    new Color(0.6f, 0.85f, 1f),          // 0%: 가장 연한 푸른색
-                    new Color(0.55f, 0.7f, 0.9f),        // 40%: 푸른 연한색
+                    new Color(1f, 0.75f, 0.85f),          // 0%: 가장 연한 핑크
+                    new Color(1f, 0.6f, 0.75f),           // 40%: 연핑크
                     t);
             }
 
