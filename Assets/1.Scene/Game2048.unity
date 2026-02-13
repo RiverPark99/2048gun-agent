@@ -738,7 +738,6 @@ MonoBehaviour:
   feverParticleSpawnPoint: {fileID: 1534413715}
   feverBackgroundImage: {fileID: 400933936}
   freezeImage1: {fileID: 148387908}
-  freezeImage2: {fileID: 0}
   gunModeOverlayImage: {fileID: 1616099625}
   gridManager: {fileID: 159172560}
   playerHP: {fileID: 159172558}
@@ -1134,7 +1133,6 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 4c1756021ac7861488d69575819bf65a, type: 3}
   - {fileID: 21300000, guid: 9b0ead94714139746bd9aa9ea7bec702, type: 3}
   - {fileID: 21300000, guid: b200801f5be8a8a44bbd79034cf3cd05, type: 3}
-  freezeImage: {fileID: 0}
 --- !u!1 &207304595
 GameObject:
   m_ObjectHideFlags: 0
@@ -1401,7 +1399,6 @@ MonoBehaviour:
   vignetteImage: {fileID: 275612702}
   vignetteColor: {r: 0.2, g: 0.4, b: 0.6, a: 1}
   maxAlpha: 0.6
-  maxEffectHealthValue: 45
 --- !u!114 &275612702
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6263,13 +6260,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 55
-  m_fontSizeBase: 55
+  m_fontSize: 60
+  m_fontSizeBase: 60
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 4
   m_VerticalAlignment: 512
   m_textAlignment: 65535
