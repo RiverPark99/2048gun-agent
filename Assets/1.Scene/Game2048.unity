@@ -1086,8 +1086,8 @@ MonoBehaviour:
   baseDamage: 28
   atkGrowthPerStep: 3
   atkGrowthInterval: 4
-  bossAtkMaxTotal: 75
-  clearModeFixedAtk: 70
+  bossAtkMaxTotal: 70
+  clearModeFixedAtk: 65
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1
