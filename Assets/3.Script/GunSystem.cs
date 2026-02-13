@@ -30,7 +30,6 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private Transform feverParticleSpawnPoint;
     [SerializeField] private Image feverBackgroundImage;
     [SerializeField] private Image freezeImage1;
-    [SerializeField] private Image freezeImage2;
 
     [Header("Gun Mode Visual")]
     [SerializeField] private Image gunModeOverlayImage;
@@ -84,6 +83,9 @@ public class GunSystem : MonoBehaviour
     private GameObject activeFeverParticle;
     // Gun 연기 파티클
     private GameObject activeGunSmoke;
+    // ⭐ v6.4: 긴급 Gun 버튼 색상 깜빡임
+    private Sequence emergencyGunFlash;
+    private bool isEmergencyFlashing = false;
 
     // === 프로퍼티 ===
     public bool IsFeverMode => isFeverMode;
@@ -103,13 +105,7 @@ public class GunSystem : MonoBehaviour
             GameObject obj = GameObject.Find("infoFreeze");
             if (obj != null) freezeImage1 = obj.GetComponent<Image>();
         }
-        if (freezeImage2 == null)
-        {
-            GameObject obj = GameObject.Find("imageFreeze");
-            if (obj != null) freezeImage2 = obj.GetComponent<Image>();
-        }
         if (freezeImage1 != null) { freezeImage1.color = new Color(1f, 1f, 1f, 70f / 255f); freezeImage1.gameObject.SetActive(false); }
-        if (freezeImage2 != null) { freezeImage2.color = new Color(1f, 1f, 1f, 70f / 255f); freezeImage2.gameObject.SetActive(false); }
 
         if (progressBarFill != null && !progressBarColorSaved)
         {
@@ -132,7 +128,6 @@ public class GunSystem : MonoBehaviour
         if (gunButtonHeartbeat != null) { gunButtonHeartbeat.Kill(); gunButtonHeartbeat = null; }
         if (gunModeGuideText != null) gunModeGuideText.gameObject.SetActive(false);
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
-        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
@@ -223,7 +218,6 @@ public class GunSystem : MonoBehaviour
         }
 
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
-        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(true);
 
         if (bossManager != null) bossManager.SetFrozen(true);
         FireFeverFreezeLaser();
@@ -244,7 +238,6 @@ public class GunSystem : MonoBehaviour
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
-        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
 
         if (bossManager != null) bossManager.SetFrozen(false);
         isFeverMode = false;
@@ -306,7 +299,6 @@ public class GunSystem : MonoBehaviour
             feverBackgroundImage.DOFade(0.7f, 0.5f).SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo);
         }
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
-        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(true);
 
         if (bossManager != null) { bossManager.SetFrozen(true); bossManager.ResetBonusTurns(); }
         SetProgressBarFreezeColor();
@@ -369,13 +361,38 @@ public class GunSystem : MonoBehaviour
     // === Freeze Sync (Boss 리스폰 시) ===
     public IEnumerator SyncFreezeWithBossRespawn()
     {
-        if (freezeImage1 != null) freezeImage1.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
-        if (freezeImage2 != null) freezeImage2.DOFade(0f, 0.5f).SetEase(Ease.InQuad);
-        yield return new WaitForSeconds(1.5f);
+        // ⭐ v6.4: 보스 쓰러짐 즉시 - Freeze 이미지 + 레이저 정리
+        if (freezeImage1 != null) { freezeImage1.DOKill(); freezeImage1.gameObject.SetActive(false); }
+        CleanupFreezeLasers();
+
+        // 보스 스폰 완료 대기 (transitioning=false = 보스 등장 애니메이션 + UI 완료)
+        while (bossBattle.IsBossTransitioning)
+            yield return null;
+
+        yield return new WaitForSeconds(2.3f);
+
         if (!isFeverMode) yield break;
-        float targetAlpha = 70f / 255f;
-        if (freezeImage1 != null) freezeImage1.DOFade(targetAlpha, 0.5f).SetEase(Ease.OutQuad);
-        if (freezeImage2 != null) freezeImage2.DOFade(targetAlpha, 0.5f).SetEase(Ease.OutQuad);
+
+        // ⭐ transitioning 해제됨 = Gun button 색상 복원 시점 → 레이저 발사 + 이미지 복원
+        FireFeverFreezeLaser();
+
+        if (freezeImage1 != null)
+        {
+            freezeImage1.gameObject.SetActive(true);
+            freezeImage1.color = new Color(1f, 1f, 1f, 0f);
+            freezeImage1.DOFade(70f / 255f, 0.5f).SetEase(Ease.OutQuad);
+        }
+    }
+
+    // ⭐ v6.4: 화면에 남아있는 Freeze 레이저 오브젝트 정리
+    void CleanupFreezeLasers()
+    {
+        var projectiles = GameObject.FindObjectsByType<Projectile>(FindObjectsSortMode.None);
+        foreach (var p in projectiles)
+        {
+            if (p != null && p.gameObject.name.Contains("Freeze"))
+                Destroy(p.gameObject);
+        }
     }
 
     // v6.3: Canvas Expand 모드 보정
@@ -491,6 +508,7 @@ public class GunSystem : MonoBehaviour
     void ExitGunMode()
     {
         isGunMode = false;
+        StopEmergencyFlash();
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         gridManager.ClearAllTileBorders();
         gridManager.DimProtectedTiles(false);
@@ -671,7 +689,7 @@ public class GunSystem : MonoBehaviour
             progressBarFill.DOSizeDelta(new Vector2(targetW, progressBarFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
         }
 
-        if (gunButtonImage != null)
+        if (gunButtonImage != null && !isEmergencyFlashing)
         {
             if (isGunMode) gunButtonImage.color = Color.red;
             else if (isFeverMode) gunButtonImage.color = new Color(1f, 0.3f, 0f);
@@ -731,13 +749,40 @@ public class GunSystem : MonoBehaviour
         UpdateGunButtonAnimationIfNeeded(hasBullet || (isFeverMode && !feverBulletUsed));
     }
 
+    // === ⭐ v6.4: 이동 불가 + Gun 있을 때 긴급 깜빡임 ===
+    public void SetEmergencyFlash(bool shouldFlash)
+    {
+        if (shouldFlash == isEmergencyFlashing) return;
+        isEmergencyFlashing = shouldFlash;
+
+        if (shouldFlash && gunButtonImage != null && !isGunMode)
+        {
+            StopEmergencyFlash();
+            Color mintColor = new Color(0.6f, 0.95f, 0.85f);
+            Color redColor = new Color(1f, 0.25f, 0.25f);
+            emergencyGunFlash = DOTween.Sequence();
+            emergencyGunFlash.Append(gunButtonImage.DOColor(redColor, 0.3f).SetEase(Ease.InOutSine));
+            emergencyGunFlash.Append(gunButtonImage.DOColor(mintColor, 0.3f).SetEase(Ease.InOutSine));
+            emergencyGunFlash.SetLoops(-1, LoopType.Restart);
+        }
+        else
+        {
+            StopEmergencyFlash();
+        }
+    }
+
+    void StopEmergencyFlash()
+    {
+        if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
+        isEmergencyFlashing = false;
+    }
+
     // === Cleanup ===
     public void CleanupFeverEffects()
     {
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
-        if (freezeImage2 != null) freezeImage2.gameObject.SetActive(false);
         if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
         if (bossManager != null) bossManager.SetFrozen(false);
         RestoreProgressBarColor();

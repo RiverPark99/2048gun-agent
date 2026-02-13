@@ -145,28 +145,32 @@ public class PlayerHPSystem : MonoBehaviour
         int heatIncrease = Random.Range(1, 6); // 1~5 랜덤
         Debug.Log($"보스 처치! Max HP +{heatIncrease} 예정");
 
-        // 룰렛 애니메이션 시작 (실제 HP 증가는 룰렛 끝난 후)
-        StartCoroutine(LevelUpRouletteCoroutine(heatIncrease));
+        // 이전 룰렛 정리
+        if (levelUpCoroutine != null) StopCoroutine(levelUpCoroutine);
+        levelUpCoroutine = StartCoroutine(LevelUpRouletteCoroutine(heatIncrease));
     }
+
+    private Coroutine levelUpCoroutine;
 
     IEnumerator LevelUpRouletteCoroutine(int finalIncrease)
     {
         isLevelUpAnimating = true;
-        Debug.Log($"[LevelUP] 룰렛 시작! 최종값: {finalIncrease}, levelUpText null: {levelUpText == null}");
 
         bool hasUI = (levelUpText != null);
         CanvasGroup cg = null;
 
         if (hasUI)
         {
+            // 페이드 중 재발동 시 즉시 리셋
+            levelUpText.DOKill();
             levelUpText.gameObject.SetActive(true);
             cg = levelUpText.GetComponent<CanvasGroup>();
             if (cg == null) cg = levelUpText.gameObject.AddComponent<CanvasGroup>();
             cg.alpha = 1f;
         }
 
-        // === Phase 1: 룰렛 (4초) - 숫자 1~5 랜덤 알록달록 ===
-        int totalTicks = 50; // 4초 / 0.08초 = 50번
+        // === Phase 1: 룰렛 (1.2초) - 숫자 1~5 랜덤 알록달록 ===
+        int totalTicks = 15; // 1.2초 / 0.08초 = 15번
         for (int i = 0; i < totalTicks; i++)
         {
             if (hasUI)
@@ -177,8 +181,6 @@ public class PlayerHPSystem : MonoBehaviour
             }
             yield return new WaitForSeconds(0.08f);
         }
-
-        Debug.Log("[LevelUP] Phase 1 완료, Phase 2 픽스");
 
         // === Phase 2: 최종 숫자 픽스 ===
         if (hasUI)
@@ -197,13 +199,13 @@ public class PlayerHPSystem : MonoBehaviour
         if (recovery > 0)
             ShowHeatChangeText(recovery);
 
-        Debug.Log($"[LevelUP] Phase 3 완료! Max HP +{finalIncrease}: {maxHeat}");
+        Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 
         // 보스 스폰 허용
         isLevelUpAnimating = false;
 
-        // === Phase 4: 3.5초 표시 후 페이드아웃 ===
-        yield return new WaitForSeconds(3.5f);
+        // === Phase 4: 2초 표시 후 페이드아웃 ===
+        yield return new WaitForSeconds(1.5f);
 
         if (hasUI && cg != null)
         {
@@ -212,6 +214,8 @@ public class PlayerHPSystem : MonoBehaviour
                 if (levelUpText != null) levelUpText.gameObject.SetActive(false);
             });
         }
+
+        levelUpCoroutine = null;
     }
 
     // Berry 회복량: 최대HP의 3%
@@ -250,16 +254,27 @@ public class PlayerHPSystem : MonoBehaviour
 
             lastCurrentHeat = currentHeat;
 
+            // ⭐ v6.4: HP bar 색상 % 기반 (핑크→푸른 연한색)
             float hp = (float)currentHeat / maxHeat;
             Color hc;
-            if (hp <= 0.2f)
-                hc = new Color(1f, 0.6f, 0.7f);
-            else if (hp <= 0.4f)
-                hc = new Color(1f, 0.5f, 0.65f);
-            else if (hp <= 0.6f)
-                hc = new Color(1f, 0.4f, 0.6f);
+            if (hp >= 0.8f)
+                hc = new Color(1f, 0.3f, 0.55f);        // 100~80%: 핑크
+            else if (hp >= 0.4f)
+            {
+                float t = (hp - 0.4f) / 0.4f; // 1.0 at 80%, 0.0 at 40%
+                hc = Color.Lerp(
+                    new Color(0.55f, 0.7f, 0.9f),       // 40%: 푸른 연한색
+                    new Color(1f, 0.3f, 0.55f),          // 80%: 핑크
+                    t);
+            }
             else
-                hc = new Color(1f, 0.3f, 0.55f);
+            {
+                float t = hp / 0.4f; // 1.0 at 40%, 0.0 at 0%
+                hc = Color.Lerp(
+                    new Color(0.6f, 0.85f, 1f),          // 0%: 가장 연한 푸른색
+                    new Color(0.55f, 0.7f, 0.9f),        // 40%: 푸른 연한색
+                    t);
+            }
 
             heatText.color = hc;
 

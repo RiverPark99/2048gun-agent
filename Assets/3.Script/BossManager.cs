@@ -45,14 +45,11 @@ public class BossManager : MonoBehaviour
     public float bossSpawnDelay = 1.0f;
 
     [Header("Boss Attack Animation")]
-    [SerializeField] private float attackMotionDuration = 0.5f;
+    [SerializeField] private float attackMotionDuration = 0.3f;
 
     [Header("Boss Images")]
     [SerializeField] private List<Sprite> bossSprites = new List<Sprite>();
     private int currentBossIndex = 0;
-
-    [Header("Freeze Visual")]
-    [SerializeField] private Image freezeImage;
 
     private bool isTransitioning = false;
     private GameManager gameManager;
@@ -139,6 +136,10 @@ public class BossManager : MonoBehaviour
             infiniteBossExtraDamage = 0;
             ApplyBlackColor();
         }
+
+        // ⭐ v6.4: 비네트에 적 ATK 전달
+        if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
+            bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
 
         UpdateUI(true);
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, ATK: {GetEffectiveDamage()}, Guard: {isGuardMode}, Clear: {isClearMode}");
@@ -251,6 +252,8 @@ public class BossManager : MonoBehaviour
         Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{bossAtkMaxTotal}");
         UpdateBossAttackUI();
         FlashAttackTextOrange();
+        if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
+            bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
         if (currentBossDamage + infiniteBossExtraDamage >= bossAtkMaxTotal && isGuardMode)
             ExitGuardMode();
     }
@@ -293,7 +296,11 @@ public class BossManager : MonoBehaviour
         currentHP -= damageInt;
 
         if (bossImageArea != null)
-            bossImageArea.transform.DOShakePosition(0.2f, strength: 10f, vibrato: 20, randomness: 90f);
+        {
+            Vector3 preShakePos = bossImageArea.transform.localPosition;
+            bossImageArea.transform.DOShakePosition(0.2f, strength: 10f, vibrato: 20, randomness: 90f)
+                .OnComplete(() => { if (bossImageArea != null) bossImageArea.transform.localPosition = preShakePos; });
+        }
 
         if (currentHP <= 0)
         {
@@ -334,6 +341,8 @@ public class BossManager : MonoBehaviour
 
             if (bonusTurnsAdded <= 0)
             {
+                // ⭐ v6.4: 보너스턴 소비 완료 → 즉시 input 차단 후 공격
+                if (gameManager != null) gameManager.SetBossAttacking(true);
                 StartCoroutine(AttackAfterBonusTurnsConsumed());
             }
             return;
@@ -354,8 +363,8 @@ public class BossManager : MonoBehaviour
 
     IEnumerator AttackAfterBonusTurnsConsumed()
     {
-        // ■■■ 다 차오른 상태 0.5초 표시
-        yield return new WaitForSeconds(0.5f);
+        // ■■■ 다 차오른 상태 0.3초 표시
+        yield return new WaitForSeconds(0.3f);
         // ■■■ 사라짐 (리셋)
         bonusTurnsConsumed = 0;
         bonusTurnsTotal = 0;
@@ -383,15 +392,17 @@ public class BossManager : MonoBehaviour
                 .SetLoops(-1, LoopType.Restart);
         }
 
-        yield return new WaitForSeconds(0.5f);
+        yield return new WaitForSeconds(0.25f);
 
         if (bossImageArea != null)
         {
             Vector3 originalPos = bossImageArea.transform.localPosition;
             Sequence attackSeq = DOTween.Sequence();
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x - 50f, attackMotionDuration * 0.3f).SetEase(Ease.OutQuad));
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x, attackMotionDuration * 0.7f).SetEase(Ease.OutBounce));
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x - 50f, attackMotionDuration * 0.25f).SetEase(Ease.OutQuad));
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x, attackMotionDuration * 0.55f).SetEase(Ease.OutBounce));
             yield return attackSeq.WaitForCompletion();
+            // ⭐ v6.4: 위치 강제 복원 (좌측 쓸림 방지)
+            bossImageArea.transform.localPosition = originalPos;
         }
         else
             yield return new WaitForSeconds(attackMotionDuration);
@@ -702,7 +713,6 @@ public class BossManager : MonoBehaviour
         if (frozen)
         {
             StopBossIdleAnimation();
-            if (freezeImage != null) freezeImage.gameObject.SetActive(true);
             if (bossAttackInfoText != null)
             {
                 if (!attackInfoColorSaved)
@@ -716,7 +726,6 @@ public class BossManager : MonoBehaviour
         else
         {
             StartBossIdleAnimation();
-            if (freezeImage != null) freezeImage.gameObject.SetActive(false);
             attackInfoColorSaved = false;
             UpdateBossAttackUI();
         }

@@ -438,14 +438,18 @@ public class GridManager : MonoBehaviour
 
         if (!CanMove())
         {
-            if (!gunSystem.IsFeverMode || gunSystem.FeverBulletUsed)
+            bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
+            if (!hasGun)
             {
-                if (!gunSystem.HasBullet)
-                {
-                    bossBattle.GameOver();
-                    return;
-                }
+                bossBattle.GameOver();
+                return;
             }
+            // ⭐ v6.4: 이동 불가 + Gun 있으면 긴급 깜박임
+            gunSystem.SetEmergencyFlash(true);
+        }
+        else
+        {
+            gunSystem.SetEmergencyFlash(false);
         }
 
         isProcessing = false;
