@@ -38,6 +38,17 @@ public class PlayerHPSystem : MonoBehaviour
 
     // HP 상태
     private int currentHeat = 100;
+    private bool isLevelUpAnimating = false;
+    public bool IsLevelUpAnimating => isLevelUpAnimating;
+
+    // ⭐ v6.4: 숫자별 색상 (1~5)
+    private static readonly Color[] levelUpColors = {
+        new Color(0.4f, 1f, 0.4f),    // 1: 연두
+        new Color(0.4f, 0.8f, 1f),    // 2: 하늘
+        new Color(1f, 0.85f, 0.3f),   // 3: 금색
+        new Color(1f, 0.5f, 0.3f),    // 4: 주황
+        new Color(1f, 0.35f, 0.55f),  // 5: 핑크
+    };
 
     // UI 애니메이션 상태
     private float heatTextOriginalY = 0f;
@@ -129,14 +140,55 @@ public class PlayerHPSystem : MonoBehaviour
     // === 보스 처치 보상 ===
     public void OnBossDefeated(int bossLevel, bool isClearMode)
     {
-        // Challenge Clear 상황에서는 성장 없음
         if (isClearMode) return;
 
-        int heatIncrease = Random.Range(1, 7); // 1~6 랜덤
-        maxHeat += heatIncrease;
-        Debug.Log($"보스 처치! Max HP +{heatIncrease}: {maxHeat}");
+        int heatIncrease = Random.Range(1, 6); // 1~5 랜덤
+        Debug.Log($"보스 처치! Max HP +{heatIncrease} 예정");
 
-        // 최대 체력 회복
+        // 룰렛 애니메이션 시작 (실제 HP 증가는 룰렛 끝난 후)
+        StartCoroutine(LevelUpRouletteCoroutine(heatIncrease));
+    }
+
+    IEnumerator LevelUpRouletteCoroutine(int finalIncrease)
+    {
+        isLevelUpAnimating = true;
+        Debug.Log($"[LevelUP] 룰렛 시작! 최종값: {finalIncrease}, levelUpText null: {levelUpText == null}");
+
+        bool hasUI = (levelUpText != null);
+        CanvasGroup cg = null;
+
+        if (hasUI)
+        {
+            levelUpText.gameObject.SetActive(true);
+            cg = levelUpText.GetComponent<CanvasGroup>();
+            if (cg == null) cg = levelUpText.gameObject.AddComponent<CanvasGroup>();
+            cg.alpha = 1f;
+        }
+
+        // === Phase 1: 룰렛 (4초) - 숫자 1~5 랜덤 알록달록 ===
+        int totalTicks = 50; // 4초 / 0.08초 = 50번
+        for (int i = 0; i < totalTicks; i++)
+        {
+            if (hasUI)
+            {
+                int randomNum = Random.Range(1, 6);
+                levelUpText.text = $"Level UP! Max HP+{randomNum}";
+                levelUpText.color = levelUpColors[randomNum - 1];
+            }
+            yield return new WaitForSeconds(0.08f);
+        }
+
+        Debug.Log("[LevelUP] Phase 1 완료, Phase 2 픽스");
+
+        // === Phase 2: 최종 숫자 픽스 ===
+        if (hasUI)
+        {
+            levelUpText.text = $"Level UP! Max HP+{finalIncrease}";
+            levelUpText.color = levelUpColors[finalIncrease - 1];
+        }
+
+        // === Phase 3: 실제 HP 증가 + 회복 ===
+        maxHeat += finalIncrease;
         int oldHeat = currentHeat;
         currentHeat = maxHeat;
         UpdateHeatUI();
@@ -145,30 +197,21 @@ public class PlayerHPSystem : MonoBehaviour
         if (recovery > 0)
             ShowHeatChangeText(recovery);
 
-        // Level UP! 텍스트 표시
-        ShowLevelUpText(heatIncrease);
-    }
+        Debug.Log($"[LevelUP] Phase 3 완료! Max HP +{finalIncrease}: {maxHeat}");
 
-    void ShowLevelUpText(int hpIncrease)
-    {
-        if (levelUpText == null) return;
+        // 보스 스폰 허용
+        isLevelUpAnimating = false;
 
-        levelUpText.text = $"Level UP! Max HP+{hpIncrease}";
-        levelUpText.gameObject.SetActive(true);
+        // === Phase 4: 3.5초 표시 후 페이드아웃 ===
+        yield return new WaitForSeconds(3.5f);
 
-        // DOTween: 페이드인 → 4초 표시 → 페이드아웃
-        levelUpText.DOKill();
-        CanvasGroup cg = levelUpText.GetComponent<CanvasGroup>();
-        if (cg == null) cg = levelUpText.gameObject.AddComponent<CanvasGroup>();
-        cg.alpha = 0f;
-
-        Sequence seq = DOTween.Sequence();
-        seq.Append(cg.DOFade(1f, 0.3f).SetEase(Ease.OutQuad));
-        seq.AppendInterval(3.4f);
-        seq.Append(cg.DOFade(0f, 0.3f).SetEase(Ease.InQuad));
-        seq.OnComplete(() => {
-            if (levelUpText != null) levelUpText.gameObject.SetActive(false);
-        });
+        if (hasUI && cg != null)
+        {
+            levelUpText.DOKill();
+            cg.DOFade(0f, 0.5f).SetEase(Ease.InQuad).OnComplete(() => {
+                if (levelUpText != null) levelUpText.gameObject.SetActive(false);
+            });
+        }
     }
 
     // Berry 회복량: 최대HP의 3%

@@ -1079,16 +1079,16 @@ MonoBehaviour:
   hpSlider: {fileID: 529900504}
   hpText: {fileID: 653140202}
   bossAttackInfoText: {fileID: 275876072}
-  bossPanelGroundImage: {fileID: 0}
+  bossPanelGroundImage: {fileID: 178796532}
   baseHP: 250
   hpIncreasePerLevel: 250
   baseTurnInterval: 6
   minTurnInterval: 4
   baseDamage: 28
   atkGrowthPerStep: 3
-  atkGrowthInterval: 2
-  bossAtkMaxTotal: 90
-  clearModeFixedAtk: 60
+  atkGrowthInterval: 4
+  bossAtkMaxTotal: 75
+  clearModeFixedAtk: 70
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1

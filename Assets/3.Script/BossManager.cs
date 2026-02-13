@@ -85,11 +85,13 @@ public class BossManager : MonoBehaviour
     // ⭐ v6.3: Guard 해제 후 HP bar 빛나는 효과
     private Sequence hpBarGlowSequence;
     private BossBattleSystem bossBattleSystem;
+    private PlayerHPSystem playerHPSystem;
 
     void Start()
     {
         gameManager = FindAnyObjectByType<GameManager>();
         bossBattleSystem = FindAnyObjectByType<BossBattleSystem>();
+        playerHPSystem = FindAnyObjectByType<PlayerHPSystem>();
 
         if (bossPanelGroundImage != null && !groundColorSaved)
         {
@@ -513,6 +515,13 @@ public class BossManager : MonoBehaviour
             fadeSeq.Append(bossImageArea.DOFade(0f, 0.5f).SetEase(Ease.InQuad));
             fadeSeq.Join(bossImageArea.transform.DOScale(0.8f, 0.5f).SetEase(Ease.InBack));
             yield return fadeSeq.WaitForCompletion();
+        }
+
+        // ⭐ v6.4: Level UP 룰렛 완료 대기
+        if (playerHPSystem != null)
+        {
+            while (playerHPSystem.IsLevelUpAnimating)
+                yield return null;
         }
 
         yield return new WaitForSeconds(bossSpawnDelay);
