@@ -207,7 +207,7 @@ public class GridManager : MonoBehaviour
                                 berryMergeCount++;
                                 hadBerryMerge = true;
 
-                                int bonusHeal = playerHP.BerryMergeBaseHeal * playerHP.BerryMergeHealMultiplier;
+                                int bonusHeal = playerHP.GetBerryHealAmount();
                                 playerHP.AddHeat(bonusHeal);
 
                                 // Berry merge projectile
@@ -584,6 +584,25 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    // ⭐ v6.4: Gun 모드 시 큰 타일 2개 어둡게 투명하게
+    public void DimProtectedTiles(bool dim)
+    {
+        var topTwo = GetTopTwoTileValues();
+        foreach (var tile in activeTiles)
+        {
+            if (tile == null) continue;
+            bool isProtected = (tile.value == topTwo.Item1 || tile.value == topTwo.Item2);
+            Image img = tile.GetComponent<Image>();
+            if (img != null)
+            {
+                if (dim && isProtected)
+                    img.color = new Color(img.color.r, img.color.g, img.color.b, 0.4f);
+                else
+                    img.color = new Color(img.color.r, img.color.g, img.color.b, 1f);
+            }
+        }
+    }
+
     // === 점수 UI ===
     void UpdateScoreUI()
     {
@@ -602,6 +621,9 @@ public class GridManager : MonoBehaviour
     }
 
     // === Turn/Stage UI ===
+    // ⭐ v6.4: 이전 스테이지 추적 (DOTween 효과용)
+    private int lastDisplayedStage = -1;
+
     public void UpdateTurnUI()
     {
         if (turnText != null)
@@ -622,11 +644,38 @@ public class GridManager : MonoBehaviour
             else if (currentStage <= 40)
             {
                 stageText.text = $"Challenge\n{currentStage}/40";
+
+                // ⭐ v6.4: 스테이지 변경 시 DOTween 효과 (Clear 이후는 제외)
+                if (currentStage != lastDisplayedStage && lastDisplayedStage >= 0)
+                {
+                    RectTransform stageRect = stageText.GetComponent<RectTransform>();
+                    stageRect.DOKill();
+                    stageText.DOKill();
+
+                    float originalY = stageRect.anchoredPosition.y;
+                    Color originalColor = stageText.color;
+
+                    Sequence seq = DOTween.Sequence();
+                    // 위로 살짝 올람
+                    seq.Append(stageRect.DOAnchorPosY(originalY + 10f, 0.15f).SetEase(Ease.OutQuad));
+                    // 주황색으로 변경
+                    seq.Join(stageText.DOColor(new Color(1f, 0.65f, 0.1f), 0.15f));
+                    // 원래 자리로 복귀
+                    seq.Append(stageRect.DOAnchorPosY(originalY, 0.2f).SetEase(Ease.InQuad));
+                    // 원래 색상으로 복귀
+                    seq.Join(stageText.DOColor(originalColor, 0.3f));
+                    seq.OnComplete(() => {
+                        if (stageRect != null) stageRect.anchoredPosition = new Vector2(stageRect.anchoredPosition.x, originalY);
+                        if (stageText != null) stageText.color = originalColor;
+                    });
+                }
             }
             else
             {
                 stageText.text = "Endless";
             }
+
+            lastDisplayedStage = currentStage;
         }
 
         // ⭐ v5.0: 무한대 보스일 때 Enemy bar 색상

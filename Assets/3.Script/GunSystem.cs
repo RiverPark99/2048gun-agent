@@ -32,6 +32,9 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private Image freezeImage1;
     [SerializeField] private Image freezeImage2;
 
+    [Header("Gun Mode Visual")]
+    [SerializeField] private Image gunModeOverlayImage;
+
     [Header("References")]
     [SerializeField] private GridManager gridManager;
     [SerializeField] private PlayerHPSystem playerHP;
@@ -115,6 +118,7 @@ public class GunSystem : MonoBehaviour
         }
 
         if (gunButton != null) gunButton.onClick.AddListener(ToggleGunMode);
+        if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         UpdateGunUI();
     }
 
@@ -132,6 +136,7 @@ public class GunSystem : MonoBehaviour
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
+        if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
 
         RestoreProgressBarColor();
         UpdateGunUI();
@@ -476,14 +481,19 @@ public class GunSystem : MonoBehaviour
 
         isGunMode = true;
         if (gunModeGuideText != null) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; }
+        if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(true);
         gridManager.UpdateTileBorders();
+        // ⭐ v6.4: 큰 타일 2개 어둡게 투명하게
+        gridManager.DimProtectedTiles(true);
         UpdateGunUI();
     }
 
     void ExitGunMode()
     {
         isGunMode = false;
+        if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         gridManager.ClearAllTileBorders();
+        gridManager.DimProtectedTiles(false);
         UpdateGuideText();
         UpdateGunUI();
     }
@@ -685,9 +695,15 @@ public class GunSystem : MonoBehaviour
         if (gunModeGuideText == null) return;
         if (isGunMode) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; return; }
         gunModeGuideText.gameObject.SetActive(true);
-        if (isFeverMode) gunModeGuideText.text = "Freeze\nGun!";
+        if (isFeverMode)
+        {
+            if (feverBulletUsed)
+                gunModeGuideText.text = "Cool\nDown";
+            else
+                gunModeGuideText.text = "Freeze\nGun!";
+        }
         else if (hasBullet) gunModeGuideText.text = "Gun\nReady";
-        else gunModeGuideText.text = "Gun";
+        else gunModeGuideText.text = "";
     }
 
     // === Gun Button 애니메이션 ===

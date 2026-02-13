@@ -182,12 +182,10 @@ public class BossBattleSystem : MonoBehaviour
     public void OnBossDefeated()
     {
         int currentStage = bossManager != null ? bossManager.GetBossLevel() : 0;
+        bool isClear = bossManager != null && bossManager.IsClearMode();
 
-        // ⭐ v6.3: 40번째부터 보스 잡아도 Player 체력 안 오름
-        if (currentStage < 40)
-            playerHP.OnBossDefeated(currentStage);
-        else
-            Debug.Log($"Stage {currentStage}: 체력 증가 없음 (40+)");
+        // 보스 처치 보상 (Clear 모드에서는 성장 없음)
+        playerHP.OnBossDefeated(currentStage, isClear);
 
         if (gunSystem.IsFeverMode)
             StartCoroutine(gunSystem.SyncFreezeWithBossRespawn());

@@ -23,6 +23,9 @@ public class PlayerHPSystem : MonoBehaviour
     [SerializeField] private int berryMergeHealMultiplier = 4;
     [SerializeField] private int berryMergeBaseHeal = 5;
 
+    [Header("Level Up UI")]
+    [SerializeField] private TextMeshProUGUI levelUpText;
+
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
 
@@ -35,7 +38,6 @@ public class PlayerHPSystem : MonoBehaviour
 
     // HP 상태
     private int currentHeat = 100;
-    private const int BOSS_DEFEAT_MAX_HEAT_INCREASE = 1;
 
     // UI 애니메이션 상태
     private float heatTextOriginalY = 0f;
@@ -125,26 +127,54 @@ public class PlayerHPSystem : MonoBehaviour
     }
 
     // === 보스 처치 보상 ===
-    public void OnBossDefeated(int bossLevel)
+    public void OnBossDefeated(int bossLevel, bool isClearMode)
     {
-        int heatIncrease = BOSS_DEFEAT_MAX_HEAT_INCREASE;
-        if (bossLevel == 39)
-        {
-            heatIncrease = 2;
-            Debug.Log("⭐ Stage 39 클리어! 최대 체력 +2!");
-        }
+        // Challenge Clear 상황에서는 성장 없음
+        if (isClearMode) return;
 
+        int heatIncrease = Random.Range(1, 7); // 1~6 랜덤
         maxHeat += heatIncrease;
-        Debug.Log($"보스 처치! 최대 히트 +{heatIncrease}: {maxHeat}");
+        Debug.Log($"보스 처치! Max HP +{heatIncrease}: {maxHeat}");
 
+        // 최대 체력 회복
         int oldHeat = currentHeat;
         currentHeat = maxHeat;
-
         UpdateHeatUI();
 
         int recovery = currentHeat - oldHeat;
         if (recovery > 0)
             ShowHeatChangeText(recovery);
+
+        // Level UP! 텍스트 표시
+        ShowLevelUpText(heatIncrease);
+    }
+
+    void ShowLevelUpText(int hpIncrease)
+    {
+        if (levelUpText == null) return;
+
+        levelUpText.text = $"Level UP! Max HP+{hpIncrease}";
+        levelUpText.gameObject.SetActive(true);
+
+        // DOTween: 페이드인 → 4초 표시 → 페이드아웃
+        levelUpText.DOKill();
+        CanvasGroup cg = levelUpText.GetComponent<CanvasGroup>();
+        if (cg == null) cg = levelUpText.gameObject.AddComponent<CanvasGroup>();
+        cg.alpha = 0f;
+
+        Sequence seq = DOTween.Sequence();
+        seq.Append(cg.DOFade(1f, 0.3f).SetEase(Ease.OutQuad));
+        seq.AppendInterval(3.4f);
+        seq.Append(cg.DOFade(0f, 0.3f).SetEase(Ease.InQuad));
+        seq.OnComplete(() => {
+            if (levelUpText != null) levelUpText.gameObject.SetActive(false);
+        });
+    }
+
+    // Berry 회복량: 최대HP의 3%
+    public int GetBerryHealAmount()
+    {
+        return Mathf.FloorToInt(maxHeat * 0.03f);
     }
 
     // === Heat UI ===

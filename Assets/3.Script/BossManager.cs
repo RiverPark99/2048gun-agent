@@ -25,8 +25,13 @@ public class BossManager : MonoBehaviour
     [Header("보스 공격 시스템")]
     [SerializeField] private int baseTurnInterval = 8;
     [SerializeField] private int minTurnInterval = 3;
+
+    [Header("⭐ v6.4: Enemy ATK 성장 설정")]
     [SerializeField] private int baseDamage = 28;
-    [SerializeField] private int damageThreshold = 40;
+    [SerializeField] private int atkGrowthPerStep = 3;        // 일반 몬스터 고정 성장치
+    [SerializeField] private int atkGrowthInterval = 2;       // 몇 Challenge마다 오르는지
+    [SerializeField] private int bossAtkMaxTotal = 90;        // boss 공격력 한계치 (move 점진적 증가 포함)
+    [SerializeField] private int clearModeFixedAtk = 60;      // Clear 이후 적 공격력 고정치
 
     private int currentTurnInterval;
     private int currentTurnCount = 0;
@@ -65,7 +70,6 @@ public class BossManager : MonoBehaviour
     private static readonly Color ICE_BLUE = new Color(0.5f, 0.8f, 1f);
 
     private int infiniteBossExtraDamage = 0;
-    private const int MAX_TOTAL_DAMAGE = 50;
     private bool pendingDamageIncrease = false;
 
     // Guard 모드
@@ -109,14 +113,8 @@ public class BossManager : MonoBehaviour
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
-        int tempDamage = baseDamage + (bossLevel - 1);
-        if (tempDamage <= damageThreshold)
-            currentBossDamage = tempDamage;
-        else
-        {
-            int levelsOverThreshold = bossLevel - (damageThreshold - baseDamage + 1);
-            currentBossDamage = damageThreshold + levelsOverThreshold / 5;
-        }
+        // ⭐ v6.4: ATK 성장
+        currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
         infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
@@ -127,10 +125,15 @@ public class BossManager : MonoBehaviour
             StartGuardColorAnimation();
         }
 
-        // ⭐ v6.3: 41번째부터 Enemy 검정 + ATK 50 고정
-        if (bossLevel >= 41 && !isClearMode && !isGuardMode)
+        // Clear 모드: 고정 공격력
+        if (isClearMode)
         {
-            currentBossDamage = 50;
+            currentBossDamage = clearModeFixedAtk;
+            infiniteBossExtraDamage = 0;
+        }
+        else if (bossLevel >= 41 && !isGuardMode)
+        {
+            currentBossDamage = clearModeFixedAtk;
             infiniteBossExtraDamage = 0;
             ApplyBlackColor();
         }
@@ -221,7 +224,7 @@ public class BossManager : MonoBehaviour
     {
         if (bossLevel < 40) return;
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
-        if (currentTotal >= MAX_TOTAL_DAMAGE)
+        if (currentTotal >= bossAtkMaxTotal)
         {
             if (isGuardMode) ExitGuardMode();
             return;
@@ -237,17 +240,16 @@ public class BossManager : MonoBehaviour
     private void ApplyDamageIncrease()
     {
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
-        if (currentTotal >= MAX_TOTAL_DAMAGE)
+        if (currentTotal >= bossAtkMaxTotal)
         {
             if (isGuardMode) ExitGuardMode();
             return;
         }
         infiniteBossExtraDamage++;
-        Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{MAX_TOTAL_DAMAGE}");
+        Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{bossAtkMaxTotal}");
         UpdateBossAttackUI();
-        // ⭐ v6.3: 주황색 플래시
         FlashAttackTextOrange();
-        if (currentBossDamage + infiniteBossExtraDamage >= MAX_TOTAL_DAMAGE && isGuardMode)
+        if (currentBossDamage + infiniteBossExtraDamage >= bossAtkMaxTotal && isGuardMode)
             ExitGuardMode();
     }
 
@@ -273,7 +275,7 @@ public class BossManager : MonoBehaviour
 
     private int GetEffectiveDamage()
     {
-        return Mathf.Min(currentBossDamage + infiniteBossExtraDamage, MAX_TOTAL_DAMAGE);
+        return Mathf.Min(currentBossDamage + infiniteBossExtraDamage, bossAtkMaxTotal);
     }
 
     public void TakeDamage(long damage)
@@ -529,11 +531,7 @@ public class BossManager : MonoBehaviour
 
             currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
-            int tempDamage = baseDamage + (bossLevel - 1);
-            if (tempDamage <= damageThreshold)
-                currentBossDamage = tempDamage;
-            else
-                currentBossDamage = damageThreshold + (bossLevel - (damageThreshold - baseDamage + 1)) / 5;
+            currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
             if (bossLevel >= 40 && !isClearMode)
             {
@@ -541,10 +539,9 @@ public class BossManager : MonoBehaviour
                 StartGuardColorAnimation();
             }
 
-            // ⭐ v6.3: 41번째부터 검정 + ATK 50
             if (bossLevel >= 41 && !isClearMode && !isGuardMode)
             {
-                currentBossDamage = 50;
+                currentBossDamage = clearModeFixedAtk;
                 infiniteBossExtraDamage = 0;
                 ApplyBlackColor();
             }
@@ -591,9 +588,9 @@ public class BossManager : MonoBehaviour
         currentHP = maxHP;
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt(38 * 0.2f));
 
-        int tempDamage = baseDamage + 38;
-        if (tempDamage <= damageThreshold) currentBossDamage = tempDamage;
-        else currentBossDamage = damageThreshold + (39 - (damageThreshold - baseDamage + 1)) / 5;
+        // Clear 모드: 고정 공격력
+        currentBossDamage = clearModeFixedAtk;
+        infiniteBossExtraDamage = 0;
     }
 
     public void ResetBoss()
