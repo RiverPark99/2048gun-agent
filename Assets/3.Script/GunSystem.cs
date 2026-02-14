@@ -582,6 +582,8 @@ public class GunSystem : MonoBehaviour
             hasBullet = (mergeGauge >= GAUGE_FOR_BULLET);
         }
 
+        // ⭐ v6.4: Gun 발사 후 긴급 깜빡임 즉시 정지
+        StopEmergencyFlash();
         ExitGunMode();
         if (!gridManager.CanMove() && !hasBullet && !isFeverMode) bossBattle.GameOver();
     }
@@ -786,6 +788,13 @@ public class GunSystem : MonoBehaviour
     {
         if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
         isEmergencyFlashing = false;
+        // ⭐ v6.4: Kill 후 중간 alpha에서 멈출 수 있으므로 강제 복원
+        if (gunButtonImage != null)
+        {
+            Color c = gunButtonImage.color;
+            c.a = 1f;
+            gunButtonImage.color = c;
+        }
     }
 
     // === Cleanup ===

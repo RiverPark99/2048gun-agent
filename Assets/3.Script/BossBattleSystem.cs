@@ -35,6 +35,10 @@ public class BossBattleSystem : MonoBehaviour
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
 
+    [Header("Challenge Clear UI")]
+    [SerializeField] private GameObject challengeClearPanel;
+    [SerializeField] private TextMeshProUGUI clearStatsText;
+
     [Header("References")]
     [SerializeField] private GridManager gridManager;
     [SerializeField] private GunSystem gunSystem;
@@ -68,6 +72,8 @@ public class BossBattleSystem : MonoBehaviour
 
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
+        if (challengeClearPanel != null)
+            challengeClearPanel.SetActive(false);
     }
 
     public void ResetState()
@@ -77,6 +83,7 @@ public class BossBattleSystem : MonoBehaviour
         isBossTransitioning = false;
         isChallengeClearShown = false;
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (challengeClearPanel != null) challengeClearPanel.SetActive(false);
     }
 
     public ProjectileManager GetProjectileManager() { return projectileManager; }
@@ -286,79 +293,28 @@ public class BossBattleSystem : MonoBehaviour
     public void ShowChallengeClearUI()
     {
         isChallengeClearShown = true;
-        long clearScore = gridManager != null ? gridManager.Score : 0;
-        int clearTurn = gridManager != null ? gridManager.CurrentTurn : 0;
-        CreateChallengeClearPanel(clearScore, clearTurn);
+
+        // ⭐ v6.4: 하이어라키 ChallengeClearPanel 활성화 + Stats 텍스트 갱신
+        if (challengeClearPanel != null)
+        {
+            challengeClearPanel.SetActive(true);
+
+            // 페이드인
+            CanvasGroup cg = challengeClearPanel.GetComponent<CanvasGroup>();
+            if (cg == null) cg = challengeClearPanel.AddComponent<CanvasGroup>();
+            cg.alpha = 0f;
+            cg.DOFade(1f, 0.5f).SetEase(Ease.InOutQuad);
+        }
+
+        if (clearStatsText != null)
+        {
+            long clearScore = gridManager != null ? gridManager.Score : 0;
+            int clearTurn = gridManager != null ? gridManager.CurrentTurn : 0;
+            clearStatsText.text = $"Score: {clearScore:N0}\nTurn: {clearTurn}";
+        }
+
         SpawnClearFirework();
         Debug.Log("🎉 Challenge Clear UI 표시!");
-    }
-
-    void CreateChallengeClearPanel(long clearScore, int clearTurn)
-    {
-        GameObject existing = GameObject.Find("ChallengeClearPanel");
-        if (existing != null) Destroy(existing);
-
-        Canvas canvas = FindAnyObjectByType<Canvas>();
-        if (canvas == null) return;
-
-        GameObject panelObj = new GameObject("ChallengeClearPanel");
-        panelObj.transform.SetParent(canvas.transform, false);
-        RectTransform panelRect = panelObj.AddComponent<RectTransform>();
-        panelRect.anchorMin = Vector2.zero; panelRect.anchorMax = Vector2.one; panelRect.sizeDelta = Vector2.zero;
-
-        Image panelImage = panelObj.AddComponent<Image>();
-        panelImage.color = new Color(0f, 0f, 0f, 0f);
-        panelImage.DOFade(0.7f, 0.5f).SetEase(Ease.InOutQuad);
-
-        GameObject titleObj = new GameObject("ClearTitle");
-        titleObj.transform.SetParent(panelObj.transform, false);
-        RectTransform titleRect = titleObj.AddComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.5f, 0.65f); titleRect.anchorMax = new Vector2(0.5f, 0.65f);
-        titleRect.sizeDelta = new Vector2(600f, 120f);
-
-        TextMeshProUGUI titleText = titleObj.AddComponent<TextMeshProUGUI>();
-        titleText.text = "Challenge\nClear!";
-        titleText.fontSize = 60; titleText.alignment = TextAlignmentOptions.Center;
-        titleText.color = new Color(1f, 0.84f, 0f); titleText.fontStyle = FontStyles.Bold;
-
-        // ⭐ v6.4: Score / Turn 표시
-        GameObject statsObj = new GameObject("ClearStats");
-        statsObj.transform.SetParent(panelObj.transform, false);
-        RectTransform statsRect = statsObj.AddComponent<RectTransform>();
-        statsRect.anchorMin = new Vector2(0.5f, 0.53f); statsRect.anchorMax = new Vector2(0.5f, 0.53f);
-        statsRect.sizeDelta = new Vector2(500f, 80f);
-
-        TextMeshProUGUI statsText = statsObj.AddComponent<TextMeshProUGUI>();
-        statsText.text = $"Score: {clearScore:N0}\nTurn: {clearTurn}";
-        statsText.fontSize = 36; statsText.alignment = TextAlignmentOptions.Center;
-        statsText.color = new Color(0.9f, 0.9f, 0.9f);
-
-        CreateClearButton(panelObj.transform, "ResumeBtn", "Resume", new Vector2(0.5f, 0.42f), OnClearResume);
-        CreateClearButton(panelObj.transform, "GoToTitleBtn", "Title", new Vector2(0.5f, 0.32f), OnClearGoToTitle);
-        CreateClearButton(panelObj.transform, "RestartBtn", "Restart", new Vector2(0.5f, 0.22f), OnClearRestart);
-    }
-
-    void CreateClearButton(Transform parent, string name, string label, Vector2 anchor, UnityEngine.Events.UnityAction onClick)
-    {
-        GameObject btnObj = new GameObject(name);
-        btnObj.transform.SetParent(parent, false);
-        RectTransform btnRect = btnObj.AddComponent<RectTransform>();
-        btnRect.anchorMin = anchor; btnRect.anchorMax = anchor; btnRect.sizeDelta = new Vector2(300f, 70f);
-
-        Image btnImage = btnObj.AddComponent<Image>();
-        btnImage.color = new Color(0.2f, 0.2f, 0.3f, 0.9f);
-
-        Button btn = btnObj.AddComponent<Button>();
-        btn.targetGraphic = btnImage;
-        btn.onClick.AddListener(onClick);
-
-        GameObject textObj = new GameObject("Text");
-        textObj.transform.SetParent(btnObj.transform, false);
-        RectTransform textRect = textObj.AddComponent<RectTransform>();
-        textRect.anchorMin = Vector2.zero; textRect.anchorMax = Vector2.one; textRect.sizeDelta = Vector2.zero;
-
-        TextMeshProUGUI btnText = textObj.AddComponent<TextMeshProUGUI>();
-        btnText.text = label; btnText.fontSize = 36; btnText.alignment = TextAlignmentOptions.Center; btnText.color = Color.white;
     }
 
     void SpawnClearFirework()
@@ -404,26 +360,24 @@ public class BossBattleSystem : MonoBehaviour
         Destroy(fwObj, 2f);
     }
 
-    void OnClearResume()
+    // ⭐ v6.4: 하이어라키 패널 숨김 (public - Button OnClick에서 호출 가능)
+    public void OnClearResume()
     {
         isChallengeClearShown = false;
-        GameObject panel = GameObject.Find("ChallengeClearPanel");
-        if (panel != null) Destroy(panel);
+        if (challengeClearPanel != null) challengeClearPanel.SetActive(false);
     }
 
-    void OnClearGoToTitle()
+    public void OnClearGoToTitle()
     {
         isChallengeClearShown = false;
-        GameObject panel = GameObject.Find("ChallengeClearPanel");
-        if (panel != null) Destroy(panel);
+        if (challengeClearPanel != null) challengeClearPanel.SetActive(false);
         RestartGame();
     }
 
-    void OnClearRestart()
+    public void OnClearRestart()
     {
         isChallengeClearShown = false;
-        GameObject panel = GameObject.Find("ChallengeClearPanel");
-        if (panel != null) Destroy(panel);
+        if (challengeClearPanel != null) challengeClearPanel.SetActive(false);
         RestartGame();
     }
 }

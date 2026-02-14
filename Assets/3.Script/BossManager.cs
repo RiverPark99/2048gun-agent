@@ -508,8 +508,8 @@ public class BossManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        // ⭐ v6.4: Challenge Clear는 41번째(Clear 모드 첫 보스) 처치 시 표시
-        bool shouldShowClear = (bossLevel == 41 && isClearMode);
+        // ⭐ v6.4: Guard 보스(40) 처치 시 Challenge Clear
+        bool shouldShowClear = (bossLevel == 40 && isClearMode && !isGuardMode);
 
         if (gameManager != null)
         {
@@ -609,7 +609,8 @@ public class BossManager : MonoBehaviour
         if (stage39SpriteIndex >= 0 && stage39SpriteIndex < bossSprites.Count)
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
 
-        ApplyOrangeColor();
+        // ⭐ v6.4: Clear 모드 보스는 검회색
+        ApplyDarkGrayColor();
         maxHP = 2147483647;
         currentHP = maxHP;
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt(38 * 0.2f));

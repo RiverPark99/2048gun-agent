@@ -637,7 +637,7 @@ public class GridManager : MonoBehaviour
         {
             int currentStage = bossManager.GetBossLevel();
 
-            if (bossManager.IsClearMode() && bossManager.GetBossLevel() > 41)
+            if (bossManager.IsClearMode() && bossManager.GetBossLevel() >= 41)
             {
                 stageText.text = "Challenge\nClear";
             }
