@@ -369,8 +369,8 @@ public class GunSystem : MonoBehaviour
         while (bossBattle.IsBossTransitioning)
             yield return null;
 
-        // ⭐ v6.4: Freeze gun 레이저 딜레이 6.4초
-        yield return new WaitForSeconds(6.4f);
+        // ⭐ v6.4: Freeze gun 레이저 딜레이 5.4초
+        yield return new WaitForSeconds(5.4f);
 
         if (!isFeverMode) yield break;
 
