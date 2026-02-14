@@ -134,7 +134,7 @@ public class BossManager : MonoBehaviour
         {
             currentBossDamage = clearModeFixedAtk;
             infiniteBossExtraDamage = 0;
-            ApplyDarkGrayColor();
+            ApplyRedColor();
         }
 
         // ⭐ v6.4: 비네트에 적 ATK 전달
@@ -416,11 +416,24 @@ public class BossManager : MonoBehaviour
         if (bossImageArea != null)
         {
             Vector3 originalPos = bossImageArea.transform.localPosition;
+
+            // ⭐ v6.4: Player HP bar 위치까지 돌진 공격 (아래로 확 내려갔다 올라오는 박치기 느낌)
+            float rushDistance = 400f; // 아래로 돌진할 거리 (local Y)
+            if (playerHPSystem != null && playerHPSystem.HeatText != null)
+            {
+                // 보스 위치와 HP bar 위치의 Y 차이 계산 (local space)
+                Vector3 hpBarWorldPos = playerHPSystem.HeatText.transform.position;
+                Vector3 hpBarLocalPos = bossImageArea.transform.parent.InverseTransformPoint(hpBarWorldPos);
+                rushDistance = Mathf.Abs(originalPos.y - hpBarLocalPos.y);
+            }
+
             Sequence attackSeq = DOTween.Sequence();
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x - 50f, attackMotionDuration * 0.25f).SetEase(Ease.OutQuad));
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveX(originalPos.x, attackMotionDuration * 0.55f).SetEase(Ease.OutBounce));
+            // 빠르게 아래로 돌진
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveY(originalPos.y - rushDistance, attackMotionDuration * 0.35f).SetEase(Ease.InQuad));
+            // 원래 자리로 복귀
+            attackSeq.Append(bossImageArea.transform.DOLocalMoveY(originalPos.y, attackMotionDuration * 0.65f).SetEase(Ease.OutBack));
             yield return attackSeq.WaitForCompletion();
-            // ⭐ v6.4: 위치 강제 복원 (좌측 쓸림 방지)
+            // ⭐ 위치 강제 복원
             bossImageArea.transform.localPosition = originalPos;
         }
         else
@@ -582,7 +595,7 @@ public class BossManager : MonoBehaviour
             {
                 currentBossDamage = clearModeFixedAtk;
                 infiniteBossExtraDamage = 0;
-                ApplyDarkGrayColor();
+                ApplyRedColor();
             }
         }
 
@@ -622,8 +635,8 @@ public class BossManager : MonoBehaviour
         if (stage39SpriteIndex >= 0 && stage39SpriteIndex < bossSprites.Count)
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
 
-        // ⭐ v6.4: Clear 모드 보스는 검회색 + HP bar 붉은색 고정
-        ApplyDarkGrayColor();
+        // ⭐ v6.4: Clear 모드 보스는 붉은색 + HP bar 붉은색 고정
+        ApplyRedColor();
         SetHPBarRedFixed();
         maxHP = 2147483647;
         currentHP = maxHP;
@@ -718,8 +731,8 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.4: 41번째부터 Enemy 검회색이 아니고 붉은색
-    void ApplyDarkGrayColor()
+    // ⭐ v6.4: Clear 모드 적 붉은색
+    void ApplyRedColor()
     {
         if (bossImageArea == null) return;
         Material mat = new Material(Shader.Find("UI/Default"));
