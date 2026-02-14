@@ -205,6 +205,18 @@ public class BossManager : MonoBehaviour
         if (hpBarGlowSequence != null) { hpBarGlowSequence.Kill(); hpBarGlowSequence = null; }
     }
 
+    // ⭐ v6.4: HP bar 붉은색 고정 (Clear 모드 적 공통)
+    void SetHPBarRedFixed()
+    {
+        if (hpSlider == null) return;
+        Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
+        if (fillImage != null)
+        {
+            fillImage.DOKill();
+            fillImage.color = new Color(0.9f, 0.2f, 0.15f);
+        }
+    }
+
     public void ExitGuardMode()
     {
         if (!isGuardMode) return;
@@ -213,8 +225,9 @@ public class BossManager : MonoBehaviour
         StopGuardColorAnimation();
         ApplyOrangeColor();
 
-        // ⭐ v6.3: HP bar 빛나는 효과 시작
-        StartHPBarGlowAnimation();
+        // ⭐ v6.4: Guard 해제 → glow 종료 + HP bar 붉은색 고정
+        StopHPBarGlowAnimation();
+        SetHPBarRedFixed();
 
         maxHP = 2147483647;
         currentHP = maxHP;
@@ -609,8 +622,9 @@ public class BossManager : MonoBehaviour
         if (stage39SpriteIndex >= 0 && stage39SpriteIndex < bossSprites.Count)
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
 
-        // ⭐ v6.4: Clear 모드 보스는 검회색
+        // ⭐ v6.4: Clear 모드 보스는 검회색 + HP bar 붉은색 고정
         ApplyDarkGrayColor();
+        SetHPBarRedFixed();
         maxHP = 2147483647;
         currentHP = maxHP;
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt(38 * 0.2f));
@@ -704,12 +718,12 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.4: 41번째부터 Enemy 검회색
+    // ⭐ v6.4: 41번째부터 Enemy 검회색이 아니고 붉은색
     void ApplyDarkGrayColor()
     {
         if (bossImageArea == null) return;
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", new Color(0.25f, 0.25f, 0.25f, 1.0f));
+        mat.SetColor("_Color", new Color(0.9f, 0.2f, 0.15f, 1.0f));
         bossImageArea.material = mat;
     }
 
