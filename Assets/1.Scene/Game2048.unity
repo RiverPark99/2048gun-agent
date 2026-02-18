@@ -242,7 +242,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &71267758
 RectTransform:
   m_ObjectHideFlags: 0
@@ -599,8 +599,8 @@ Material:
     - _TextureHeight: 1024
     - _TextureWidth: 1024
     - _UnderlayDilate: 0
-    - _UnderlayOffsetX: 1
-    - _UnderlayOffsetY: -1
+    - _UnderlayOffsetX: 0.4
+    - _UnderlayOffsetY: -0.4
     - _UnderlaySoftness: 0
     - _VertexOffsetX: 0
     - _VertexOffsetY: 0
@@ -741,6 +741,7 @@ MonoBehaviour:
   playerHP: {fileID: 159172558}
   bossBattle: {fileID: 159172557}
   bossManager: {fileID: 178796534}
+  swipeThreshold: 50
 --- !u!114 &159172557
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2327,8 +2328,8 @@ MonoBehaviour:
   - {fileID: 146234537}
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278214399
-  m_fontColor: {r: 1, g: 0.36715755, b: 0, a: 1}
+    rgba: 4280493093
+  m_fontColor: {r: 0.14509805, g: 0.14117648, b: 0.13725491, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

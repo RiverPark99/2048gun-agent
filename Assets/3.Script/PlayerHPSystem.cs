@@ -52,21 +52,26 @@ public class PlayerHPSystem : MonoBehaviour
         public LevelUpEntry(int v, Color c, string l) { value = v; color = c; label = l; }
     }
 
+    // ⭐ v6.4: 등급별 색상 상수
+    private static readonly Color COLOR_BRONZE = new Color(0.80f, 0.50f, 0.20f);  // 동
+    private static readonly Color COLOR_SILVER = new Color(0.75f, 0.75f, 0.80f);  // 은
+    private static readonly Color COLOR_GOLD   = new Color(1.00f, 0.84f, 0.00f);  // 금
+
     private static readonly LevelUpEntry[] allLevelUpEntries = {
-        // 60% 테이블 (2~5)
-        new LevelUpEntry(2,  new Color(0.4f, 0.8f, 1f),   "Level UP! MaxHP +2"),
-        new LevelUpEntry(3,  new Color(0.4f, 1f, 0.6f),   "Level UP! MaxHP +3"),
-        new LevelUpEntry(4,  new Color(1f, 0.85f, 0.3f),  "Level UP! MaxHP +4"),
-        new LevelUpEntry(5,  new Color(1f, 0.6f, 0.3f),   "Level UP! MaxHP +5"),
-        // 39% 테이블 (10~15)
-        new LevelUpEntry(10, new Color(0.3f, 1f, 0.3f),   "Level UP! MaxHP +10"),
-        new LevelUpEntry(11, new Color(0.5f, 1f, 0.4f),   "Level UP! MaxHP +11"),
-        new LevelUpEntry(12, new Color(0.6f, 1f, 0.5f),   "Level UP! MaxHP +12"),
-        new LevelUpEntry(13, new Color(0.7f, 1f, 0.3f),   "Level UP! MaxHP +13"),
-        new LevelUpEntry(14, new Color(0.85f, 1f, 0.2f),  "Level UP! MaxHP +14"),
-        new LevelUpEntry(15, new Color(1f, 1f, 0.2f),     "Level UP! MaxHP +15"),
-        // 1% (40)
-        new LevelUpEntry(40, new Color(1f, 0.35f, 0.55f), "Level UP! MaxHP +40"),
+        // 60% 테이블 (2~5) - 동색
+        new LevelUpEntry(2,  COLOR_BRONZE, "Level UP! MaxHP +2"),
+        new LevelUpEntry(3,  COLOR_BRONZE, "Level UP! MaxHP +3"),
+        new LevelUpEntry(4,  COLOR_BRONZE, "Level UP! MaxHP +4"),
+        new LevelUpEntry(5,  COLOR_BRONZE, "Level UP! MaxHP +5"),
+        // 39% 테이블 (10~15) - 은색
+        new LevelUpEntry(10, COLOR_SILVER, "Level UP! MaxHP +10"),
+        new LevelUpEntry(11, COLOR_SILVER, "Level UP! MaxHP +11"),
+        new LevelUpEntry(12, COLOR_SILVER, "Level UP! MaxHP +12"),
+        new LevelUpEntry(13, COLOR_SILVER, "Level UP! MaxHP +13"),
+        new LevelUpEntry(14, COLOR_SILVER, "Level UP! MaxHP +14"),
+        new LevelUpEntry(15, COLOR_SILVER, "Level UP! MaxHP +15"),
+        // 1% (40) - 금색
+        new LevelUpEntry(40, COLOR_GOLD,   "Level UP! MaxHP +40"),
     };
 
     // UI 애니메이션 상태
@@ -231,11 +236,17 @@ public class PlayerHPSystem : MonoBehaviour
             levelUpText.text = finalEntry.label;
             levelUpText.color = finalEntry.color;
 
-            // 픽스 시 텍스트 스케일 펄스
+            // ⭐ v6.4: 등급별 띠용 효과 (동 < 은 < 금)
+            float popScale;
+            float popDuration;
+            if (finalIncrease >= 40)      { popScale = 1.8f; popDuration = 0.35f; }
+            else if (finalIncrease >= 10) { popScale = 1.5f; popDuration = 0.28f; }
+            else                          { popScale = 1.3f; popDuration = 0.20f; }
+
             RectTransform tr = levelUpText.GetComponent<RectTransform>();
             tr.DOKill();
-            tr.localScale = Vector3.one * 1.3f;
-            tr.DOScale(1f, 0.2f).SetEase(Ease.OutBack);
+            tr.localScale = Vector3.one * popScale;
+            tr.DOScale(1f, popDuration).SetEase(Ease.OutBack);
         }
 
         // === Phase 3: 실제 HP 증가 + 회복 ===

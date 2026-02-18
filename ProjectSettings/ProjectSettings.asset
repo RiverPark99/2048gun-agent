@@ -849,8 +849,8 @@ PlayerSettings:
   editorAssembliesCompatibilityLevel: 1
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: 2048_gun&agent
-  metroPackageVersion: 
+  metroPackageName: 2048gunagent
+  metroPackageVersion: 1.0.0.0
   metroCertificatePath: 
   metroCertificatePassword: 
   metroCertificateSubject: 
@@ -858,7 +858,7 @@ PlayerSettings:
   metroCertificateNotAfter: 0000000000000000
   metroApplicationDescription: 2048_gun&agent
   wsaImages: {}
-  metroTileShortName: 
+  metroTileShortName: 2048_gun&agent
   metroTileShowName: 0
   metroMediumTileShowName: 0
   metroLargeTileShowName: 0
