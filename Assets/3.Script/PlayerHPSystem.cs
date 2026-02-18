@@ -20,12 +20,13 @@ public class PlayerHPSystem : MonoBehaviour
 
     [Header("Heat Recovery")]
     [SerializeField] private int[] comboHeatRecover = { 0, 0, 4, 10, 18, 30 };
-    [SerializeField] private int berryMergeHealMultiplier = 4;
-    [SerializeField] private int berryMergeBaseHeal = 5;
+    [SerializeField, Range(0f, 1f)] private float berryHealPercent = 0.12f;
+    [SerializeField, Range(0f, 1f)] private float mixHealPercent = 0.06f;
 
     [Header("Level Up UI")]
     [SerializeField] private GameObject levelUpPanel;
     [SerializeField] private TextMeshProUGUI levelUpText;
+    [SerializeField] private GameObject levelUpTapHintObj;
 
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
@@ -80,8 +81,6 @@ public class PlayerHPSystem : MonoBehaviour
     public int MaxHeat => maxHeat;
     public TextMeshProUGUI HeatText => heatText;
     public int[] ComboHeatRecover => comboHeatRecover;
-    public int BerryMergeHealMultiplier => berryMergeHealMultiplier;
-    public int BerryMergeBaseHeal => berryMergeBaseHeal;
     public LowHealthVignette LowHealthVignette => lowHealthVignette;
 
     public void Initialize()
@@ -103,6 +102,7 @@ public class PlayerHPSystem : MonoBehaviour
         UpdateHeatUI(true);
 
         if (levelUpPanel != null) levelUpPanel.SetActive(false);
+        if (levelUpTapHintObj != null) levelUpTapHintObj.SetActive(false);
     }
 
     public void ResetState()
@@ -114,6 +114,7 @@ public class PlayerHPSystem : MonoBehaviour
             lowHealthVignette.ResetInfiniteBossBonus();
 
         if (levelUpPanel != null) levelUpPanel.SetActive(false);
+        if (levelUpTapHintObj != null) levelUpTapHintObj.SetActive(false);
         UpdateHeatUI(true);
     }
 
@@ -251,10 +252,36 @@ public class PlayerHPSystem : MonoBehaviour
 
         yield return new WaitForSeconds(1.0f);
 
-        // 보스 스폰 허용 (페이드아웃 직전 input 해제)
+        // === Phase 4: TimeScale 정지 → 터치 대기 ===
+        Time.timeScale = 0f;
+
+        // 탭 힌트 표시 + 투명도 깜빡임
+        Tweener tapHintTween = null;
+        if (levelUpTapHintObj != null)
+        {
+            levelUpTapHintObj.SetActive(true);
+            CanvasGroup tapCG = levelUpTapHintObj.GetComponent<CanvasGroup>();
+            if (tapCG == null) tapCG = levelUpTapHintObj.AddComponent<CanvasGroup>();
+            tapCG.alpha = 1f;
+            tapHintTween = tapCG.DOFade(0.5f, 0.6f).SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo).SetUpdate(true);
+        }
+
+        yield return new WaitForSecondsRealtime(0.2f);
+
+        // 터치/클릭 대기
+        while (!Input.GetMouseButtonDown(0) && !Input.anyKeyDown)
+            yield return null;
+
+        // 탭 힌트 숨기기
+        if (tapHintTween != null) tapHintTween.Kill();
+        if (levelUpTapHintObj != null) levelUpTapHintObj.SetActive(false);
+
+        Time.timeScale = 1f;
+
+        // 보스 스폰 허용
         isLevelUpAnimating = false;
 
-        // === Phase 4: 1초 페이드아웃 ===
+        // === Phase 5: 1초 페이드아웃 ===
         if (panelCG != null)
         {
             panelCG.DOKill();
@@ -266,10 +293,16 @@ public class PlayerHPSystem : MonoBehaviour
         levelUpCoroutine = null;
     }
 
-    // Berry 회복량: 최대HP의 3%
+    // ⭐ v6.4: Berry+Berry 회복량: 최대HP의 12%
     public int GetBerryHealAmount()
     {
-        return Mathf.FloorToInt(maxHeat * 0.03f);
+        return Mathf.FloorToInt(maxHeat * berryHealPercent);
+    }
+
+    // ⭐ v6.4: Mix(Berry+Choco) 회복량: 최대HP의 6%
+    public int GetMixHealAmount()
+    {
+        return Mathf.FloorToInt(maxHeat * mixHealPercent);
     }
 
     // === Heat UI ===

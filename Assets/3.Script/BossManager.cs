@@ -47,6 +47,10 @@ public class BossManager : MonoBehaviour
     [Header("Boss Attack Animation")]
     [SerializeField] private float attackMotionDuration = 0.3f;
 
+    [Header("⭐ v6.4: Guard ATK Progress Bar")]
+    [SerializeField] private GameObject guardAtkProgressBarObj;
+    [SerializeField] private RectTransform guardAtkProgressFill;
+
     [Header("Boss Images")]
     [SerializeField] private List<Sprite> bossSprites = new List<Sprite>();
     private int currentBossIndex = 0;
@@ -122,6 +126,12 @@ public class BossManager : MonoBehaviour
         {
             isGuardMode = true;
             StartGuardColorAnimation();
+            if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(true);
+            UpdateGuardAtkProgressBar();
+        }
+        else
+        {
+            if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
         }
 
         // Clear 모드: 고정 공격력
@@ -217,6 +227,19 @@ public class BossManager : MonoBehaviour
         }
     }
 
+    // ⭐ v6.4: Guard ATK 진행 바 업데이트
+    void UpdateGuardAtkProgressBar()
+    {
+        if (guardAtkProgressFill == null || guardAtkProgressBarObj == null) return;
+        if (!guardAtkProgressBarObj.activeSelf) return;
+        int currentTotal = currentBossDamage + infiniteBossExtraDamage;
+        float progress = Mathf.Clamp01((float)currentTotal / bossAtkMaxTotal);
+        float parentWidth = guardAtkProgressFill.parent.GetComponent<RectTransform>().rect.width;
+        float targetW = parentWidth * progress;
+        guardAtkProgressFill.DOKill();
+        guardAtkProgressFill.DOSizeDelta(new Vector2(targetW, guardAtkProgressFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
+    }
+
     public void ExitGuardMode()
     {
         if (!isGuardMode) return;
@@ -228,6 +251,7 @@ public class BossManager : MonoBehaviour
         // ⭐ v6.4: Guard 해제 → glow 종료 + HP bar 붉은색 고정
         StopHPBarGlowAnimation();
         SetHPBarRedFixed();
+        if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
 
         maxHP = 2147483647;
         currentHP = maxHP;
@@ -270,6 +294,7 @@ public class BossManager : MonoBehaviour
         infiniteBossExtraDamage++;
         Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{bossAtkMaxTotal}");
         UpdateBossAttackUI();
+        UpdateGuardAtkProgressBar();
         FlashAttackTextOrange();
         if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
@@ -319,6 +344,9 @@ public class BossManager : MonoBehaviour
             Vector3 preShakePos = bossImageArea.transform.localPosition;
             bossImageArea.transform.DOShakePosition(0.2f, strength: 10f, vibrato: 20, randomness: 90f)
                 .OnComplete(() => { if (bossImageArea != null) bossImageArea.transform.localPosition = preShakePos; });
+
+            // ⭐ v6.4: 피격 시 흰색 점멸
+            StartCoroutine(FlashBossWhite());
         }
 
         if (currentHP <= 0)
@@ -417,32 +445,40 @@ public class BossManager : MonoBehaviour
         {
             Vector3 originalPos = bossImageArea.transform.localPosition;
 
-            // ⭐ v6.4: Player HP bar 위치까지 돌진 공격 (아래로 확 내려갔다 올라오는 박치기 느낌)
-            float rushDistance = 400f; // 아래로 돌진할 거리 (local Y)
+            // ⭐ v6.4: Player HP bar 위치까지 돌진 공격
+            float rushDistance = 400f;
             if (playerHPSystem != null && playerHPSystem.HeatText != null)
             {
-                // 보스 위치와 HP bar 위치의 Y 차이 계산 (local space)
                 Vector3 hpBarWorldPos = playerHPSystem.HeatText.transform.position;
                 Vector3 hpBarLocalPos = bossImageArea.transform.parent.InverseTransformPoint(hpBarWorldPos);
                 rushDistance = Mathf.Abs(originalPos.y - hpBarLocalPos.y);
             }
 
-            Sequence attackSeq = DOTween.Sequence();
             // 빠르게 아래로 돌진
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveY(originalPos.y - rushDistance, attackMotionDuration * 0.35f).SetEase(Ease.InQuad));
+            yield return bossImageArea.transform.DOLocalMoveY(originalPos.y - rushDistance, attackMotionDuration * 0.35f)
+                .SetEase(Ease.InQuad).WaitForCompletion();
+
+            // ⭐ 최하단 도달 시점에 데미지 + 피격효과
+            if (gameManager != null)
+            {
+                gameManager.TakeBossAttack(GetEffectiveDamage());
+                CameraShake.Instance?.ShakeMedium();
+            }
+
             // 원래 자리로 복귀
-            attackSeq.Append(bossImageArea.transform.DOLocalMoveY(originalPos.y, attackMotionDuration * 0.65f).SetEase(Ease.OutBack));
-            yield return attackSeq.WaitForCompletion();
-            // ⭐ 위치 강제 복원
+            yield return bossImageArea.transform.DOLocalMoveY(originalPos.y, attackMotionDuration * 0.65f)
+                .SetEase(Ease.OutBack).WaitForCompletion();
+
             bossImageArea.transform.localPosition = originalPos;
         }
         else
-            yield return new WaitForSeconds(attackMotionDuration);
-
-        if (gameManager != null)
         {
-            gameManager.TakeBossAttack(GetEffectiveDamage());
-            CameraShake.Instance?.ShakeMedium();
+            yield return new WaitForSeconds(attackMotionDuration);
+            if (gameManager != null)
+            {
+                gameManager.TakeBossAttack(GetEffectiveDamage());
+                CameraShake.Instance?.ShakeMedium();
+            }
         }
 
         if (gameManager != null) gameManager.SetBossAttacking(false);
@@ -605,6 +641,10 @@ public class BossManager : MonoBehaviour
         bonusTurnsConsumed = 0;
         bonusTurnsTotal = 0;
 
+        // ⭐ v6.4: 새 보스 스폰 후 비네트에 ATK 전달
+        if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
+            bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
+
         if (bossImageArea != null)
         {
             bossImageArea.color = new Color(1f, 1f, 1f, 0f);
@@ -645,6 +685,10 @@ public class BossManager : MonoBehaviour
         // Clear 모드: 고정 공격력
         currentBossDamage = clearModeFixedAtk;
         infiniteBossExtraDamage = 0;
+
+        // ⭐ v6.4: 비네트에 적 ATK 전달
+        if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
+            bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
     }
 
     public void ResetBoss()
@@ -662,6 +706,7 @@ public class BossManager : MonoBehaviour
         stage39SpriteIndex = -1;
         StopGuardColorAnimation();
         StopHPBarGlowAnimation();
+        if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
 
         if (bossPanelGroundImage != null && groundColorSaved)
         {
@@ -738,6 +783,23 @@ public class BossManager : MonoBehaviour
         Material mat = new Material(Shader.Find("UI/Default"));
         mat.SetColor("_Color", new Color(0.9f, 0.2f, 0.15f, 1.0f));
         bossImageArea.material = mat;
+    }
+
+    // ⭐ v6.4: 적 피격 시 흰색 점멸 (Guard/Red 색상 복원)
+    IEnumerator FlashBossWhite()
+    {
+        if (bossImageArea == null || bossImageArea.material == null) yield break;
+
+        // 현재 색상 저장
+        Color originalMatColor = bossImageArea.material.GetColor("_Color");
+
+        // 흰색으로
+        bossImageArea.material.SetColor("_Color", Color.white);
+        yield return new WaitForSeconds(0.07f);
+
+        // 원래 색상 복원 (Guard glow 중이면 glow가 다시 덮어쓰므로 OK)
+        if (bossImageArea != null && bossImageArea.material != null)
+            bossImageArea.material.SetColor("_Color", originalMatColor);
     }
 
     public void SetFrozen(bool frozen)

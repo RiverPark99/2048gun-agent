@@ -33,6 +33,7 @@ public class GunSystem : MonoBehaviour
 
     [Header("Gun Mode Visual")]
     [SerializeField] private Image gunModeOverlayImage;
+    [SerializeField] private Image hpBarBackgroundImage;
 
     [Header("References")]
     [SerializeField] private GridManager gridManager;
@@ -64,6 +65,9 @@ public class GunSystem : MonoBehaviour
 
     // Gun 모드
     private bool isGunMode = false;
+    private Sequence hpBarGunModeAnim;
+    private Color hpBarOriginalBgColor;
+    private bool hpBarBgColorSaved = false;
 
     // UI 애니메이션 상태
     private Tweener gunButtonHeartbeat;
@@ -115,6 +119,13 @@ public class GunSystem : MonoBehaviour
 
         if (gunButton != null) gunButton.onClick.AddListener(ToggleGunMode);
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
+
+        if (hpBarBackgroundImage != null && !hpBarBgColorSaved)
+        {
+            hpBarOriginalBgColor = hpBarBackgroundImage.color;
+            hpBarBgColorSaved = true;
+        }
+
         UpdateGunUI();
     }
 
@@ -501,18 +512,18 @@ public class GunSystem : MonoBehaviour
         if (gunModeGuideText != null) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; }
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(true);
         gridManager.UpdateTileBorders();
-        // ⭐ v6.4: 큰 타일 2개 어둡게 투명하게
         gridManager.DimProtectedTiles(true);
+        StartHPBarGunModeAnim();
         UpdateGunUI();
     }
 
     void ExitGunMode()
     {
         isGunMode = false;
-        // ⭐ v6.4: cancel 후에도 이동 불가면 깜빡임 유지 (이동 가능이면 AfterMove에서 꺼짐)
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         gridManager.ClearAllTileBorders();
         gridManager.DimProtectedTiles(false);
+        StopHPBarGunModeAnim();
         UpdateGuideText();
         UpdateGunUI();
     }
@@ -798,6 +809,27 @@ public class GunSystem : MonoBehaviour
         }
     }
 
+    // === ⭐ v6.4: Gun 모드 시 HP bar 배경 색상 애니메이션 ===
+    void StartHPBarGunModeAnim()
+    {
+        StopHPBarGunModeAnim();
+        if (hpBarBackgroundImage == null) return;
+        hpBarOriginalBgColor = hpBarBackgroundImage.color;
+        Color greenColor = new Color(0.3f, 0.8f, 0.4f);
+
+        hpBarGunModeAnim = DOTween.Sequence();
+        hpBarGunModeAnim.Append(hpBarBackgroundImage.DOColor(greenColor, 0.5f).SetEase(Ease.InOutSine));
+        hpBarGunModeAnim.Append(hpBarBackgroundImage.DOColor(hpBarOriginalBgColor, 0.5f).SetEase(Ease.InOutSine));
+        hpBarGunModeAnim.SetLoops(-1, LoopType.Restart);
+    }
+
+    void StopHPBarGunModeAnim()
+    {
+        if (hpBarGunModeAnim != null) { hpBarGunModeAnim.Kill(); hpBarGunModeAnim = null; }
+        if (hpBarBackgroundImage != null && hpBarBgColorSaved)
+            hpBarBackgroundImage.color = hpBarOriginalBgColor;
+    }
+
     // === Cleanup ===
     public void CleanupFeverEffects()
     {
@@ -807,5 +839,6 @@ public class GunSystem : MonoBehaviour
         if (activeGunSmoke != null) { Destroy(activeGunSmoke); activeGunSmoke = null; }
         if (bossManager != null) bossManager.SetFrozen(false);
         RestoreProgressBarColor();
+        StopHPBarGunModeAnim();
     }
 }

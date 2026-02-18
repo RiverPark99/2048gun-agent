@@ -229,8 +229,8 @@ public class GridManager : MonoBehaviour
                             }
                             else
                             {
-                                // MixMerge: HP +mergedValue*2 회복 + 공격력 2배 + gauge +1
-                                int mixHeal = mergedValue * 2;
+                                // ⭐ v6.4: MixMerge: 최대HP 6% 회복 + 공격력 2배 + gauge +1
+                                int mixHeal = playerHP.GetMixHealAmount();
                                 playerHP.AddHeat(mixHeal);
                                 totalMergedValue += mergedValue; // 2배 공격력
 
@@ -238,7 +238,7 @@ public class GridManager : MonoBehaviour
                                     gunSystem.AddMergeGauge(1);
 
                                 score += mergedValue;
-                                Debug.Log($"MIX MERGE! HP+{mixHeal}, ATK x2, Gauge +1 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"MIX MERGE! HP+{mixHeal}(6%), ATK x2, Gauge +1 ({gunSystem.MergeGauge}/40)");
                             }
 
                             if (isColorBonus)
@@ -427,8 +427,9 @@ public class GridManager : MonoBehaviour
             gunSystem.ProcessFreezeAfterMove(comboCount);
         }
 
-        // Freeze가 아닐 때만 게이지 → Freeze 진입 체크 (AfterMove 마지막)
-        gunSystem.CheckGaugeAndFever();
+        // ⭐ v6.4: Freeze 진입은 보스가 transitioning 아닐 때만 (데미지로 적 쓰러진 후 허공 레이저 방지)
+        if (!bossBattle.IsBossTransitioning)
+            gunSystem.CheckGaugeAndFever();
 
         // Fever 중이 아닐 때만 보스 턴 진행
         if (bossManager != null && !gunSystem.IsFeverMode && !bossManager.IsFrozen())
