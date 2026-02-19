@@ -122,28 +122,27 @@ public class Tile : MonoBehaviour
     }
 
     // v6.2: 해상도 독립적 크기 (RectTransform 기반 + Canvas 보정)
+    // #2: 해상도 대응 - canvasCorr를 곱하여 작은 해상도에서 작아지도록
     float GetAdaptiveParticleSize(float baseRatio)
     {
         if (rectTransform == null) return 50f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        float canvasCorr = GetCanvasScaleCorrection();
-        return tileSize * baseRatio / canvasCorr;
+        // tileSize는 Canvas 로컬 단위, 파티클도 로컬이므로 보정 불필요
+        return tileSize * baseRatio;
     }
 
     float GetAdaptiveShapeRadius()
     {
         if (rectTransform == null) return 30f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        float canvasCorr = GetCanvasScaleCorrection();
-        return tileSize * 0.35f / canvasCorr;
+        return tileSize * 0.35f;
     }
 
     float GetAdaptiveSpeed()
     {
         if (rectTransform == null) return 200f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        float canvasCorr = GetCanvasScaleCorrection();
-        return tileSize * 2.0f / canvasCorr;
+        return tileSize * 2.0f;
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)

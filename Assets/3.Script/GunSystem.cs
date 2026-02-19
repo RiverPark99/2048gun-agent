@@ -119,6 +119,8 @@ public class GunSystem : MonoBehaviour
     private bool atkColorSaved = false;
     private Sequence atkFreezeColorAnim;   // 주황↔검정
     private Sequence freezeTurnColorAnim;  // 주황↔검정
+    private Sequence freezeTotalDmgColorAnim; // 주황↔검정
+    private Sequence freezeTotalDmgBobAnim;   // bob 효과
 
     // Freeze UI 원래 위치 저장
     private Vector2 freezeTurnOriginalPos;
@@ -448,9 +450,10 @@ public class GunSystem : MonoBehaviour
             cg.alpha = 1f; rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
 
-            Color origColor = freezeTotalDmgColorSaved ? freezeTotalDmgOriginalColor : freezeTotalDamageText.color;
-            freezeTotalDamageText.color = Color.white;
-            freezeTotalDamageText.DOColor(origColor, 0.4f).SetDelay(0.15f);
+            // 검정색으로 고정 + LevelUpMaxHP 스타일 팝 효과
+            freezeTotalDamageText.color = FREEZE_BLACK;
+            rt.localScale = Vector3.one * 1.4f;
+            rt.DOScale(1f, 0.25f).SetEase(Ease.OutBack);
 
             DOTween.Sequence()
                 .AppendInterval(fadeDelay)
@@ -465,7 +468,6 @@ public class GunSystem : MonoBehaviour
         }
     }
 
-    // #4: "Freeze Turn N (xM.MM)"
     void UpdateFreezeTurnUI()
     {
         if (freezeTurnText != null && isFeverMode)
@@ -475,8 +477,8 @@ public class GunSystem : MonoBehaviour
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
-            rt.DOScale(1.06f, 0.08f).SetEase(Ease.OutQuad)
-                .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.1f).SetEase(Ease.InQuad); });
+            rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
+                .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
         }
     }
 
@@ -506,12 +508,33 @@ public class GunSystem : MonoBehaviour
             freezeTurnColorAnim.Append(freezeTurnText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
             freezeTurnColorAnim.SetLoops(-1, LoopType.Restart);
         }
+
+        // Total Damage 색상 루프 + bob
+        if (freezeTotalDamageText != null)
+        {
+            freezeTotalDamageText.DOKill();
+            freezeTotalDamageText.color = FREEZE_ORANGE;
+            freezeTotalDmgColorAnim = DOTween.Sequence();
+            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeTotalDmgColorAnim.SetLoops(-1, LoopType.Restart);
+
+            // bob (좌우 미세 이동) - ATK+와 동일
+            RectTransform dmgRT = freezeTotalDamageText.GetComponent<RectTransform>();
+            float origX = freezeTotalDmgPosSaved ? freezeTotalDmgOriginalPos.x : dmgRT.anchoredPosition.x;
+            freezeTotalDmgBobAnim = DOTween.Sequence();
+            freezeTotalDmgBobAnim.Append(dmgRT.DOAnchorPosX(origX + 3f, 0.3f).SetEase(Ease.InOutSine));
+            freezeTotalDmgBobAnim.Append(dmgRT.DOAnchorPosX(origX - 3f, 0.3f).SetEase(Ease.InOutSine));
+            freezeTotalDmgBobAnim.SetLoops(-1, LoopType.Yoyo);
+        }
     }
 
     void StopFreezeColorLoops()
     {
         if (atkFreezeColorAnim != null) { atkFreezeColorAnim.Kill(); atkFreezeColorAnim = null; }
         if (freezeTurnColorAnim != null) { freezeTurnColorAnim.Kill(); freezeTurnColorAnim = null; }
+        if (freezeTotalDmgColorAnim != null) { freezeTotalDmgColorAnim.Kill(); freezeTotalDmgColorAnim = null; }
+        if (freezeTotalDmgBobAnim != null) { freezeTotalDmgBobAnim.Kill(); freezeTotalDmgBobAnim = null; }
 
         // ATK 색상 복원
         if (attackPowerText != null)
@@ -524,7 +547,13 @@ public class GunSystem : MonoBehaviour
                 attackPowerText.color = c;
             }
         }
-        // Freeze Turn 색상은 ForceResetFreezeUITransforms에서 처리
+        // Total Damage bob 위치 복원
+        if (freezeTotalDamageText != null)
+        {
+            RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
+            rt.DOKill();
+            if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
+        }
     }
 
     void SetProgressBarFreezeColor()
@@ -671,7 +700,7 @@ public class GunSystem : MonoBehaviour
         return canvasRect.rect.width / 1290f;
     }
 
-    // === ATK Floating Text ===
+    // === ATK Floating Text (우측 끝에서 생성) ===
     void ShowATKChangeText(long increase)
     {
         if (damageTextPrefab == null || damageTextParent == null || attackPowerText == null) return;
@@ -681,7 +710,14 @@ public class GunSystem : MonoBehaviour
         {
             txt.text = $"+{increase}"; txt.color = new Color(1f, 0.7f, 0.2f); txt.fontSize = 32;
             RectTransform r = obj.GetComponent<RectTransform>();
-            r.position = attackPowerText.GetComponent<RectTransform>().position;
+            RectTransform atkRect = attackPowerText.GetComponent<RectTransform>();
+
+            // ATK 텍스트의 우측 끝 월드 좌표 계산
+            Vector3[] corners = new Vector3[4];
+            atkRect.GetWorldCorners(corners); // [0]=BL, [1]=TL, [2]=TR, [3]=BR
+            Vector3 rightEdgeWorld = (corners[2] + corners[3]) * 0.5f; // 우측 중앙
+            r.position = rightEdgeWorld;
+
             CanvasGroup cg = obj.GetComponent<CanvasGroup>(); if (cg == null) cg = obj.AddComponent<CanvasGroup>();
             DOTween.Sequence()
                 .Append(r.DOAnchorPosY(r.anchoredPosition.y + 60f, 0.7f).SetEase(Ease.OutCubic))
