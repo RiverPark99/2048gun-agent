@@ -1625,8 +1625,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LowHealthVignette
   vignetteImage: {fileID: 275612702}
-  vignetteColor: {r: 0.2, g: 0.4, b: 0.6, a: 1}
-  maxAlpha: 0.8
+  vignetteColor: {r: 0.8066038, g: 0.90398765, b: 1, a: 1}
+  maxAlpha: 0.99
 --- !u!114 &275612702
 MonoBehaviour:
   m_ObjectHideFlags: 0

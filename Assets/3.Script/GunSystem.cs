@@ -619,26 +619,27 @@ public class GunSystem : MonoBehaviour
         pm.FireFreezeLaser(gunButton.transform.position, monsterRect.position, new Color(0.5f, 0.85f, 1f, 0.9f), null);
     }
 
-    // === Fever 파티클 ===
+    // === Fever 파티클 (해상도 대응) ===
     void SpawnFeverParticle()
     {
         if (feverParticleSpawnPoint == null) return;
         if (activeFeverParticle != null) Destroy(activeFeverParticle);
 
-        float canvasCorr = GetCanvasScaleCorrection();
+        float screenRatio = GetScreenScaleRatio();
 
         GameObject particleObj = new GameObject("FeverFlameParticle");
         particleObj.transform.SetParent(feverParticleSpawnPoint, false);
         particleObj.transform.localPosition = Vector3.zero;
 
+        // 파티클 속성은 1290 기준 고정값, UIParticle.scale로 해상도 보정
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.startLifetime = 0.5f; main.startSpeed = 50f / canvasCorr; main.startSize = 30f / canvasCorr;
+        main.startLifetime = 0.5f; main.startSpeed = 50f; main.startSize = 30f;
         main.startColor = new Color(1f, 0.5f, 0f); main.maxParticles = 50;
         main.simulationSpace = ParticleSystemSimulationSpace.Local; main.playOnAwake = true; main.loop = true;
 
         var emission = ps.emission; emission.enabled = true; emission.rateOverTime = 20;
-        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 15f; shape.radius = 10f / canvasCorr;
+        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 15f; shape.radius = 10f;
 
         var col = ps.colorOverLifetime; col.enabled = true;
         Gradient g = new Gradient();
@@ -648,11 +649,12 @@ public class GunSystem : MonoBehaviour
         );
         col.color = new ParticleSystem.MinMaxGradient(g);
 
-        var vel = ps.velocityOverLifetime; vel.enabled = true; vel.y = new ParticleSystem.MinMaxCurve(100f / canvasCorr);
+        var vel = ps.velocityOverLifetime; vel.enabled = true; vel.y = new ParticleSystem.MinMaxCurve(100f);
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default")); renderer.sortingOrder = 1;
-        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = 3f;
+        // UIParticle.scale: 1290기준 3.0, Screen.width 비례 보정
+        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = 3f * screenRatio;
 
         activeFeverParticle = particleObj;
     }
@@ -689,15 +691,9 @@ public class GunSystem : MonoBehaviour
         }
     }
 
-    float GetCanvasScaleCorrection()
+    float GetScreenScaleRatio()
     {
-        Canvas canvas = gunButton.GetComponentInParent<Canvas>();
-        if (canvas == null) return 1f;
-        Canvas root = canvas.rootCanvas;
-        if (root == null) return 1f;
-        RectTransform canvasRect = root.GetComponent<RectTransform>();
-        if (canvasRect == null) return 1f;
-        return canvasRect.rect.width / 1290f;
+        return (float)Screen.width / 1290f;
     }
 
     // === ATK Floating Text (우측 끝에서 생성) ===
