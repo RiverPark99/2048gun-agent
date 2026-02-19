@@ -1238,8 +1238,8 @@ RectTransform:
   m_Children:
   - {fileID: 1613650120}
   - {fileID: 275876071}
-  - {fileID: 644562007}
   - {fileID: 1561769433}
+  - {fileID: 644562007}
   - {fileID: 529900503}
   - {fileID: 749306236}
   m_Father: {fileID: 1308007497}
@@ -4225,13 +4225,13 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 40
-  m_fontSizeBase: 40
+  m_fontSize: 42
+  m_fontSizeBase: 42
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 1
   m_VerticalAlignment: 256
   m_textAlignment: 65535
