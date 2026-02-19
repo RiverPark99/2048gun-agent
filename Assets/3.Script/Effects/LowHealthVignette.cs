@@ -7,7 +7,7 @@ public class LowHealthVignette : MonoBehaviour
     [Header("Vignette Settings")]
     [SerializeField] private Image vignetteImage;
     [SerializeField] private Color vignetteColor = new Color(0.2f, 0.4f, 0.6f, 0f);
-    [SerializeField] private float maxAlpha = 0.35f;
+    [SerializeField] private float maxAlpha = 0.5f;
 
     private float currentAlpha = 0f;
 
@@ -17,8 +17,8 @@ public class LowHealthVignette : MonoBehaviour
     // ⭐ v6.4: 위험 색상 애니메이션 (맞으면 죽는 피)
     private Sequence dangerColorAnim;
     private bool isDangerAnimActive = false;
-    private static readonly Color DANGER_BLUE = new Color(0.2f, 0.4f, 0.6f);
-    private static readonly Color DANGER_RED  = new Color(0.7f, 0.15f, 0.15f);
+    private static readonly Color DANGER_BLUE   = new Color(0.2f, 0.4f, 0.7f);
+    private static readonly Color DANGER_PURPLE = new Color(0.5f, 0.15f, 0.6f);
 
     void Start()
     {
@@ -93,15 +93,15 @@ public class LowHealthVignette : MonoBehaviour
         StopDangerColorAnim();
         isDangerAnimActive = true;
 
-        Color blueC = DANGER_BLUE; blueC.a = alpha;
-        Color redC  = DANGER_RED;  redC.a  = alpha;
+        Color blueC   = DANGER_BLUE;   blueC.a = alpha;
+        Color purpleC = DANGER_PURPLE; purpleC.a = alpha;
 
         vignetteImage.DOKill();
         vignetteImage.color = blueC;
 
         dangerColorAnim = DOTween.Sequence();
-        dangerColorAnim.Append(vignetteImage.DOColor(redC, 1.2f).SetEase(Ease.InOutSine));
-        dangerColorAnim.Append(vignetteImage.DOColor(blueC, 1.2f).SetEase(Ease.InOutSine));
+        dangerColorAnim.Append(vignetteImage.DOColor(purpleC, 0.6f).SetEase(Ease.InOutSine));
+        dangerColorAnim.Append(vignetteImage.DOColor(blueC, 0.6f).SetEase(Ease.InOutSine));
         dangerColorAnim.SetLoops(-1, LoopType.Restart);
     }
 

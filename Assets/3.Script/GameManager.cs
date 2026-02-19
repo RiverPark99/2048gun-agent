@@ -16,12 +16,13 @@ public class GameManager : MonoBehaviour
     [SerializeField] private BossManager bossManager;
 
     [Header("Swipe Settings")]
-    [SerializeField] private float swipeThreshold = 50f;
+    [SerializeField] private float swipeThresholdBase = 80f; // 1290px 기준
 
     // 스와이프 추적
     private Vector2 pointerStartPos;
     private bool isPointerDown = false;
     private bool swipeConsumed = false;
+    private float swipeThreshold;
 
     // Input Actions
     private InputAction moveAction;
@@ -70,6 +71,9 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        // v6.6: 화면 비율 대응 스와이프 임계값
+        swipeThreshold = swipeThresholdBase * (Screen.width / 1290f);
+
         gridManager.Initialize();
         playerHP.Initialize();
         gunSystem.Initialize();

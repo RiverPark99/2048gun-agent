@@ -34,28 +34,41 @@ public class Projectile : MonoBehaviour
         CreateLaserLine(laserColor);
     }
 
+    // v6.6: 해상도 비율 계산
+    float GetCanvasScaleRatio()
+    {
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return 1f;
+        Canvas root = canvas.rootCanvas;
+        if (root == null) return 1f;
+        RectTransform canvasRect = root.GetComponent<RectTransform>();
+        if (canvasRect == null) return 1f;
+        return canvasRect.rect.width / 1290f;
+    }
+
     void CreateLaserLine(Color laserColor)
     {
         RectTransform rect = GetComponent<RectTransform>();
 
+        // v6.6: 해상도 대응 두께
+        float scale = GetCanvasScaleRatio();
+
         if (type == ProjectileType.Bullet)
         {
             lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f);
-            rect.sizeDelta = new Vector2(0f, 8f);
+            rect.sizeDelta = new Vector2(0f, 12f * scale);
         }
         else if (type == ProjectileType.Freeze)
         {
             lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.85f);
-            rect.sizeDelta = new Vector2(0f, 18f);
+            rect.sizeDelta = new Vector2(0f, 24f * scale);
         }
         else
         {
             lineImage.color = new Color(laserColor.r, laserColor.g, laserColor.b, 0.8f);
-            rect.sizeDelta = new Vector2(0f, 12f);
+            rect.sizeDelta = new Vector2(0f, 18f * scale);
         }
 
-        // ⭐ v6.3: Canvas 좌표 기반으로 레이저 거리/각도 계산
-        // world position → Canvas 로컬 좌표 변환
         Canvas canvas = GetComponentInParent<Canvas>();
         RectTransform canvasRect = canvas != null ? canvas.GetComponent<RectTransform>() : null;
         Camera cam = (canvas != null && canvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : Camera.main;
@@ -79,7 +92,6 @@ public class Projectile : MonoBehaviour
         float distance = direction.magnitude;
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
-        // RectTransform을 Canvas 로컬 좌표에 배치
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = localStart;

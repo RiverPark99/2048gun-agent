@@ -1,9 +1,11 @@
 // =====================================================
-// GunSystem.cs - v6.5
+// GunSystem.cs - v6.7
 // Gun 모드, Freeze(게이지 0~40)
-// Freeze: 40/40 진입, 20 이하 종료, 턴당 1.14배율
+// Freeze: 40/40 진입, 20 이하 종료, 턴당 1.06배율
 // Freeze Gun: 즉시 -20 → Freeze 종료
-// 페이백/쿨다운/턴증가 삭제
+// Continue 횟수 제한 2회
+// ATK+/Freeze Turn: 주황↔검정 색상 루프
+// Combo: -2 합산 후 한 번만 표시
 // =====================================================
 
 using UnityEngine;
@@ -35,10 +37,14 @@ public class GunSystem : MonoBehaviour
     [Header("Gun Mode Visual")]
     [SerializeField] private Image gunModeOverlayImage;
     [SerializeField] private Image hpBarBackgroundImage;
+    [SerializeField] private Image progressBarGlowOverlay;
 
     [Header("Freeze UI")]
     [SerializeField] private TextMeshProUGUI freezeTurnText;
     [SerializeField] private TextMeshProUGUI freezeTotalDamageText;
+
+    [Header("Continue")]
+    [SerializeField] private TextMeshProUGUI continueGuideText;
 
     [Header("References")]
     [SerializeField] private GridManager gridManager;
@@ -53,6 +59,11 @@ public class GunSystem : MonoBehaviour
     private const int FREEZE_COMBO_BONUS = 2;
     private const int GUN_SHOT_COST = 20;
     private const float FREEZE_TURN_MULTIPLIER = 1.06f;
+    private const int MAX_CONTINUES = 2;
+
+    // Freeze 색상 루프 상수
+    private static readonly Color FREEZE_ORANGE = new Color(1f, 0.6f, 0.1f, 1f);
+    private static readonly Color FREEZE_BLACK  = new Color(0f, 0f, 0f, 1f);
 
     // Gauge & Fever 상태
     private int mergeGauge = 0;
@@ -60,7 +71,7 @@ public class GunSystem : MonoBehaviour
     private bool isFeverMode = false;
     private bool feverBulletUsed = false;
 
-    // ⭐ v6.5: Freeze 턴 배율
+    // Freeze 턴 배율
     private int freezeTurnCount = 0;
     private long freezeTotalDamage = 0;
 
@@ -74,7 +85,7 @@ public class GunSystem : MonoBehaviour
     private Color hpBarOriginalBgColor;
     private bool hpBarBgColorSaved = false;
 
-    // ⭐ v6.5: Gun 모드 시 progress bar 빛남
+    // Progress bar glow
     private Sequence progressBarGlowAnim;
 
     // UI 상태
@@ -94,18 +105,33 @@ public class GunSystem : MonoBehaviour
     // 파티클
     private GameObject activeFeverParticle;
 
-    // ⭐ v6.5: 긴급 깜빡임
+    // 긴급 깜빡임
     private Sequence emergencyGunFlash;
     private bool isEmergencyFlashing = false;
 
-    // ⭐ v6.5: ATK+ 시소 애니메이션
+    // ATK+ 시소
     private Sequence atkBobAnim;
+    private float atkOriginalX = 0f;
+    private bool atkOriginalXSaved = false;
+
+    // ATK 색상
+    private Color atkOriginalColor = Color.black;
+    private bool atkColorSaved = false;
+    private Sequence atkFreezeColorAnim;   // 주황↔검정
+    private Sequence freezeTurnColorAnim;  // 주황↔검정
 
     // Freeze UI 원래 위치 저장
     private Vector2 freezeTurnOriginalPos;
     private bool freezeTurnPosSaved = false;
     private Vector2 freezeTotalDmgOriginalPos;
     private bool freezeTotalDmgPosSaved = false;
+
+    // Freeze total damage 원래 색상
+    private Color freezeTotalDmgOriginalColor = Color.white;
+    private bool freezeTotalDmgColorSaved = false;
+
+    // Continue 횟수
+    private static int continueCount = 0;
 
     // === 프로퍼티 ===
     public bool IsFeverMode => isFeverMode;
@@ -115,15 +141,15 @@ public class GunSystem : MonoBehaviour
     public int MergeGauge => mergeGauge;
     public long PermanentAttackPower => permanentAttackPower;
     public long FeverMergeIncreaseAtk => feverMergeIncreaseAtk;
-    // ⭐ v6.5: Freeze 턴 배율 (GridManager에서 사용)
+    public int ContinuesRemaining => MAX_CONTINUES - continueCount;
     public float GetFreezeDamageMultiplier() { return Mathf.Pow(FREEZE_TURN_MULTIPLIER, freezeTurnCount); }
+
     public void AddFreezeTotalDamage(long dmg)
     {
         freezeTotalDamage += dmg;
         if (freezeTotalDamageText != null && freezeTotalDamageText.gameObject.activeSelf)
         {
-            freezeTotalDamageText.text = $"Total: {freezeTotalDamage:N0}";
-            // 위로 살짝 올랐다 내려오는 효과
+            freezeTotalDamageText.text = $"{freezeTotalDamage:N0}";
             RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
@@ -160,6 +186,12 @@ public class GunSystem : MonoBehaviour
             hpBarBgColorSaved = true;
         }
 
+        if (progressBarGlowOverlay != null)
+        {
+            Color c = progressBarGlowOverlay.color; c.a = 0f; progressBarGlowOverlay.color = c;
+            progressBarGlowOverlay.gameObject.SetActive(false);
+        }
+
         if (freezeTurnText != null)
         {
             if (!freezeTurnPosSaved) { freezeTurnOriginalPos = freezeTurnText.GetComponent<RectTransform>().anchoredPosition; freezeTurnPosSaved = true; }
@@ -168,9 +200,18 @@ public class GunSystem : MonoBehaviour
         if (freezeTotalDamageText != null)
         {
             if (!freezeTotalDmgPosSaved) { freezeTotalDmgOriginalPos = freezeTotalDamageText.GetComponent<RectTransform>().anchoredPosition; freezeTotalDmgPosSaved = true; }
+            if (!freezeTotalDmgColorSaved) { freezeTotalDmgOriginalColor = freezeTotalDamageText.color; freezeTotalDmgColorSaved = true; }
             freezeTotalDamageText.gameObject.SetActive(false);
         }
 
+        if (attackPowerText != null && !atkColorSaved)
+        {
+            atkOriginalColor = attackPowerText.color;
+            atkColorSaved = true;
+        }
+
+        continueCount = 0;
+        UpdateContinueGuideText();
         UpdateGunUI();
     }
 
@@ -184,6 +225,7 @@ public class GunSystem : MonoBehaviour
 
         if (gunButtonHeartbeat != null) { gunButtonHeartbeat.Kill(); gunButtonHeartbeat = null; }
         if (atkBobAnim != null) { atkBobAnim.Kill(); atkBobAnim = null; }
+        StopFreezeColorLoops();
         if (gunModeGuideText != null) gunModeGuideText.gameObject.SetActive(false);
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
@@ -192,6 +234,13 @@ public class GunSystem : MonoBehaviour
         ForceResetFreezeUITransforms();
         if (freezeTurnText != null) freezeTurnText.gameObject.SetActive(false);
         if (freezeTotalDamageText != null) freezeTotalDamageText.gameObject.SetActive(false);
+
+        // ATK 색상 복원
+        if (attackPowerText != null && atkColorSaved)
+        {
+            attackPowerText.DOKill();
+            attackPowerText.color = atkOriginalColor;
+        }
 
         StopProgressBarGlow();
         RestoreProgressBarColor();
@@ -210,33 +259,34 @@ public class GunSystem : MonoBehaviour
 
     public void UpdateGaugeUIOnly() { UpdateGunUI(); }
     public void AddFeverMergeATK() { permanentAttackPower += feverMergeIncreaseAtk; }
-
-    // ⭐ v6.5: 페이백 삭제 → 빈 메서드 (호출처 호환)
     public void ClearFeverPaybackIfNeeded() { }
 
     // === Freeze 턴 처리 ===
+    // #1 수정: combo bonus + move cost 합산 후 1회만 표시
     public void ProcessFreezeAfterMove(int comboCount)
     {
         if (!isFeverMode) return;
 
         freezeTurnCount++;
-        int netChange = 0;
+        int gaugeBeforeAll = mergeGauge;
 
+        // 콤보 보너스
         if (comboCount >= 2)
         {
             int bonus = FREEZE_COMBO_BONUS * comboCount;
-            int before = mergeGauge;
             mergeGauge += bonus;
             if (mergeGauge > GAUGE_MAX) mergeGauge = GAUGE_MAX;
-            netChange += (mergeGauge - before);
         }
 
+        // 이동 비용
         mergeGauge -= FREEZE_MOVE_COST;
-        netChange -= FREEZE_MOVE_COST;
 
-        if (netChange != 0) ShowGaugeChangeText(netChange);
+        // 합산 결과
+        int netChange = mergeGauge - gaugeBeforeAll;
+        bool isCombo = (comboCount >= 2);
+        if (netChange != 0)
+            ShowGaugeChangeText(netChange, isCombo);
 
-        // Freeze 턴 UI 갱신
         UpdateFreezeTurnUI();
 
         if (mergeGauge <= GAUGE_FOR_BULLET) EndFever();
@@ -260,16 +310,14 @@ public class GunSystem : MonoBehaviour
         UpdateGunUI();
     }
 
-    // ⭐ v6.5: 보스 전환 완료 후 Freeze 진입 (버튼 투명도 복원 후)
     public IEnumerator DelayedFreezeCheck()
     {
-        // Gun button alpha가 1로 완전히 복원될 때까지 대기
         if (gunButtonImage != null)
         {
             while (gunButtonImage.color.a < 0.99f)
                 yield return null;
         }
-        yield return null; // 1프레임 추가 대기
+        yield return null;
         CheckGaugeAndFever();
     }
 
@@ -299,10 +347,11 @@ public class GunSystem : MonoBehaviour
         UpdateGunButtonAnimation();
         SetProgressBarFreezeColor();
         StartAtkBobAnimation();
+        StartFreezeColorLoops();
 
-        // Freeze 턴/데미지 UI 활성화
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Turn 0"; }
-        if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "Total: 0"; }
+        // #4: "Freeze Turn" 명시
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Freeze Turn 0"; }
+        if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
     }
@@ -318,50 +367,69 @@ public class GunSystem : MonoBehaviour
         feverBulletUsed = false;
         RestoreProgressBarColor();
         StopAtkBobAnimation();
+        StopFreezeColorLoops();
 
-        // ⭐ v6.5: Freeze UI 강제 리셋 후 종료 애니메이션
         ForceResetFreezeUITransforms();
         AnimateAndHideFreezeUI();
 
-        // ⭐ v6.5: 자연종료 → 현재 게이지 유지, bullet 체크
         hasBullet = (mergeGauge >= GAUGE_FOR_BULLET);
         freezeTurnCount = 0;
 
         UpdateGunUI();
     }
 
-    // ⭐ v6.5: Freeze UI transform 강제 리셋 (DOTween이 중간에 멈춘 경우 대비)
     void ForceResetFreezeUITransforms()
     {
         if (freezeTurnText != null)
         {
+            freezeTurnText.DOKill();
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill(); rt.localScale = Vector3.one;
             if (freezeTurnPosSaved) rt.anchoredPosition = freezeTurnOriginalPos;
+            CanvasGroup cg = freezeTurnText.GetComponent<CanvasGroup>();
+            if (cg != null) cg.alpha = 1f;
         }
         if (freezeTotalDamageText != null)
         {
+            freezeTotalDamageText.DOKill();
             RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
             rt.DOKill(); rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
+            if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
+            CanvasGroup cg = freezeTotalDamageText.GetComponent<CanvasGroup>();
+            if (cg != null) cg.alpha = 1f;
+        }
+        // ATK 색상 복원
+        if (attackPowerText != null)
+        {
+            attackPowerText.DOKill();
+            if (atkColorSaved)
+            {
+                Color c = atkOriginalColor;
+                c.a = 0.35f;
+                attackPowerText.color = c;
+            }
         }
     }
 
-    // ⭐ v6.5: Freeze UI 종료 애니메이션 (턴 + 총데미지)
     void AnimateAndHideFreezeUI()
     {
-        // Freeze Turn: 페이드아웃
+        float fadeDelay = 1.5f;
+        float fadeDuration = 0.6f;
+
         if (freezeTurnText != null && freezeTurnText.gameObject.activeSelf)
         {
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             CanvasGroup cg = freezeTurnText.GetComponent<CanvasGroup>();
             if (cg == null) cg = freezeTurnText.gameObject.AddComponent<CanvasGroup>();
-            rt.DOKill(); cg.DOKill();
+            rt.DOKill(); cg.DOKill(); freezeTurnText.DOKill();
             cg.alpha = 1f; rt.localScale = Vector3.one;
+            // 색상 복원 (검정으로)
+            freezeTurnText.color = FREEZE_BLACK;
 
             DOTween.Sequence()
-                .AppendInterval(1.0f)
-                .Append(cg.DOFade(0f, 0.5f).SetEase(Ease.InQuad))
+                .AppendInterval(fadeDelay)
+                .Append(cg.DOFade(0f, fadeDuration).SetEase(Ease.InQuad))
                 .OnComplete(() => {
                     if (freezeTurnText == null) return;
                     freezeTurnText.gameObject.SetActive(false);
@@ -370,43 +438,93 @@ public class GunSystem : MonoBehaviour
                 });
         }
 
-        // Freeze Total Damage: 픽스 표시 후 페이드아웃
         if (freezeTotalDamageText != null && freezeTotalDamageText.gameObject.activeSelf)
         {
-            freezeTotalDamageText.text = $"Freeze DMG: {freezeTotalDamage:N0}";
+            freezeTotalDamageText.text = $"{freezeTotalDamage:N0}";
             RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
             CanvasGroup cg = freezeTotalDamageText.GetComponent<CanvasGroup>();
             if (cg == null) cg = freezeTotalDamageText.gameObject.AddComponent<CanvasGroup>();
-            rt.DOKill(); cg.DOKill();
+            rt.DOKill(); cg.DOKill(); freezeTotalDamageText.DOKill();
             cg.alpha = 1f; rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
 
+            Color origColor = freezeTotalDmgColorSaved ? freezeTotalDmgOriginalColor : freezeTotalDamageText.color;
+            freezeTotalDamageText.color = Color.white;
+            freezeTotalDamageText.DOColor(origColor, 0.4f).SetDelay(0.15f);
+
             DOTween.Sequence()
-                .AppendInterval(2.0f)
-                .Append(cg.DOFade(0f, 0.6f).SetEase(Ease.InQuad))
+                .AppendInterval(fadeDelay)
+                .Append(cg.DOFade(0f, fadeDuration).SetEase(Ease.InQuad))
                 .OnComplete(() => {
                     if (freezeTotalDamageText == null) return;
                     freezeTotalDamageText.gameObject.SetActive(false);
                     cg.alpha = 1f; rt.localScale = Vector3.one;
                     if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
+                    if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
                 });
         }
     }
 
-    // ⭐ v6.5: Freeze 턴 UI 갱신
+    // #4: "Freeze Turn N (xM.MM)"
     void UpdateFreezeTurnUI()
     {
         if (freezeTurnText != null && isFeverMode)
         {
             float mult = GetFreezeDamageMultiplier();
-            freezeTurnText.text = $"Turn {freezeTurnCount} (x{mult:F2})";
-            // 턴 변경 시 스케일 펌스 (1→1.06→1)
+            freezeTurnText.text = $"Freeze Turn {freezeTurnCount} (x{mult:F2})";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
             rt.DOScale(1.06f, 0.08f).SetEase(Ease.OutQuad)
                 .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.1f).SetEase(Ease.InQuad); });
         }
+    }
+
+    // === #3 + #4: 주황↔검정 색상 루프 (ATK + Freeze Turn 동기화) ===
+    void StartFreezeColorLoops()
+    {
+        StopFreezeColorLoops();
+
+        // ATK+ 색상 루프
+        if (attackPowerText != null)
+        {
+            attackPowerText.DOKill();
+            attackPowerText.color = FREEZE_ORANGE;
+            atkFreezeColorAnim = DOTween.Sequence();
+            atkFreezeColorAnim.Append(attackPowerText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            atkFreezeColorAnim.Append(attackPowerText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            atkFreezeColorAnim.SetLoops(-1, LoopType.Restart);
+        }
+
+        // Freeze Turn 색상 루프 (동일 타이밍)
+        if (freezeTurnText != null)
+        {
+            freezeTurnText.DOKill();
+            freezeTurnText.color = FREEZE_ORANGE;
+            freezeTurnColorAnim = DOTween.Sequence();
+            freezeTurnColorAnim.Append(freezeTurnText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            freezeTurnColorAnim.Append(freezeTurnText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeTurnColorAnim.SetLoops(-1, LoopType.Restart);
+        }
+    }
+
+    void StopFreezeColorLoops()
+    {
+        if (atkFreezeColorAnim != null) { atkFreezeColorAnim.Kill(); atkFreezeColorAnim = null; }
+        if (freezeTurnColorAnim != null) { freezeTurnColorAnim.Kill(); freezeTurnColorAnim = null; }
+
+        // ATK 색상 복원
+        if (attackPowerText != null)
+        {
+            attackPowerText.DOKill();
+            if (atkColorSaved)
+            {
+                Color c = atkOriginalColor;
+                c.a = 0.35f;
+                attackPowerText.color = c;
+            }
+        }
+        // Freeze Turn 색상은 ForceResetFreezeUITransforms에서 처리
     }
 
     void SetProgressBarFreezeColor()
@@ -423,7 +541,21 @@ public class GunSystem : MonoBehaviour
         if (fillImg != null) fillImg.color = progressBarOriginalColor;
     }
 
-    // === Continue → Fever ===
+    // === Continue ===
+    public bool CanContinue() { return continueCount < MAX_CONTINUES; }
+
+    public void UseContinue()
+    {
+        continueCount++;
+        UpdateContinueGuideText();
+    }
+
+    void UpdateContinueGuideText()
+    {
+        if (continueGuideText != null)
+            continueGuideText.text = $"{MAX_CONTINUES - continueCount}/{MAX_CONTINUES}";
+    }
+
     public void ContinueIntoFever()
     {
         isFeverMode = true; mergeGauge = GAUGE_MAX; feverBulletUsed = false; hasBullet = false;
@@ -441,10 +573,11 @@ public class GunSystem : MonoBehaviour
         if (bossManager != null) { bossManager.SetFrozen(true); bossManager.ResetBonusTurns(); }
         SetProgressBarFreezeColor();
         StartAtkBobAnimation();
+        StartFreezeColorLoops();
         FireFeverFreezeLaser();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Turn 0"; }
-        if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "Total: 0"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Freeze Turn 0"; }
+        if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
         UpdateGunUI();
     }
 
@@ -615,14 +748,12 @@ public class GunSystem : MonoBehaviour
         var curTop = gridManager.GetTopTwoTileValues();
         if (targetTile.value == curTop.Item1 || targetTile.value == curTop.Item2) return;
 
-        // HP 회복
         int oldHP = playerHP.CurrentHeat;
         playerHP.SetHeatToMax();
         playerHP.UpdateHeatUI(false);
         int recovery = playerHP.CurrentHeat - oldHP;
         if (recovery > 0) playerHP.ShowHeatChangeText(recovery);
 
-        // 타일 파괴
         Vector2Int pos = targetTile.gridPosition;
         targetTile.PlayGunDestroyEffect();
         gridManager.Tiles[pos.x, pos.y] = null;
@@ -631,7 +762,6 @@ public class GunSystem : MonoBehaviour
 
         if (isFeverMode)
         {
-            // ⭐ v6.5: Freeze Gun → 즉시 -20 → Freeze 종료
             feverBulletUsed = true;
             hasBullet = false;
             mergeGauge -= GUN_SHOT_COST;
@@ -650,14 +780,19 @@ public class GunSystem : MonoBehaviour
     }
 
     // === Gauge Change Text ===
-    void ShowGaugeChangeText(int change)
+    void ShowGaugeChangeText(int change, bool isCombo = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || turnsUntilBulletText == null) return;
         GameObject obj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI txt = obj.GetComponent<TextMeshProUGUI>();
         if (txt != null)
         {
-            txt.text = change > 0 ? $"+{change}" : change.ToString();
+            // #1: Combo!는 netChange가 양수/음수 상관없이 combo이면 표시
+            if (isCombo)
+                txt.text = change > 0 ? $"Combo! +{change}" : $"Combo! {change}";
+            else
+                txt.text = change > 0 ? $"+{change}" : change.ToString();
+
             txt.color = change > 0 ? new Color(0.9f, 0.2f, 0.2f) : new Color(0.6f, 0.6f, 0.6f);
             txt.fontSize = 36;
             RectTransform r = obj.GetComponent<RectTransform>();
@@ -706,7 +841,7 @@ public class GunSystem : MonoBehaviour
             }
         }
 
-        // ⭐ v6.5: ATK+ 텍스트 (□/■ 알파 구분)
+        // ATK+ 텍스트 (색상은 색상 루프가 관리, 여기서는 텍스트만)
         if (attackPowerText != null)
         {
             if (!attackTextInitialized)
@@ -716,13 +851,18 @@ public class GunSystem : MonoBehaviour
             }
 
             bool bulletReady = hasBullet || (isFeverMode && !feverBulletUsed);
-            string bulletIcon = bulletReady ? "■" : "□";
-            attackPowerText.text = $"{bulletIcon} ATK+{permanentAttackPower}";
+            string bulletIcon = bulletReady ? "\u25A0" : "\u25A1";
+            attackPowerText.text = $"{bulletIcon} ATK+{permanentAttackPower:N0}";
 
-            // 알파값: □=투명하게, ■=최대
-            Color atkColor = attackPowerText.color;
-            atkColor.a = bulletReady ? 1f : 0.5f;
-            attackPowerText.color = atkColor;
+            // 색상: Freeze 중에는 색상 루프가 관리, 아닐 때만 직접 설정
+            if (!isFeverMode)
+            {
+                Color c = atkColorSaved ? atkOriginalColor : Color.black;
+                c.a = bulletReady ? 0.7f : 0.35f;
+                // 색상 루프 돌고있지 않을 때만 직접 설정
+                if (atkFreezeColorAnim == null)
+                    attackPowerText.color = c;
+            }
 
             if (permanentAttackPower != lastPermanentAttackPower)
             {
@@ -746,12 +886,11 @@ public class GunSystem : MonoBehaviour
             progressBarFill.DOSizeDelta(new Vector2(targetW, progressBarFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
         }
 
-        // 버튼 색상
         if (gunButtonImage != null && !isEmergencyFlashing)
         {
             if (isGunMode) gunButtonImage.color = Color.red;
             else if (isFeverMode) gunButtonImage.color = new Color(1f, 0.3f, 0f);
-            else if (hasBullet) gunButtonImage.color = new Color(0.6f, 0.95f, 0.85f); // 민트
+            else if (hasBullet) gunButtonImage.color = new Color(0.6f, 0.95f, 0.85f);
             else gunButtonImage.color = new Color(0.5f, 0.5f, 0.5f);
         }
 
@@ -770,15 +909,12 @@ public class GunSystem : MonoBehaviour
         if (gunModeGuideText == null) return;
         if (isGunMode) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; return; }
         gunModeGuideText.gameObject.SetActive(true);
-        if (isFeverMode) gunModeGuideText.text = "Freeze\nGun!";
+        if (isFeverMode) gunModeGuideText.text = "Gun\nReady";
         else if (hasBullet) gunModeGuideText.text = "Gun\nReady";
         else gunModeGuideText.text = "";
     }
 
-    // === ATK+ 시소 애니메이션 (좌우 미세 이동) ===
-    private float atkOriginalX = 0f;
-    private bool atkOriginalXSaved = false;
-
+    // === ATK+ 시소 ===
     void StartAtkBobAnimation()
     {
         StopAtkBobAnimation();
@@ -791,7 +927,6 @@ public class GunSystem : MonoBehaviour
             atkOriginalXSaved = true;
         }
 
-        // 좌우 ±3px 미세 이동 (0.6초 주기)
         atkBobAnim = DOTween.Sequence();
         atkBobAnim.Append(tr.DOAnchorPosX(atkOriginalX + 3f, 0.3f).SetEase(Ease.InOutSine));
         atkBobAnim.Append(tr.DOAnchorPosX(atkOriginalX - 3f, 0.3f).SetEase(Ease.InOutSine));
@@ -839,27 +974,17 @@ public class GunSystem : MonoBehaviour
     {
         if (shouldFlash && gunButtonImage != null)
         {
-            if (!isEmergencyFlashing)
-            {
-                isEmergencyFlashing = true;
-                StartEmergencyFlashLoop();
-            }
+            if (!isEmergencyFlashing) { isEmergencyFlashing = true; StartEmergencyFlashLoop(); }
         }
-        else
-        {
-            StopEmergencyFlash();
-        }
+        else { StopEmergencyFlash(); }
     }
 
     void StartEmergencyFlashLoop()
     {
         if (gunButtonImage == null) return;
         if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
-
-        // ⭐ v6.5: Freeze gun도 민트 (기본 gun 장전 색상)
-        Color colorA = new Color(0.6f, 0.95f, 0.85f); // 민트
+        Color colorA = new Color(0.6f, 0.95f, 0.85f);
         Color colorB = new Color(1f, 0.25f, 0.25f);
-
         gunButtonImage.color = colorA;
         emergencyGunFlash = DOTween.Sequence();
         emergencyGunFlash.Append(gunButtonImage.DOColor(colorB, 0.35f).SetEase(Ease.InOutSine));
@@ -871,35 +996,36 @@ public class GunSystem : MonoBehaviour
     {
         if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
         isEmergencyFlashing = false;
-        if (gunButtonImage != null)
-        {
-            Color c = gunButtonImage.color; c.a = 1f; gunButtonImage.color = c;
-        }
+        if (gunButtonImage != null) { Color c = gunButtonImage.color; c.a = 1f; gunButtonImage.color = c; }
     }
 
-    // === Progress bar 빛남 (Gun mode) ===
+    // === Progress bar glow ===
     void StartProgressBarGlow()
     {
         StopProgressBarGlow();
-        if (progressBarFill == null) return;
-        Image fillImg = progressBarFill.GetComponent<Image>();
-        if (fillImg == null) return;
+        if (progressBarGlowOverlay == null) return;
 
-        Color baseColor = fillImg.color;
-        Color glowColor = new Color(Mathf.Min(1f, baseColor.r + 0.3f), Mathf.Min(1f, baseColor.g + 0.3f), Mathf.Min(1f, baseColor.b + 0.3f));
+        progressBarGlowOverlay.gameObject.SetActive(true);
+        Color c = progressBarGlowOverlay.color; c.a = 0f; progressBarGlowOverlay.color = c;
 
         progressBarGlowAnim = DOTween.Sequence();
-        progressBarGlowAnim.Append(fillImg.DOColor(glowColor, 0.4f).SetEase(Ease.InOutSine));
-        progressBarGlowAnim.Append(fillImg.DOColor(baseColor, 0.4f).SetEase(Ease.InOutSine));
+        progressBarGlowAnim.Append(progressBarGlowOverlay.DOFade(0.5f, 0.5f).SetEase(Ease.InOutSine));
+        progressBarGlowAnim.Append(progressBarGlowOverlay.DOFade(0f, 0.5f).SetEase(Ease.InOutSine));
         progressBarGlowAnim.SetLoops(-1, LoopType.Restart);
     }
 
     void StopProgressBarGlow()
     {
         if (progressBarGlowAnim != null) { progressBarGlowAnim.Kill(); progressBarGlowAnim = null; }
+        if (progressBarGlowOverlay != null)
+        {
+            progressBarGlowOverlay.DOKill();
+            Color c = progressBarGlowOverlay.color; c.a = 0f; progressBarGlowOverlay.color = c;
+            progressBarGlowOverlay.gameObject.SetActive(false);
+        }
     }
 
-    // === HP bar 배경 애니메이션 (Gun mode) ===
+    // === HP bar 배경 ===
     void StartHPBarGunModeAnim()
     {
         StopHPBarGunModeAnim();
@@ -931,6 +1057,7 @@ public class GunSystem : MonoBehaviour
         StopHPBarGunModeAnim();
         StopProgressBarGlow();
         StopAtkBobAnimation();
+        StopFreezeColorLoops();
         StopEmergencyFlash();
     }
 }

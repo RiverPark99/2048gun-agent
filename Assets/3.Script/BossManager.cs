@@ -50,6 +50,7 @@ public class BossManager : MonoBehaviour
     [Header("⭐ v6.4: Guard ATK Progress Bar")]
     [SerializeField] private GameObject guardAtkProgressBarObj;
     [SerializeField] private RectTransform guardAtkProgressFill;
+    [SerializeField] private Slider guardAtkSlider; // v6.6: Slider 직접 할당 가능
 
     [Header("Boss Images")]
     [SerializeField] private List<Sprite> bossSprites = new List<Sprite>();
@@ -152,6 +153,7 @@ public class BossManager : MonoBehaviour
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
 
         UpdateUI(true);
+        UpdateStageBackgroundColor();
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, ATK: {GetEffectiveDamage()}, Guard: {isGuardMode}, Clear: {isClearMode}");
     }
 
@@ -230,14 +232,24 @@ public class BossManager : MonoBehaviour
     // ⭐ v6.4: Guard ATK 진행 바 업데이트
     void UpdateGuardAtkProgressBar()
     {
-        if (guardAtkProgressFill == null || guardAtkProgressBarObj == null) return;
+        if (guardAtkProgressBarObj == null) return;
         if (!guardAtkProgressBarObj.activeSelf) return;
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
         float progress = Mathf.Clamp01((float)currentTotal / bossAtkMaxTotal);
-        float parentWidth = guardAtkProgressFill.parent.GetComponent<RectTransform>().rect.width;
-        float targetW = parentWidth * progress;
-        guardAtkProgressFill.DOKill();
-        guardAtkProgressFill.DOSizeDelta(new Vector2(targetW, guardAtkProgressFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
+
+        // v6.6: Slider 우선, 없으면 RectTransform sizeDelta
+        if (guardAtkSlider != null)
+        {
+            guardAtkSlider.DOKill();
+            guardAtkSlider.DOValue(progress, 0.3f).SetEase(Ease.OutQuad);
+        }
+        else if (guardAtkProgressFill != null)
+        {
+            float parentWidth = guardAtkProgressFill.parent.GetComponent<RectTransform>().rect.width;
+            float targetW = parentWidth * progress;
+            guardAtkProgressFill.DOKill();
+            guardAtkProgressFill.DOSizeDelta(new Vector2(targetW, guardAtkProgressFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
+        }
     }
 
     public void ExitGuardMode()
@@ -521,7 +533,7 @@ public class BossManager : MonoBehaviour
         if (hpText != null)
         {
             if (isGuardMode) hpText.text = "HP: Guard";
-            else hpText.text = "HP: " + currentHP + " / " + maxHP;
+            else hpText.text = $"HP: {currentHP:N0} / {maxHP:N0}";
         }
 
         UpdateBossAttackUI();
@@ -547,7 +559,7 @@ public class BossManager : MonoBehaviour
             for (int i = 0; i < bonusTurnsAdded; i++) symbols += "□";
         }
 
-        return $"ATK: {GetEffectiveDamage()}\n{symbols}";
+        return $"ATK: {GetEffectiveDamage():N0}\n{symbols}";
     }
 
     void UpdateBossAttackUI()
@@ -857,6 +869,26 @@ public class BossManager : MonoBehaviour
         yield return new WaitForSeconds(2.0f);
         if (bossBattleSystem != null)
             bossBattleSystem.ShowChallengeClearUI();
+    }
+
+    // v6.6: 10스테이지마다 배경색 변경 (파스텔톤)
+    void UpdateStageBackgroundColor()
+    {
+        if (bossPanelGroundImage == null) return;
+        if (isGuardMode || isClearMode) return;
+
+        Color targetColor;
+        if (bossLevel <= 10)
+            targetColor = groundColorSaved ? originalGroundColor : bossPanelGroundImage.color;
+        else if (bossLevel <= 20)
+            targetColor = new Color(0.65f, 0.78f, 0.9f, 1f);
+        else if (bossLevel <= 30)
+            targetColor = new Color(0.9f, 0.7f, 0.8f, 1f);
+        else
+            targetColor = new Color(0.72f, 0.55f, 0.42f, 1f);
+
+        bossPanelGroundImage.DOKill();
+        bossPanelGroundImage.DOColor(targetColor, 0.5f).SetEase(Ease.InOutQuad);
     }
 
     public bool IsFrozen() { return isFrozen; }

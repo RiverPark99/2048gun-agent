@@ -51,9 +51,9 @@ public class GridManager : MonoBehaviour
     // ⭐ v5.0: 무한대 보스 전용
     private int infiniteBossMoveCount = 0;
 
-    // 상수
-    // ⭐ v6.3: 콤보 데미지 소폭 상향 (1.4→1.6)
-    private const float COMBO_MULTIPLIER_BASE = 1.6f;
+    // ⭐ v6.7: 콤보 데미지 배율 (Inspector에서 밸런싱 가능)
+    [Header("Balance")]
+    [SerializeField] private float comboMultiplierBase = 1.6f;
 
     // === 프로퍼티 ===
     public Tile[,] Tiles => tiles;
@@ -332,7 +332,7 @@ public class GridManager : MonoBehaviour
             {
                 float comboMultiplier = 1.0f;
                 if (mergeCountThisTurn > 1)
-                    comboMultiplier = Mathf.Pow(COMBO_MULTIPLIER_BASE, mergeCountThisTurn - 1);
+                    comboMultiplier = Mathf.Pow(comboMultiplierBase, mergeCountThisTurn - 1);
 
                 long baseDamage = (long)Mathf.Floor(totalMergedValue * comboMultiplier);
 
@@ -414,9 +414,11 @@ public class GridManager : MonoBehaviour
             gunSystem.ProcessFreezeAfterMove(comboCount);
         }
 
-        // ⭐ v6.5: Freeze 진입 체크 — 보스 전환 중이면 버튼 투명도 복원 후 지연 체크
+        // ⭐ v6.6: Freeze 진입 체크 — 보스 전환 중이면 리스폰 완료 후 지연 체크
         if (bossBattle.IsBossTransitioning)
             StartCoroutine(gunSystem.DelayedFreezeCheck());
+        else if (bossManager.GetCurrentHP() <= 0)
+            StartCoroutine(gunSystem.DelayedFreezeCheck()); // 보스 사망 직후
         else
             gunSystem.CheckGaugeAndFever();
 

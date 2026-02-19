@@ -1,7 +1,7 @@
 // =====================================================
-// BossBattleSystem.cs - v6.3
+// BossBattleSystem.cs - v6.6
 // Boss 전투, 데미지, 게임오버, Challenge Clear UI
-// Restart → Scene 재로드 (0.6초 딜레이)
+// Continue 횟수 제한, 데미지 텍스트 N0 포맷
 // =====================================================
 
 using UnityEngine;
@@ -67,6 +67,8 @@ public class BossBattleSystem : MonoBehaviour
             gameOverPanel.SetActive(false);
         if (challengeClearPanel != null)
             challengeClearPanel.SetActive(false);
+
+        UpdateContinueButtonState();
     }
 
     public void ResetState()
@@ -113,7 +115,7 @@ public class BossBattleSystem : MonoBehaviour
         }
     }
 
-    // === 데미지 텍스트 ===
+    // === 데미지 텍스트 (N0 포맷) ===
     public void ShowDamageText(long damage, int comboNum, bool isGunDamage, bool isChoco = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
@@ -125,7 +127,7 @@ public class BossBattleSystem : MonoBehaviour
         {
             if (isGunDamage)
             {
-                damageText.text = $"-{damage}";
+                damageText.text = $"-{damage:N0}";
                 damageText.color = isChoco ? new Color(1f, 0.84f, 0f) : Color.yellow;
                 damageText.fontSize = 54;
             }
@@ -133,7 +135,7 @@ public class BossBattleSystem : MonoBehaviour
             {
                 if (comboNum >= 2)
                 {
-                    damageText.text = $"{comboNum} Combo!\n-{damage}";
+                    damageText.text = $"{comboNum} Combo!\n-{damage:N0}";
                     if (comboNum >= 5) damageText.color = new Color(1f, 0f, 1f);
                     else if (comboNum >= 4) damageText.color = new Color(1f, 0.3f, 0f);
                     else if (comboNum >= 3) damageText.color = new Color(1f, 0.6f, 0f);
@@ -142,7 +144,7 @@ public class BossBattleSystem : MonoBehaviour
                 }
                 else
                 {
-                    damageText.text = "-" + damage;
+                    damageText.text = $"-{damage:N0}";
                     damageText.color = Color.white;
                     damageText.fontSize = 48;
                 }
@@ -184,7 +186,6 @@ public class BossBattleSystem : MonoBehaviour
         int currentStage = bossManager != null ? bossManager.GetBossLevel() : 0;
         bool isClear = bossManager != null && bossManager.IsClearMode();
 
-        // 보스 처치 보상 (Clear 모드에서는 성장 없음)
         playerHP.OnBossDefeated(currentStage, isClear);
 
         if (gunSystem.IsFeverMode)
@@ -192,12 +193,8 @@ public class BossBattleSystem : MonoBehaviour
 
         if (currentStage == 39)
             gridManager.ResetInfiniteBossMoveCount();
-
-        // ⭐ v6.3: Challenge Clear는 Guard 모드에서 ExitGuardMode 시에만 표시
-        // Clear 모드에서 추가 보스 처치 시에는 표시 안 함
     }
 
-    // === HP bar 색상 (Guard 모드) ===
     public void UpdateInfiniteBossEnemyBarColor()
     {
         if (bossManager == null) return;
@@ -208,7 +205,6 @@ public class BossBattleSystem : MonoBehaviour
             {
                 if (bossManager.IsGuardMode())
                     fillImage.color = new Color(1f, 0.25f, 0.25f);
-                // Clear 모드는 HP bar glow 애니메이션이 관리 (BossManager)
             }
         }
     }
@@ -222,6 +218,9 @@ public class BossBattleSystem : MonoBehaviour
         gunSystem.CleanupFeverEffects();
         gunSystem.UpdateGunUI();
 
+        // v6.6: Continue 버튼 상태 업데이트
+        UpdateContinueButtonState();
+
         if (gameOverPanel != null)
         {
             gameOverPanel.SetActive(true);
@@ -232,10 +231,13 @@ public class BossBattleSystem : MonoBehaviour
         }
     }
 
-    // === Continue ===
+    // === Continue (횟수 제한) ===
     void ContinueGame()
     {
         if (!isGameOver) return;
+        if (!gunSystem.CanContinue()) return;
+
+        gunSystem.UseContinue();
         isGameOver = false;
         gridManager.IsProcessing = false;
 
@@ -245,7 +247,8 @@ public class BossBattleSystem : MonoBehaviour
 
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
 
-        // ⭐ v6.4: Continue 후 이동 불가면 긴급 깜빡임
+        UpdateContinueButtonState();
+
         if (!gridManager.CanMove())
         {
             bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
@@ -253,7 +256,21 @@ public class BossBattleSystem : MonoBehaviour
         }
     }
 
-    // ⭐ v6.3: Restart → 0.6초 후 현재 Scene 재로드
+    // v6.6: Continue 버튼 활성/비활성
+    void UpdateContinueButtonState()
+    {
+        if (continueButton == null) return;
+        bool canCont = gunSystem != null && gunSystem.CanContinue();
+        continueButton.interactable = canCont;
+        Image btnImg = continueButton.GetComponent<Image>();
+        if (btnImg != null)
+        {
+            Color c = btnImg.color;
+            c.a = canCont ? 1f : 0.4f;
+            btnImg.color = c;
+        }
+    }
+
     public void RestartGame()
     {
         StartCoroutine(RestartGameCoroutine());
@@ -287,12 +304,9 @@ public class BossBattleSystem : MonoBehaviour
     {
         isChallengeClearShown = true;
 
-        // ⭐ v6.4: 하이어라키 ChallengeClearPanel 활성화 + Stats 텍스트 갱신
         if (challengeClearPanel != null)
         {
             challengeClearPanel.SetActive(true);
-
-            // 페이드인
             CanvasGroup cg = challengeClearPanel.GetComponent<CanvasGroup>();
             if (cg == null) cg = challengeClearPanel.AddComponent<CanvasGroup>();
             cg.alpha = 0f;
@@ -307,7 +321,7 @@ public class BossBattleSystem : MonoBehaviour
         }
 
         SpawnClearFirework();
-        Debug.Log("🎉 Challenge Clear UI 표시!");
+        Debug.Log("Challenge Clear UI!");
     }
 
     void SpawnClearFirework()
@@ -353,7 +367,6 @@ public class BossBattleSystem : MonoBehaviour
         Destroy(fwObj, 2f);
     }
 
-    // ⭐ v6.4: 하이어라키 패널 숨김 (public - Button OnClick에서 호출 가능)
     public void OnClearResume()
     {
         isChallengeClearShown = false;
