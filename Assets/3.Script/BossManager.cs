@@ -659,7 +659,7 @@ public class BossManager : MonoBehaviour
         SetBossUIActive(true);
         UpdateBossAttackUI();
 
-        if (!isFrozen) StartBossIdleAnimation();
+        StartBossIdleAnimation();  // isFrozen이면 내부에서 return
 
         if (gameManager != null)
         {
@@ -821,7 +821,9 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            StartBossIdleAnimation();
+            // ⭐ v6.5: transitioning 중이면 idle 시작 안 함 (OnBossDefeatedCoroutine에서 처리)
+            if (!isTransitioning)
+                StartBossIdleAnimation();
             attackInfoColorSaved = false;
             UpdateBossAttackUI();
         }

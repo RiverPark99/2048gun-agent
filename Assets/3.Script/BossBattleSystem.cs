@@ -27,11 +27,6 @@ public class BossBattleSystem : MonoBehaviour
     [SerializeField] private GameObject damageTextPrefab;
     [SerializeField] private Transform damageTextParent;
 
-    [Header("색상 조합 보너스")]
-    [SerializeField] private int chocoMergeDamageMultiplier = 4;
-    // ⭐ v6.3: Freeze 데미지 2배 상향 (1.5→2.0)
-    [SerializeField] private float feverDamageMultiplier = 2.0f;
-
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
 
@@ -55,8 +50,6 @@ public class BossBattleSystem : MonoBehaviour
     public bool IsBossTransitioning => isBossTransitioning;
     public bool IsGameOver => isGameOver;
     public bool IsChallengeClearShown => isChallengeClearShown;
-    public int ChocoMergeDamageMultiplier => chocoMergeDamageMultiplier;
-    public float FeverDamageMultiplier => feverDamageMultiplier;
     public LowHealthVignette LowHealthVignette => lowHealthVignette;
 
     public void Initialize()

@@ -52,25 +52,35 @@ public class PlayerHPSystem : MonoBehaviour
         public LevelUpEntry(int v, Color c, string l) { value = v; color = c; label = l; }
     }
 
-    // ⭐ v6.4: 등급별 색상 상수
-    private static readonly Color COLOR_BRONZE = new Color(0.80f, 0.50f, 0.20f);  // 동
-    private static readonly Color COLOR_SILVER = new Color(0.75f, 0.75f, 0.80f);  // 은
-    private static readonly Color COLOR_GOLD   = new Color(1.00f, 0.84f, 0.00f);  // 금
+    // ⭐ v6.5: 등급별 픽스 색상 (동/은/금)
+    private static readonly Color COLOR_BRONZE = new Color(0.80f, 0.50f, 0.20f);
+    private static readonly Color COLOR_SILVER = new Color(0.75f, 0.75f, 0.80f);
+    private static readonly Color COLOR_GOLD   = new Color(1.00f, 0.84f, 0.00f);
+
+    // ⭐ v6.5: 셔플 중 알록달록 색상
+    private static readonly Color[] SHUFFLE_COLORS = {
+        new Color(0.4f, 0.8f, 1f),
+        new Color(0.4f, 1f, 0.6f),
+        new Color(1f, 0.85f, 0.3f),
+        new Color(1f, 0.6f, 0.3f),
+        new Color(0.3f, 1f, 0.3f),
+        new Color(0.6f, 1f, 0.5f),
+        new Color(0.85f, 1f, 0.2f),
+        new Color(1f, 1f, 0.2f),
+        new Color(1f, 0.35f, 0.55f),
+    };
 
     private static readonly LevelUpEntry[] allLevelUpEntries = {
-        // 60% 테이블 (2~5) - 동색
         new LevelUpEntry(2,  COLOR_BRONZE, "Level UP! MaxHP +2"),
         new LevelUpEntry(3,  COLOR_BRONZE, "Level UP! MaxHP +3"),
         new LevelUpEntry(4,  COLOR_BRONZE, "Level UP! MaxHP +4"),
         new LevelUpEntry(5,  COLOR_BRONZE, "Level UP! MaxHP +5"),
-        // 39% 테이블 (10~15) - 은색
         new LevelUpEntry(10, COLOR_SILVER, "Level UP! MaxHP +10"),
         new LevelUpEntry(11, COLOR_SILVER, "Level UP! MaxHP +11"),
         new LevelUpEntry(12, COLOR_SILVER, "Level UP! MaxHP +12"),
         new LevelUpEntry(13, COLOR_SILVER, "Level UP! MaxHP +13"),
         new LevelUpEntry(14, COLOR_SILVER, "Level UP! MaxHP +14"),
         new LevelUpEntry(15, COLOR_SILVER, "Level UP! MaxHP +15"),
-        // 1% (40) - 금색
         new LevelUpEntry(40, COLOR_GOLD,   "Level UP! MaxHP +40"),
     };
 
@@ -221,7 +231,8 @@ public class PlayerHPSystem : MonoBehaviour
             {
                 LevelUpEntry randEntry = allLevelUpEntries[Random.Range(0, allLevelUpEntries.Length)];
                 levelUpText.text = randEntry.label;
-                levelUpText.color = randEntry.color;
+                // ⭐ v6.5: 셔플 중에는 알록달록 색상
+                levelUpText.color = SHUFFLE_COLORS[Random.Range(0, SHUFFLE_COLORS.Length)];
             }
             // 점점 느려지는 간격 (0.06~0.18초)
             float interval = Mathf.Lerp(0.06f, 0.18f, elapsed / shuffleTime);

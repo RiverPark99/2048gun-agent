@@ -1,6 +1,6 @@
 // =====================================================
-// GameManager.cs - v6.4
-// New Input System: 스와이프 + 키보드 (WASD/Arrow)
+// GameManager.cs - v6.5
+// New Input System: 스와이프(임계값 즉시 판정) + 키보드
 // =====================================================
 
 using UnityEngine;
@@ -30,7 +30,6 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
-        // 키보드 이동 (WASD + Arrow)
         moveAction = new InputAction("Move", InputActionType.Value);
         moveAction.AddCompositeBinding("2DVector")
             .With("Up", "<Keyboard>/w")
@@ -43,10 +42,7 @@ public class GameManager : MonoBehaviour
             .With("Left", "<Keyboard>/leftArrow")
             .With("Right", "<Keyboard>/rightArrow");
 
-        // 포인터(마우스/터치) 프레스
         pointerPressAction = new InputAction("PointerPress", InputActionType.Button, "<Pointer>/press");
-
-        // 포인터 위치
         pointerPositionAction = new InputAction("PointerPosition", InputActionType.Value, "<Pointer>/position");
     }
 
@@ -84,7 +80,31 @@ public class GameManager : MonoBehaviour
         gridManager.UpdateTurnUI();
     }
 
-    // === 키보드 이동 ===
+    // ⭐ v6.5: 드래그 중 임계값 도달 시 즉시 입력
+    void Update()
+    {
+        if (!isPointerDown || swipeConsumed) return;
+
+        Vector2 currentPos = pointerPositionAction.ReadValue<Vector2>();
+        Vector2 delta = currentPos - pointerStartPos;
+
+        if (delta.magnitude >= swipeThreshold)
+        {
+            swipeConsumed = true;
+
+            if (bossBattle.ShouldBlockInput()) return;
+            if (gunSystem.IsGunMode) return;
+
+            Vector2Int dir;
+            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
+                dir = delta.x > 0 ? Vector2Int.right : Vector2Int.left;
+            else
+                dir = delta.y > 0 ? Vector2Int.down : Vector2Int.up;
+
+            gridManager.Move(dir);
+        }
+    }
+
     void OnMovePerformed(InputAction.CallbackContext ctx)
     {
         if (bossBattle.ShouldBlockInput()) return;
@@ -93,17 +113,15 @@ public class GameManager : MonoBehaviour
         Vector2 v = ctx.ReadValue<Vector2>();
         Vector2Int dir = Vector2Int.zero;
 
-        // 가장 큰 축 기준 방향 판별
         if (Mathf.Abs(v.x) > Mathf.Abs(v.y))
             dir = v.x > 0 ? Vector2Int.right : Vector2Int.left;
         else if (Mathf.Abs(v.y) > 0)
-            dir = v.y > 0 ? Vector2Int.down : Vector2Int.up;   // Grid: Y 반전
+            dir = v.y > 0 ? Vector2Int.down : Vector2Int.up;
 
         if (dir != Vector2Int.zero)
             gridManager.Move(dir);
     }
 
-    // === 포인터(터치/마우스) 스와이프 ===
     void OnPointerDown(InputAction.CallbackContext ctx)
     {
         pointerStartPos = pointerPositionAction.ReadValue<Vector2>();
@@ -113,63 +131,24 @@ public class GameManager : MonoBehaviour
 
     void OnPointerUp(InputAction.CallbackContext ctx)
     {
-        if (!isPointerDown || swipeConsumed) { isPointerDown = false; return; }
-        isPointerDown = false;
+        if (!isPointerDown) { isPointerDown = false; return; }
 
-        if (bossBattle.ShouldBlockInput()) return;
-
-        Vector2 endPos = pointerPositionAction.ReadValue<Vector2>();
-        Vector2 delta = endPos - pointerStartPos;
-
-        // Gun 모드: 탭(스와이프 아님) → ShootTile
-        if (gunSystem.IsGunMode)
+        // Gun 모드: 탭(스와이프 안 됨) → ShootTile
+        if (!swipeConsumed && gunSystem.IsGunMode)
         {
-            if (delta.magnitude < swipeThreshold)
+            if (!bossBattle.ShouldBlockInput())
                 gunSystem.ShootTile();
-            return;
         }
 
-        // 스와이프 판별
-        if (delta.magnitude < swipeThreshold) return;
-
-        Vector2Int dir;
-        if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-            dir = delta.x > 0 ? Vector2Int.right : Vector2Int.left;
-        else
-            dir = delta.y > 0 ? Vector2Int.down : Vector2Int.up;   // Grid: Y 반전
-
-        gridManager.Move(dir);
-        swipeConsumed = true;
+        isPointerDown = false;
+        swipeConsumed = false;
     }
 
-    // === 다른 시스템에서 호출하는 중계 메서드 ===
-    public void SetBossAttacking(bool attacking)
-    {
-        bossBattle.SetBossAttacking(attacking);
-    }
-
-    public bool IsBossAttacking()
-    {
-        return bossBattle.IsBossAttacking;
-    }
-
-    public void SetBossTransitioning(bool transitioning)
-    {
-        bossBattle.SetBossTransitioning(transitioning);
-    }
-
-    public void TakeBossAttack(int damage)
-    {
-        bossBattle.TakeBossAttack(damage);
-    }
-
-    public void OnBossDefeated()
-    {
-        bossBattle.OnBossDefeated();
-    }
-
-    public void UpdateTurnUI()
-    {
-        gridManager.UpdateTurnUI();
-    }
+    // === 중계 메서드 ===
+    public void SetBossAttacking(bool attacking) { bossBattle.SetBossAttacking(attacking); }
+    public bool IsBossAttacking() { return bossBattle.IsBossAttacking; }
+    public void SetBossTransitioning(bool transitioning) { bossBattle.SetBossTransitioning(transitioning); }
+    public void TakeBossAttack(int damage) { bossBattle.TakeBossAttack(damage); }
+    public void OnBossDefeated() { bossBattle.OnBossDefeated(); }
+    public void UpdateTurnUI() { gridManager.UpdateTurnUI(); }
 }
