@@ -106,15 +106,23 @@ public class Tile : MonoBehaviour
     // === 파티클 해상도 대응 ===
     // UIParticle.scale: Screen.width 비례 → 퍼지는 정도/속도 동일 비율
     // 기준: 498px에서 scale=3
-    // 입자 크기: scale이 커지면 입자도 커지므로 역보정 (498/Screen.width)
+    // startSize/radius/speed: Canvas 로컬 단위 고정 → scaleFactor가 자동 화면 매핑
     static float ParticleScaleFactor() => 3f * ((float)Screen.width / 498f);
-    static float SizeCorrection() => 498f / (float)Screen.width;
+
+    // scaleFactor가 입자 크기에 영향 → sf 역보정
+    // 498(sf=0.386) 기준으로 동일 화면 비율 유지
+    float GetScaleFactorSizeCorrection()
+    {
+        Canvas rootCanvas = GetComponentInParent<Canvas>();
+        float sf = (rootCanvas != null && rootCanvas.rootCanvas != null) ? rootCanvas.rootCanvas.scaleFactor : 0.386f;
+        return 0.386f / Mathf.Max(sf, 0.01f);
+    }
 
     float GetAdaptiveParticleSize(float baseRatio)
     {
         if (rectTransform == null) return 15f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * baseRatio * SizeCorrection();
+        return tileSize * baseRatio * GetScaleFactorSizeCorrection();
     }
 
     float GetAdaptiveShapeRadius()
@@ -150,7 +158,7 @@ public class Tile : MonoBehaviour
         float adaptiveSize = GetAdaptiveParticleSize(sizeRatio);
         float adaptiveSpeed = GetAdaptiveSpeed();
         float adaptiveRadius = GetAdaptiveShapeRadius();
-
+        Debug.Log($"[Particle] Screen={Screen.width}, startSize={adaptiveSize:F1}, sfCorr={GetScaleFactorSizeCorrection():F3}");
         var main = ps.main;
         main.startLifetime = lifetime;
         main.startSpeed = adaptiveSpeed;

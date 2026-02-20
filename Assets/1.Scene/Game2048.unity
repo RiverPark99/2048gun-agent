@@ -1049,7 +1049,7 @@ MonoBehaviour:
   unlockManager: {fileID: 159172561}
   cheatMode: 0
   cheatInfiniteContinue: 0
-  freezeTurnMultiplier: 1.06
+  freezeTurnMultiplier: 1.14
 --- !u!114 &159172560
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1418,8 +1418,8 @@ MonoBehaviour:
   animationDuration: 0.5
   bossSpawnDelay: 1
   attackMotionDuration: 0.5
-  tutorialFixedHP: 300
-  tutorialFixedATK: 20
+  tutorialHP: c8000000f4010000e8030000f4010000d0070000b80b0000ac0d0000a00f000010270000
+  tutorialATK: 0a0000000a00000019000000430000002300000024000000250000002600000028000000
   stage39HP: 2147483647
   attackInfoColorA: {r: 0.7, g: 0.7, b: 0.7, a: 1}
   attackInfoColorB: {r: 1, g: 0.85, b: 0.5, a: 1}
@@ -4348,7 +4348,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 50, y: 30}
+  m_AnchoredPosition: {x: 50, y: 49}
   m_SizeDelta: {x: 2000, y: 30}
   m_Pivot: {x: 0, y: 0.5}
 --- !u!114 &751145185
