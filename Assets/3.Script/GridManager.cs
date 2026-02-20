@@ -32,6 +32,7 @@ public class GridManager : MonoBehaviour
     [SerializeField] private PlayerHPSystem playerHP;
     [SerializeField] private BossBattleSystem bossBattle;
     [SerializeField] private BossManager bossManager;
+    [SerializeField] private UnlockManager unlockManager;
 
     // Grid 데이터
     private Tile[,] tiles;
@@ -48,8 +49,7 @@ public class GridManager : MonoBehaviour
     private int comboCount = 0;
     private Vector3 lastMergedTilePosition;
 
-    // ⭐ v5.0: 무한대 보스 전용
-    private int infiniteBossMoveCount = 0;
+
 
     // ⭐ v6.7: 콤보 데미지 배율 (Inspector에서 밸런싱 가능)
     [Header("Balance")]
@@ -100,7 +100,6 @@ public class GridManager : MonoBehaviour
         score = 0;
         currentTurn = 0;
         comboCount = 0;
-        infiniteBossMoveCount = 0;
 
         UpdateScoreUI();
         SpawnTile();
@@ -116,7 +115,6 @@ public class GridManager : MonoBehaviour
         }
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
-        infiniteBossMoveCount = 0;
     }
 
     // === 이동 ===
@@ -195,7 +193,10 @@ public class GridManager : MonoBehaviour
                                 totalMergedValue += bonusDamage;
 
                                 if (!gunSystem.IsFeverMode)
+                                {
                                     gunSystem.AddMergeGauge(1);
+                                    gunSystem.ShowMergeGaugeChange(1, false);
+                                }
 
                                 Debug.Log($"CHOCO MERGE! x4 DMG, Gauge +1 ({gunSystem.MergeGauge}/40)");
                                 targetTile.PlayChocoMergeEffect();
@@ -219,7 +220,10 @@ public class GridManager : MonoBehaviour
                                 }
 
                                 if (!gunSystem.IsFeverMode)
+                                {
                                     gunSystem.AddMergeGauge(1);
+                                    gunSystem.ShowMergeGaugeChange(1, false);
+                                }
 
                                 Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
                                 targetTile.PlayBerryMergeEffect();
@@ -233,7 +237,10 @@ public class GridManager : MonoBehaviour
                                 totalMergedValue += mergedValue; // 기본 + 1배 추가 = 2배
 
                                 if (!gunSystem.IsFeverMode)
+                                {
                                     gunSystem.AddMergeGauge(1);
+                                    gunSystem.ShowMergeGaugeChange(1, false);
+                                }
 
                                 score += mergedValue;
                                 Debug.Log($"MIX MERGE! x2 DMG, HP+{mixHeal}(6%), Gauge +1 ({gunSystem.MergeGauge}/40)");
@@ -247,7 +254,8 @@ public class GridManager : MonoBehaviour
                                 targetTile.PlayMixMergeEffect();
                             }
 
-                            TileColor newColor = Random.value < 0.5f ? TileColor.Choco : TileColor.Berry;
+                            TileColor newColor = (unlockManager != null) ? unlockManager.GetMergeResultColorForStage()
+                                : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry);
                             targetTile.SetColor(newColor);
 
                             merged[nextPos.x, nextPos.y] = true;
@@ -303,25 +311,6 @@ public class GridManager : MonoBehaviour
         {
             currentTurn++;
             UpdateTurnUI();
-
-            // ⭐ v5.0: 무한대 보스(stage 40)에서 20회 이동마다 공격력 증가
-            if (bossManager != null && bossManager.IsInfiniteBoss())
-            {
-                infiniteBossMoveCount++;
-                if (infiniteBossMoveCount % 20 == 0)
-                {
-                    bossManager.IncreaseInfiniteBossDamage();
-
-                    if (bossBattle.LowHealthVignette != null)
-                    {
-                        bossBattle.LowHealthVignette.IncreaseInfiniteBossBonus();
-                        bossBattle.LowHealthVignette.UpdateVignette(playerHP.CurrentHeat, playerHP.MaxHeat);
-                        gunSystem.UpdateGuideText();
-                    }
-
-                    Debug.Log($"⚠️ 무한대 보스: {infiniteBossMoveCount}회 이동! 공격력 + 비네트 증가!");
-                }
-            }
 
             comboCount = mergeCountThisTurn;
 
@@ -382,6 +371,7 @@ public class GridManager : MonoBehaviour
             {
                 gunSystem.AddMergeGauge(1);
                 gunSystem.ClearFeverPaybackIfNeeded();
+                gunSystem.ShowMergeGaugeChange(1, true);
                 Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/40)");
             }
 
@@ -475,8 +465,9 @@ public class GridManager : MonoBehaviour
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
 
-        TileColor randomColor = Random.value < 0.5f ? TileColor.Choco : TileColor.Berry;
-        tile.SetColor(randomColor);
+        TileColor tileColor = (unlockManager != null) ? unlockManager.GetTileColorForStage() 
+            : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry);
+        tile.SetColor(tileColor);
 
         tile.SetGridPosition(pos);
         tile.MoveTo(GetCellPosition(pos.x, pos.y), false);
@@ -704,9 +695,6 @@ public class GridManager : MonoBehaviour
         return sum;
     }
 
-    // === 무한 보스 이동 카운트 리셋 ===
-    public void ResetInfiniteBossMoveCount()
-    {
-        infiniteBossMoveCount = 0;
-    }
+    // 하위 호환용
+    public void ResetInfiniteBossMoveCount() { }
 }

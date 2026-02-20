@@ -26,12 +26,12 @@ public class BossManager : MonoBehaviour
     [SerializeField] private int baseTurnInterval = 8;
     [SerializeField] private int minTurnInterval = 3;
 
-    [Header("⭐ v6.4: Enemy ATK 성장 설정")]
+    [Header("Enemy ATK 성장 설정")]
     [SerializeField] private int baseDamage = 28;
-    [SerializeField] private int atkGrowthPerStep = 3;        // 일반 몬스터 고정 성장치
-    [SerializeField] private int atkGrowthInterval = 2;       // 몇 Challenge마다 오르는지
-    [SerializeField] private int bossAtkMaxTotal = 90;        // boss 공격력 한계치 (move 점진적 증가 포함)
-    [SerializeField] private int clearModeFixedAtk = 60;      // Clear 이후 적 공격력 고정치
+    [SerializeField] private int atkGrowthPerStep = 3;
+    [SerializeField] private int atkGrowthInterval = 2;
+    [SerializeField] private int bossAtkMaxTotal = 90;
+    [SerializeField] private int clearModeFixedAtk = 60;
 
     private int currentTurnInterval;
     private int currentTurnCount = 0;
@@ -47,10 +47,15 @@ public class BossManager : MonoBehaviour
     [Header("Boss Attack Animation")]
     [SerializeField] private float attackMotionDuration = 0.3f;
 
-    [Header("⭐ v6.4: Guard ATK Progress Bar")]
-    [SerializeField] private GameObject guardAtkProgressBarObj;
-    [SerializeField] private RectTransform guardAtkProgressFill;
-    [SerializeField] private Slider guardAtkSlider; // v6.6: Slider 직접 할당 가능
+    [Header("Guard ATK Slider (Enemy HP bar와 동일 구조)")]
+    [SerializeField] private Slider guardAtkSlider;
+    [SerializeField] private int guardAtkIncreaseTurns = 20;
+
+    [Header("스테이지 배경 색상 (Inspector 설정)")]
+    [SerializeField] private Color stageColor_1_10  = new Color(0.25f, 0.25f, 0.35f, 1f);
+    [SerializeField] private Color stageColor_11_20 = new Color(0.65f, 0.78f, 0.9f, 1f);
+    [SerializeField] private Color stageColor_21_30 = new Color(0.9f, 0.7f, 0.8f, 1f);
+    [SerializeField] private Color stageColor_31_40 = new Color(0.72f, 0.55f, 0.42f, 1f);
 
     [Header("Boss Images")]
     [SerializeField] private List<Sprite> bossSprites = new List<Sprite>();
@@ -64,8 +69,8 @@ public class BossManager : MonoBehaviour
 
     private bool isFrozen = false;
     private int bonusTurnsAdded = 0;
-    private int bonusTurnsConsumed = 0; // □→■ 차오른 수
-    private int bonusTurnsTotal = 0;    // 총 보너스턴 수 (표시용)
+    private int bonusTurnsConsumed = 0;
+    private int bonusTurnsTotal = 0;
 
     private Color originalAttackInfoColor = Color.white;
     private bool attackInfoColorSaved = false;
@@ -77,6 +82,7 @@ public class BossManager : MonoBehaviour
     // Guard 모드
     private bool isGuardMode = false;
     private Sequence guardColorSequence;
+    private int guardAtkTurnCounter = 0; // Guard ATK 턴 카운터
 
     // Clear 모드
     private bool isClearMode = false;
@@ -84,16 +90,18 @@ public class BossManager : MonoBehaviour
     private Color originalGroundColor;
     private bool groundColorSaved = false;
 
-    // ⭐ v6.3: Guard 해제 후 HP bar 빛나는 효과
+    // HP bar glow
     private Sequence hpBarGlowSequence;
     private BossBattleSystem bossBattleSystem;
     private PlayerHPSystem playerHPSystem;
+    private UnlockManager unlockManager;
 
     void Start()
     {
         gameManager = FindAnyObjectByType<GameManager>();
         bossBattleSystem = FindAnyObjectByType<BossBattleSystem>();
         playerHPSystem = FindAnyObjectByType<PlayerHPSystem>();
+        unlockManager = FindAnyObjectByType<UnlockManager>();
 
         if (bossPanelGroundImage != null && !groundColorSaved)
         {
@@ -117,25 +125,23 @@ public class BossManager : MonoBehaviour
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
-        // ⭐ v6.4: ATK 성장
         currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
         infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
+        guardAtkTurnCounter = 0;
 
         if (bossLevel >= 40 && !isClearMode)
         {
             isGuardMode = true;
             StartGuardColorAnimation();
-            if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(true);
-            UpdateGuardAtkProgressBar();
+            ShowGuardAtkSlider();
         }
         else
         {
-            if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
+            HideGuardAtkSlider();
         }
 
-        // Clear 모드: 고정 공격력
         if (isClearMode)
         {
             currentBossDamage = clearModeFixedAtk;
@@ -148,7 +154,6 @@ public class BossManager : MonoBehaviour
             ApplyRedColor();
         }
 
-        // ⭐ v6.4: 비네트에 적 ATK 전달
         if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
 
@@ -157,12 +162,62 @@ public class BossManager : MonoBehaviour
         Debug.Log($"Boss Level {bossLevel} spawned! HP: {currentHP}/{maxHP}, ATK: {GetEffectiveDamage()}, Guard: {isGuardMode}, Clear: {isClearMode}");
     }
 
+    // === Guard ATK Slider 재설계 ===
+    void ShowGuardAtkSlider()
+    {
+        if (guardAtkSlider == null) return;
+        guardAtkSlider.gameObject.SetActive(true);
+        guardAtkSlider.minValue = 0f;
+        guardAtkSlider.maxValue = 1f;
+        guardAtkSlider.value = 0f;
+        guardAtkTurnCounter = 0;
+    }
+
+    void HideGuardAtkSlider()
+    {
+        if (guardAtkSlider == null) return;
+        guardAtkSlider.DOKill();
+        guardAtkSlider.gameObject.SetActive(false);
+    }
+
+    void UpdateGuardAtkSliderProgress()
+    {
+        if (guardAtkSlider == null || !guardAtkSlider.gameObject.activeSelf) return;
+        float progress = Mathf.Clamp01((float)guardAtkTurnCounter / guardAtkIncreaseTurns);
+        guardAtkSlider.DOKill();
+        guardAtkSlider.DOValue(progress, 0.25f).SetEase(Ease.OutQuad);
+    }
+
+    // Guard 턴 진행: 매 턴 카운터 증가 → 꽉 차면 ATK 증가 → 리셋
+    public void ProcessGuardAtkTurn()
+    {
+        if (!isGuardMode) return;
+        if (isClearMode) return;
+
+        guardAtkTurnCounter++;
+        UpdateGuardAtkSliderProgress();
+
+        if (guardAtkTurnCounter >= guardAtkIncreaseTurns)
+        {
+            // 꽉 참 → ATK 증가
+            guardAtkTurnCounter = 0;
+            ApplyDamageIncrease();
+
+            // 슬라이더 꽉 찬 뒤 0으로 리셋 (짧은 딜레이)
+            if (guardAtkSlider != null)
+            {
+                guardAtkSlider.DOKill();
+                guardAtkSlider.value = 1f;
+                guardAtkSlider.DOValue(0f, 0.3f).SetEase(Ease.InQuad).SetDelay(0.15f);
+            }
+        }
+    }
+
     void StartGuardColorAnimation()
     {
         if (bossImageArea == null) return;
         StopGuardColorAnimation();
 
-        // ⭐ v6.4: Guard 색상 주황↔붉은색 (푸른색 제거)
         Color pastelRedColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);
         Color pastelOrangeColor = new Color(1.0f, 0.75f, 0.5f, 1.0f);
 
@@ -185,7 +240,6 @@ public class BossManager : MonoBehaviour
         );
         guardColorSequence.SetLoops(-1, LoopType.Restart);
 
-        // ⭐ v6.4: Guard 상태에서 HP bar glow 시작
         StartHPBarGlowAnimation();
     }
 
@@ -194,7 +248,6 @@ public class BossManager : MonoBehaviour
         if (guardColorSequence != null) { guardColorSequence.Kill(); guardColorSequence = null; }
     }
 
-    // ⭐ v6.3: Guard 해제 후 HP bar 주황↔붉은 빛나는 루프
     void StartHPBarGlowAnimation()
     {
         StopHPBarGlowAnimation();
@@ -217,7 +270,6 @@ public class BossManager : MonoBehaviour
         if (hpBarGlowSequence != null) { hpBarGlowSequence.Kill(); hpBarGlowSequence = null; }
     }
 
-    // ⭐ v6.4: HP bar 붉은색 고정 (Clear 모드 적 공통)
     void SetHPBarRedFixed()
     {
         if (hpSlider == null) return;
@@ -229,31 +281,6 @@ public class BossManager : MonoBehaviour
         }
     }
 
-    // ⭐ v6.4: Guard ATK 진행 바 업데이트
-    void UpdateGuardAtkProgressBar()
-    {
-        if (guardAtkProgressBarObj == null) return;
-        if (!guardAtkProgressBarObj.activeSelf) return;
-        int currentTotal = currentBossDamage + infiniteBossExtraDamage;
-        float progress = Mathf.Clamp01((float)currentTotal / bossAtkMaxTotal);
-
-        // Slider 우선, 없으면 RectTransform sizeDelta
-        if (guardAtkSlider != null)
-        {
-            guardAtkSlider.minValue = 0f;
-            guardAtkSlider.maxValue = 1f;
-            guardAtkSlider.DOKill();
-            guardAtkSlider.DOValue(progress, 0.3f).SetEase(Ease.OutQuad);
-        }
-        else if (guardAtkProgressFill != null)
-        {
-            float parentWidth = guardAtkProgressFill.parent.GetComponent<RectTransform>().rect.width;
-            float targetW = parentWidth * progress;
-            guardAtkProgressFill.DOKill();
-            guardAtkProgressFill.DOSizeDelta(new Vector2(targetW, guardAtkProgressFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
-        }
-    }
-
     public void ExitGuardMode()
     {
         if (!isGuardMode) return;
@@ -262,10 +289,9 @@ public class BossManager : MonoBehaviour
         StopGuardColorAnimation();
         ApplyOrangeColor();
 
-        // ⭐ v6.4: Guard 해제 → glow 종료 + HP bar 붉은색 고정
         StopHPBarGlowAnimation();
         SetHPBarRedFixed();
-        if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
+        HideGuardAtkSlider();
 
         maxHP = 2147483647;
         currentHP = maxHP;
@@ -278,10 +304,15 @@ public class BossManager : MonoBehaviour
         Debug.Log("🏆 Guard 해제! Clear 모드 진입!");
     }
 
+    // 기존 IncreaseInfiniteBossDamage는 ProcessGuardAtkTurn 으로 대체
+    // 하위 호환용
     public void IncreaseInfiniteBossDamage()
     {
-        if (bossLevel < 40) return;
-        // ⭐ v6.4: Clear 모드(41+) 에서는 ATK 증가 비활성화
+        // 이제 ProcessGuardAtkTurn()에서 처리
+    }
+
+    private void ApplyDamageIncrease()
+    {
         if (isClearMode) return;
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
         if (currentTotal >= bossAtkMaxTotal)
@@ -289,26 +320,9 @@ public class BossManager : MonoBehaviour
             if (isGuardMode) ExitGuardMode();
             return;
         }
-        if (gameManager != null && gameManager.IsBossAttacking())
-        {
-            pendingDamageIncrease = true;
-            return;
-        }
-        ApplyDamageIncrease();
-    }
-
-    private void ApplyDamageIncrease()
-    {
-        int currentTotal = currentBossDamage + infiniteBossExtraDamage;
-        if (currentTotal >= bossAtkMaxTotal)
-        {
-            if (isGuardMode) ExitGuardMode();
-            return;
-        }
         infiniteBossExtraDamage++;
-        Debug.Log($"⚠️ 무한 보스 ATK 증가! {GetEffectiveDamage()}/{bossAtkMaxTotal}");
+        Debug.Log($"⚠️ Guard ATK 증가! {GetEffectiveDamage()}/{bossAtkMaxTotal}");
         UpdateBossAttackUI();
-        UpdateGuardAtkProgressBar();
         FlashAttackTextOrange();
         if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
@@ -325,7 +339,6 @@ public class BossManager : MonoBehaviour
         }
     }
 
-    // ⭐ v6.3: 주황색 플래시 (기존 파란색→주황색)
     void FlashAttackTextOrange()
     {
         if (bossAttackInfoText == null) return;
@@ -358,8 +371,6 @@ public class BossManager : MonoBehaviour
             Vector3 preShakePos = bossImageArea.transform.localPosition;
             bossImageArea.transform.DOShakePosition(0.2f, strength: 10f, vibrato: 20, randomness: 90f)
                 .OnComplete(() => { if (bossImageArea != null) bossImageArea.transform.localPosition = preShakePos; });
-
-            // ⭐ v6.4: 피격 시 흰색 점멸
             StartCoroutine(FlashBossWhite());
         }
 
@@ -382,7 +393,6 @@ public class BossManager : MonoBehaviour
         UpdateBossAttackUI();
     }
 
-    // ⭐ v6.3: □ 보너스턴 추가 시 UI 갱신
     public void PlayBonusTurnEffect()
     {
         UpdateBossAttackUI();
@@ -393,7 +403,13 @@ public class BossManager : MonoBehaviour
         if (isTransitioning) return;
         if (isFrozen) return;
 
-        // 보너스턴 소비 단계 (일반턴 다 찬 후)
+        // 해금 전: 적 공격 안함
+        if (unlockManager != null && !unlockManager.CanEnemyAttack()) return;
+
+        // Guard ATK 턴 진행
+        if (isGuardMode && !isClearMode)
+            ProcessGuardAtkTurn();
+
         if (currentTurnCount <= 0 && bonusTurnsAdded > 0)
         {
             bonusTurnsAdded--;
@@ -402,7 +418,6 @@ public class BossManager : MonoBehaviour
 
             if (bonusTurnsAdded <= 0)
             {
-                // ⭐ v6.4: 보너스턴 소비 완료 → 즉시 input 차단 후 공격
                 if (gameManager != null) gameManager.SetBossAttacking(true);
                 StartCoroutine(AttackAfterBonusTurnsConsumed());
             }
@@ -413,24 +428,19 @@ public class BossManager : MonoBehaviour
 
         if (currentTurnCount <= 0 && bonusTurnsAdded <= 0)
         {
-            // 보너스턴 없으면 즉시 공격
             AttackPlayer();
             return;
         }
 
-        // currentTurnCount가 0이 되었지만 보너스턴이 있으면 → 이번 턴은 일반턴 다 찬 것만 표시
         UpdateBossAttackUI();
     }
 
     IEnumerator AttackAfterBonusTurnsConsumed()
     {
-        // ■■■ 다 차오른 상태 0.3초 표시
         yield return new WaitForSeconds(0.3f);
-        // ■■■ 사라짐 (리셋)
         bonusTurnsConsumed = 0;
         bonusTurnsTotal = 0;
         UpdateBossAttackUI();
-        // 공격
         AttackPlayer();
     }
 
@@ -459,7 +469,6 @@ public class BossManager : MonoBehaviour
         {
             Vector3 originalPos = bossImageArea.transform.localPosition;
 
-            // ⭐ v6.4: Player HP bar 위치까지 돌진 공격
             float rushDistance = 400f;
             if (playerHPSystem != null && playerHPSystem.HeatText != null)
             {
@@ -468,18 +477,15 @@ public class BossManager : MonoBehaviour
                 rushDistance = Mathf.Abs(originalPos.y - hpBarLocalPos.y);
             }
 
-            // 빠르게 아래로 돌진
             yield return bossImageArea.transform.DOLocalMoveY(originalPos.y - rushDistance, attackMotionDuration * 0.35f)
                 .SetEase(Ease.InQuad).WaitForCompletion();
 
-            // ⭐ 최하단 도달 시점에 데미지 + 피격효과
             if (gameManager != null)
             {
                 gameManager.TakeBossAttack(GetEffectiveDamage());
                 CameraShake.Instance?.ShakeMedium();
             }
 
-            // 원래 자리로 복귀
             yield return bossImageArea.transform.DOLocalMoveY(originalPos.y, attackMotionDuration * 0.65f)
                 .SetEase(Ease.OutBack).WaitForCompletion();
 
@@ -553,7 +559,6 @@ public class BossManager : MonoBehaviour
         for (int i = 0; i < filledCount; i++) symbols += filledSymbol;
         for (int i = filledCount; i < totalTurns; i++) symbols += emptySymbol;
 
-        // ⭐ v6.3: 보너스턴 □/■ 표시 (소비된 것은 ■, 남은 것은 □)
         int totalBonus = bonusTurnsConsumed + bonusTurnsAdded;
         if (totalBonus > 0)
         {
@@ -584,7 +589,6 @@ public class BossManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        // ⭐ v6.4: Guard 보스(40) 처치 시 Challenge Clear
         bool shouldShowClear = (bossLevel == 40 && isClearMode && !isGuardMode);
 
         if (gameManager != null)
@@ -594,10 +598,7 @@ public class BossManager : MonoBehaviour
         }
 
         if (shouldShowClear && bossBattleSystem != null)
-        {
-            // 보스 쓰러짐 연출 후 Clear UI 표시
             StartCoroutine(ShowClearUIDelayed());
-        }
 
         SetBossUIActive(false);
         StopBossIdleAnimation();
@@ -610,7 +611,6 @@ public class BossManager : MonoBehaviour
             yield return fadeSeq.WaitForCompletion();
         }
 
-        // ⭐ v6.4: Level UP 룰렛 완료 대기
         if (playerHPSystem != null)
         {
             while (playerHPSystem.IsLevelUpAnimating)
@@ -619,6 +619,9 @@ public class BossManager : MonoBehaviour
 
         yield return new WaitForSeconds(bossSpawnDelay);
         bossLevel++;
+
+        // 해금 체크
+        if (unlockManager != null) unlockManager.OnStageChanged(bossLevel);
 
         if (isClearMode)
             SetupClearModeBoss();
@@ -632,13 +635,13 @@ public class BossManager : MonoBehaviour
             currentHP = maxHP;
 
             currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-
             currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
             if (bossLevel >= 40 && !isClearMode)
             {
                 isGuardMode = true;
                 StartGuardColorAnimation();
+                ShowGuardAtkSlider();
             }
 
             if (bossLevel >= 41 && !isClearMode && !isGuardMode)
@@ -654,8 +657,8 @@ public class BossManager : MonoBehaviour
         bonusTurnsAdded = 0;
         bonusTurnsConsumed = 0;
         bonusTurnsTotal = 0;
+        guardAtkTurnCounter = 0;
 
-        // ⭐ v6.4: 새 보스 스폰 후 비네트에 ATK 전달
         if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
 
@@ -672,8 +675,9 @@ public class BossManager : MonoBehaviour
         UpdateUI(true);
         SetBossUIActive(true);
         UpdateBossAttackUI();
+        UpdateStageBackgroundColor();
 
-        StartBossIdleAnimation();  // isFrozen이면 내부에서 return
+        StartBossIdleAnimation();
 
         if (gameManager != null)
         {
@@ -689,18 +693,16 @@ public class BossManager : MonoBehaviour
         if (stage39SpriteIndex >= 0 && stage39SpriteIndex < bossSprites.Count)
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
 
-        // ⭐ v6.4: Clear 모드 보스는 붉은색 + HP bar 붉은색 고정
         ApplyRedColor();
         SetHPBarRedFixed();
+        HideGuardAtkSlider();
         maxHP = 2147483647;
         currentHP = maxHP;
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt(38 * 0.2f));
 
-        // Clear 모드: 고정 공격력
         currentBossDamage = clearModeFixedAtk;
         infiniteBossExtraDamage = 0;
 
-        // ⭐ v6.4: 비네트에 적 ATK 전달
         if (bossBattleSystem != null && bossBattleSystem.LowHealthVignette != null)
             bossBattleSystem.LowHealthVignette.SetEnemyAtk(GetEffectiveDamage());
     }
@@ -718,9 +720,10 @@ public class BossManager : MonoBehaviour
         isGuardMode = false;
         isClearMode = false;
         stage39SpriteIndex = -1;
+        guardAtkTurnCounter = 0;
         StopGuardColorAnimation();
         StopHPBarGlowAnimation();
-        if (guardAtkProgressBarObj != null) guardAtkProgressBarObj.SetActive(false);
+        HideGuardAtkSlider();
 
         if (bossPanelGroundImage != null && groundColorSaved)
         {
@@ -736,11 +739,10 @@ public class BossManager : MonoBehaviour
             bossImageArea.transform.localScale = Vector3.one;
         }
 
-        // ⭐ v6.3: HP bar 색상 초기화 (흰색이 아닌 원래 색으로)
         if (hpSlider != null)
         {
             Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
-            if (fillImage != null) fillImage.color = new Color(0.3f, 0.85f, 0.4f); // 기본 녹색
+            if (fillImage != null) fillImage.color = new Color(0.3f, 0.85f, 0.4f);
         }
 
         InitializeBoss();
@@ -790,7 +792,6 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.4: Clear 모드 적 붉은색
     void ApplyRedColor()
     {
         if (bossImageArea == null) return;
@@ -799,19 +800,12 @@ public class BossManager : MonoBehaviour
         bossImageArea.material = mat;
     }
 
-    // ⭐ v6.4: 적 피격 시 흰색 점멸 (Guard/Red 색상 복원)
     IEnumerator FlashBossWhite()
     {
         if (bossImageArea == null || bossImageArea.material == null) yield break;
-
-        // 현재 색상 저장
         Color originalMatColor = bossImageArea.material.GetColor("_Color");
-
-        // 흰색으로
         bossImageArea.material.SetColor("_Color", Color.white);
         yield return new WaitForSeconds(0.07f);
-
-        // 원래 색상 복원 (Guard glow 중이면 glow가 다시 덮어쓰므로 OK)
         if (bossImageArea != null && bossImageArea.material != null)
             bossImageArea.material.SetColor("_Color", originalMatColor);
     }
@@ -835,7 +829,6 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            // ⭐ v6.5: transitioning 중이면 idle 시작 안 함 (OnBossDefeatedCoroutine에서 처리)
             if (!isTransitioning)
                 StartBossIdleAnimation();
             attackInfoColorSaved = false;
@@ -865,7 +858,6 @@ public class BossManager : MonoBehaviour
         if (bossAttackInfoText != null) bossAttackInfoText.gameObject.SetActive(active);
     }
 
-    // ⭐ v6.3: Challenge Clear UI 지연 표시
     IEnumerator ShowClearUIDelayed()
     {
         yield return new WaitForSeconds(2.0f);
@@ -873,7 +865,7 @@ public class BossManager : MonoBehaviour
             bossBattleSystem.ShowChallengeClearUI();
     }
 
-    // v6.6: 10스테이지마다 배경색 변경 (파스텔톤)
+    // === 스테이지 배경색 (SerializeField 색상 사용) ===
     void UpdateStageBackgroundColor()
     {
         if (bossPanelGroundImage == null) return;
@@ -881,13 +873,13 @@ public class BossManager : MonoBehaviour
 
         Color targetColor;
         if (bossLevel <= 10)
-            targetColor = groundColorSaved ? originalGroundColor : bossPanelGroundImage.color;
+            targetColor = stageColor_1_10;
         else if (bossLevel <= 20)
-            targetColor = new Color(0.65f, 0.78f, 0.9f, 1f);
+            targetColor = stageColor_11_20;
         else if (bossLevel <= 30)
-            targetColor = new Color(0.9f, 0.7f, 0.8f, 1f);
+            targetColor = stageColor_21_30;
         else
-            targetColor = new Color(0.72f, 0.55f, 0.42f, 1f);
+            targetColor = stageColor_31_40;
 
         bossPanelGroundImage.DOKill();
         bossPanelGroundImage.DOColor(targetColor, 0.5f).SetEase(Ease.InOutQuad);

@@ -103,55 +103,41 @@ public class Tile : MonoBehaviour
         StopUltrasonicEffect();
     }
 
-    // === 해상도 보정 ===
-    // 1290x2796 기준값으로 정규화: tileSize 비례하되, Canvas 확장 비율로 나눠서
-    // 어떤 해상도에서든 화면 대비 동일한 비율의 파티클
-    //
-    // Expand 모드에서 Canvas 로컬 width가 해상도마다 다름:
-    //   1290x2796 → canvasW≈1290, tileSize≈280
-    //   498x1080  → canvasW≈2580(세로기준확장), tileSize≈560
-    // canvasRatio = canvasW / 1290 로 나눠서 정규화
-    float GetCanvasWidthRatio()
+    // === 파티클 해상도 대응 ===
+    // Canvas Expand: 로컬 좌표 1290x2796 고정, tileSize≈268
+    // UIParticle이 내부적으로 scaleFactor 역수를 적용하므로
+    // scale = 3 / scaleFactor 로 보정해야 양쪽 해상도에서 동일
+    float GetCanvasScaleFactor()
     {
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas == null) return 1f;
         Canvas root = canvas.rootCanvas;
-        if (root == null) return 1f;
-        RectTransform canvasRect = root.GetComponent<RectTransform>();
-        if (canvasRect == null) return 1f;
-        return canvasRect.rect.width / 1290f;
+        return root != null ? root.scaleFactor : 1f;
     }
 
-    // startSize: tileSize 비례 (UIParticle이 Canvas scale 반영하므로 그대로 OK)
     float GetAdaptiveParticleSize(float baseRatio)
     {
-        if (rectTransform == null) return 50f;
+        if (rectTransform == null) return 15f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
         return tileSize * baseRatio;
     }
 
-    // shapeRadius & speed: tileSize 비례하되 canvasRatio로 나눠서 퍼짐 정규화
     float GetAdaptiveShapeRadius()
     {
-        if (rectTransform == null) return 30f;
+        if (rectTransform == null) return 8f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        float ratio = GetCanvasWidthRatio();
-        return (tileSize * 0.35f) / ratio;
+        return tileSize * 0.08f; // 타일의 8% → 약 21 로컬
     }
 
     float GetAdaptiveSpeed()
     {
-        if (rectTransform == null) return 200f;
+        if (rectTransform == null) return 60f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        float ratio = GetCanvasWidthRatio();
-        return (tileSize * 2.0f) / ratio;
+        return tileSize * 0.5f; // 타일의 50% → 약 134 로컬/초
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
     {
-        float tileSize = rectTransform != null ? Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) : 0f;
-        float cRatio = GetCanvasWidthRatio();
-        Debug.Log($"[Particle Debug] Screen={Screen.width}x{Screen.height}, tileSize={tileSize:F0}, canvasRatio={cRatio:F3}, size={tileSize*sizeRatio:F0}, speed={tileSize*2f/cRatio:F0}, radius={tileSize*0.35f/cRatio:F0}");
         GameObject particleObj = new GameObject("MergeParticle");
 
         Transform gridContainer = transform.parent;
@@ -219,10 +205,10 @@ public class Tile : MonoBehaviour
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
-        // UIParticle: scale=3/canvasRatio (화면 대비 동일 비율)
-        float canvasR = GetCanvasWidthRatio();
+        // UIParticle: scaleFactor 보정으로 해상도 무관 동일 비율
+        float sf = GetCanvasScaleFactor();
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiP.scale = 3f / canvasR;
+        uiP.scale = 3f / sf;
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);

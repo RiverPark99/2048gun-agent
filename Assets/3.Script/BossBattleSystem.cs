@@ -362,7 +362,8 @@ public class BossBattleSystem : MonoBehaviour
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
-        var uiP = fwObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = 3f;
+        float sf = canvas.scaleFactor;
+        var uiP = fwObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = 3f / sf;
         ps.Play();
         Destroy(fwObj, 2f);
     }

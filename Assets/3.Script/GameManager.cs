@@ -14,6 +14,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private PlayerHPSystem playerHP;
     [SerializeField] private BossBattleSystem bossBattle;
     [SerializeField] private BossManager bossManager;
+    [SerializeField] private UnlockManager unlockManager;
 
     [Header("Swipe Settings")]
     [SerializeField] private float swipeThresholdBase = 80f; // 1290px 기준
@@ -78,6 +79,7 @@ public class GameManager : MonoBehaviour
         playerHP.Initialize();
         gunSystem.Initialize();
         bossBattle.Initialize();
+        if (unlockManager != null) unlockManager.Initialize();
 
         gridManager.StartNewGame();
         gunSystem.UpdateGunUI();
