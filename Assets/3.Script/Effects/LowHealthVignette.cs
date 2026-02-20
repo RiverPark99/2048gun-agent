@@ -6,28 +6,29 @@ public class LowHealthVignette : MonoBehaviour
 {
     [Header("Vignette Settings")]
     [SerializeField] private Image vignetteImage;
-    [SerializeField] private Color vignetteColor = new Color(0.2f, 0.4f, 0.6f, 0f);
     [SerializeField] private float maxAlpha = 0.5f;
+
+    [Header("Vignette Colors (Inspector에서 수정 가능)")]
+    [SerializeField] private Color vignetteBaseColor = new Color(0.2f, 0.4f, 0.6f, 0f);
+    [SerializeField] private Color dangerColor1 = new Color(0.2f, 0.4f, 0.7f);
+    [SerializeField] private Color dangerColor2 = new Color(0.5f, 0.15f, 0.6f);
 
     private float currentAlpha = 0f;
 
-    // ⭐ v6.4: 적 ATK 기반 동적 기준
+    // 적 ATK 기반 동적 기준
     private int enemyAtk = 28;
 
-    // ⭐ v6.4: 위험 색상 애니메이션 (맞으면 죽는 피)
+    // 위험 색상 애니메이션
     private Sequence dangerColorAnim;
     private bool isDangerAnimActive = false;
-    private static readonly Color DANGER_BLUE   = new Color(0.2f, 0.4f, 0.7f);
-    private static readonly Color DANGER_PURPLE = new Color(0.5f, 0.15f, 0.6f);
 
     void Start()
     {
         if (vignetteImage == null) return;
-        vignetteColor.a = 0f;
-        vignetteImage.color = vignetteColor;
+        Color c = vignetteBaseColor; c.a = 0f;
+        vignetteImage.color = c;
     }
 
-    // ⭐ v6.4: 적 ATK 설정
     public void SetEnemyAtk(int atk)
     {
         enemyAtk = atk;
@@ -43,7 +44,6 @@ public class LowHealthVignette : MonoBehaviour
         else if (currentHeat <= enemyAtk * 2)
             targetAlpha = maxAlpha * (1f - (float)(currentHeat - enemyAtk) / enemyAtk);
 
-        // ⭐ v6.4: 맞으면 죽는 피 → 색상 깜빡임
         bool shouldDanger = (currentHeat <= enemyAtk && currentHeat > 0);
         if (shouldDanger && !isDangerAnimActive)
             StartDangerColorAnim(targetAlpha);
@@ -53,7 +53,7 @@ public class LowHealthVignette : MonoBehaviour
         if (!isDangerAnimActive)
         {
             vignetteImage.DOKill();
-            Color targetColor = vignetteColor;
+            Color targetColor = vignetteBaseColor;
             targetColor.a = targetAlpha;
             vignetteImage.DOColor(targetColor, 0.3f).SetEase(Ease.InOutQuad);
         }
@@ -79,7 +79,7 @@ public class LowHealthVignette : MonoBehaviour
 
         if (!isDangerAnimActive)
         {
-            Color targetColor = vignetteColor;
+            Color targetColor = vignetteBaseColor;
             targetColor.a = targetAlpha;
             vignetteImage.color = targetColor;
         }
@@ -87,21 +87,20 @@ public class LowHealthVignette : MonoBehaviour
         currentAlpha = targetAlpha;
     }
 
-    // ⭐ v6.4: 위험 색상 애니메이션 (푸른색↔붉은색)
     void StartDangerColorAnim(float alpha)
     {
         StopDangerColorAnim();
         isDangerAnimActive = true;
 
-        Color blueC   = DANGER_BLUE;   blueC.a = alpha;
-        Color purpleC = DANGER_PURPLE; purpleC.a = alpha;
+        Color c1 = dangerColor1; c1.a = alpha;
+        Color c2 = dangerColor2; c2.a = alpha;
 
         vignetteImage.DOKill();
-        vignetteImage.color = blueC;
+        vignetteImage.color = c1;
 
         dangerColorAnim = DOTween.Sequence();
-        dangerColorAnim.Append(vignetteImage.DOColor(purpleC, 0.6f).SetEase(Ease.InOutSine));
-        dangerColorAnim.Append(vignetteImage.DOColor(blueC, 0.6f).SetEase(Ease.InOutSine));
+        dangerColorAnim.Append(vignetteImage.DOColor(c2, 0.6f).SetEase(Ease.InOutSine));
+        dangerColorAnim.Append(vignetteImage.DOColor(c1, 0.6f).SetEase(Ease.InOutSine));
         dangerColorAnim.SetLoops(-1, LoopType.Restart);
     }
 
@@ -112,12 +111,11 @@ public class LowHealthVignette : MonoBehaviour
         if (vignetteImage != null)
         {
             vignetteImage.DOKill();
-            Color c = vignetteColor; c.a = 0f;
+            Color c = vignetteBaseColor; c.a = 0f;
             vignetteImage.color = c;
         }
     }
 
-    // 레거시 호환용 (무해)
     public void IncreaseInfiniteBossBonus() { }
 
     public void ResetInfiniteBossBonus()
@@ -127,7 +125,7 @@ public class LowHealthVignette : MonoBehaviour
         if (vignetteImage != null)
         {
             vignetteImage.DOKill();
-            Color c = vignetteColor; c.a = 0f;
+            Color c = vignetteBaseColor; c.a = 0f;
             vignetteImage.color = c;
         }
     }

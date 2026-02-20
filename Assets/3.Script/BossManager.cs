@@ -237,9 +237,11 @@ public class BossManager : MonoBehaviour
         int currentTotal = currentBossDamage + infiniteBossExtraDamage;
         float progress = Mathf.Clamp01((float)currentTotal / bossAtkMaxTotal);
 
-        // v6.6: Slider 우선, 없으면 RectTransform sizeDelta
+        // Slider 우선, 없으면 RectTransform sizeDelta
         if (guardAtkSlider != null)
         {
+            guardAtkSlider.minValue = 0f;
+            guardAtkSlider.maxValue = 1f;
             guardAtkSlider.DOKill();
             guardAtkSlider.DOValue(progress, 0.3f).SetEase(Ease.OutQuad);
         }

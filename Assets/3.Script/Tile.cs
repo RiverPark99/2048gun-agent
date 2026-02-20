@@ -104,42 +104,54 @@ public class Tile : MonoBehaviour
     }
 
     // === 해상도 보정 ===
-    // Screen.width 기준으로 보정 (Canvas 로컬값이 아닌 실제 화면 픽셀)
-    // 1290px에서 1.0, 498px에서 0.386
-    float GetScreenScaleRatio()
+    // 1290x2796 기준값으로 정규화: tileSize 비례하되, Canvas 확장 비율로 나눠서
+    // 어떤 해상도에서든 화면 대비 동일한 비율의 파티클
+    //
+    // Expand 모드에서 Canvas 로컬 width가 해상도마다 다름:
+    //   1290x2796 → canvasW≈1290, tileSize≈280
+    //   498x1080  → canvasW≈2580(세로기준확장), tileSize≈560
+    // canvasRatio = canvasW / 1290 로 나눠서 정규화
+    float GetCanvasWidthRatio()
     {
-        return (float)Screen.width / 1290f;
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return 1f;
+        Canvas root = canvas.rootCanvas;
+        if (root == null) return 1f;
+        RectTransform canvasRect = root.GetComponent<RectTransform>();
+        if (canvasRect == null) return 1f;
+        return canvasRect.rect.width / 1290f;
     }
 
-    // 파티클 크기: 1290 기준 고정값 사용 (tileSize 비례 제거)
-    // 1290에서 타일 약 280px, sizeRatio 0.6 → 168
-    // 모든 해상도에서 동일한 값 사용, UIParticle.scale로 보정
-    static readonly float REF_TILE_SIZE = 280f; // 1290x2796에서의 타일 크기
-
+    // startSize: tileSize 비례 (UIParticle이 Canvas scale 반영하므로 그대로 OK)
     float GetAdaptiveParticleSize(float baseRatio)
     {
-        return REF_TILE_SIZE * baseRatio;
+        if (rectTransform == null) return 50f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        return tileSize * baseRatio;
     }
 
+    // shapeRadius & speed: tileSize 비례하되 canvasRatio로 나눠서 퍼짐 정규화
     float GetAdaptiveShapeRadius()
     {
-        return REF_TILE_SIZE * 0.35f;
+        if (rectTransform == null) return 30f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        float ratio = GetCanvasWidthRatio();
+        return (tileSize * 0.35f) / ratio;
     }
 
     float GetAdaptiveSpeed()
     {
-        return REF_TILE_SIZE * 2.0f;
-    }
-
-    // UIParticle.scale: Screen.width 비례로 보정
-    // 1290 → scale=3.0, 498 → scale≈1.16
-    float GetAdaptiveUIParticleScale(float baseScale)
-    {
-        return baseScale * GetScreenScaleRatio();
+        if (rectTransform == null) return 200f;
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        float ratio = GetCanvasWidthRatio();
+        return (tileSize * 2.0f) / ratio;
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
     {
+        float tileSize = rectTransform != null ? Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) : 0f;
+        float cRatio = GetCanvasWidthRatio();
+        Debug.Log($"[Particle Debug] Screen={Screen.width}x{Screen.height}, tileSize={tileSize:F0}, canvasRatio={cRatio:F3}, size={tileSize*sizeRatio:F0}, speed={tileSize*2f/cRatio:F0}, radius={tileSize*0.35f/cRatio:F0}");
         GameObject particleObj = new GameObject("MergeParticle");
 
         Transform gridContainer = transform.parent;
@@ -154,7 +166,6 @@ public class Tile : MonoBehaviour
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
 
-        // v6.0: adaptive sizing
         float adaptiveSize = GetAdaptiveParticleSize(sizeRatio);
         float adaptiveSpeed = GetAdaptiveSpeed();
         float adaptiveRadius = GetAdaptiveShapeRadius();
@@ -208,8 +219,10 @@ public class Tile : MonoBehaviour
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
+        // UIParticle: scale=3/canvasRatio (화면 대비 동일 비율)
+        float canvasR = GetCanvasWidthRatio();
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiP.scale = GetAdaptiveUIParticleScale(3f);
+        uiP.scale = 3f / canvasR;
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);
@@ -250,11 +263,10 @@ public class Tile : MonoBehaviour
     public void MergeWith(Tile other)
     {
         SetValue(value * 2);
-        // v6.0: ratio-based size (was hardcoded 80f)
         SpawnParticleAtPosition(
             GetComponent<RectTransform>().anchoredPosition,
             new Color(1f, 0.8f, 0.2f),
-            0.6f, // ~60% of tile size
+            0.6f,
             0.3f
         );
         StartCoroutine(PopAnimation());
