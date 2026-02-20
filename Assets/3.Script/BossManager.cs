@@ -47,6 +47,19 @@ public class BossManager : MonoBehaviour
     [Header("Boss Attack Animation")]
     [SerializeField] private float attackMotionDuration = 0.3f;
 
+    [Header("Tutorial Stage 1~9 개별 설정 (HP / ATK)")]
+    [SerializeField] private int[] tutorialHP = new int[] { 100, 150, 200, 250, 300, 400, 500, 650, 800 };
+    [SerializeField] private int[] tutorialATK = new int[] { 10, 12, 14, 16, 18, 20, 22, 25, 28 };
+
+    [Header("Stage 39 HP")]
+    [SerializeField] private int stage39HP = 2147483647;
+
+    [Header("Attack Info 색상 루프")]
+    [SerializeField] private Color attackInfoColorA = new Color(0.7f, 0.7f, 0.7f);
+    [SerializeField] private Color attackInfoColorB = new Color(1f, 0.85f, 0.5f);
+    [SerializeField] private float attackInfoColorSpeed = 1.5f;
+    private Sequence attackInfoColorLoop;
+
     [Header("Guard ATK Slider (Enemy HP bar와 동일 구조)")]
     [SerializeField] private Slider guardAtkSlider;
     [SerializeField] private int guardAtkIncreaseTurns = 20;
@@ -95,6 +108,7 @@ public class BossManager : MonoBehaviour
     private BossBattleSystem bossBattleSystem;
     private PlayerHPSystem playerHPSystem;
     private UnlockManager unlockManager;
+    private GunSystem gunSystem;
 
     void Start()
     {
@@ -102,6 +116,7 @@ public class BossManager : MonoBehaviour
         bossBattleSystem = FindAnyObjectByType<BossBattleSystem>();
         playerHPSystem = FindAnyObjectByType<PlayerHPSystem>();
         unlockManager = FindAnyObjectByType<UnlockManager>();
+        gunSystem = FindAnyObjectByType<GunSystem>();
 
         if (bossPanelGroundImage != null && !groundColorSaved)
         {
@@ -115,17 +130,24 @@ public class BossManager : MonoBehaviour
 
     void InitializeBoss()
     {
-        float exponent = Mathf.Pow(1.5f, bossLevel - 1);
-        maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+        if (bossLevel >= 1 && bossLevel <= 9 && bossLevel - 1 < tutorialHP.Length)
+        {
+            maxHP = tutorialHP[bossLevel - 1];
+            currentBossDamage = (bossLevel - 1 < tutorialATK.Length) ? tutorialATK[bossLevel - 1] : baseDamage;
+        }
+        else
+        {
+            float exponent = Mathf.Pow(1.5f, bossLevel - 1);
+            maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+            currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
+        }
 
-        if (bossLevel == 39) maxHP = 2147483647;
+        if (bossLevel == 39) maxHP = stage39HP;
         else if (bossLevel >= 40) maxHP = 2147483647;
 
         currentHP = maxHP;
 
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-
-        currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
         infiniteBossExtraDamage = 0;
         currentTurnCount = currentTurnInterval;
@@ -401,14 +423,15 @@ public class BossManager : MonoBehaviour
     public void OnPlayerTurn()
     {
         if (isTransitioning) return;
-        if (isFrozen) return;
 
         // 해금 전: 적 공격 안함
         if (unlockManager != null && !unlockManager.CanEnemyAttack()) return;
 
-        // Guard ATK 턴 진행
+        // #8: Guard ATK 턴은 freeze 중에도 진행
         if (isGuardMode && !isClearMode)
             ProcessGuardAtkTurn();
+
+        if (isFrozen) return;
 
         if (currentTurnCount <= 0 && bonusTurnsAdded > 0)
         {
@@ -571,18 +594,57 @@ public class BossManager : MonoBehaviour
 
     void UpdateBossAttackUI()
     {
-        if (bossAttackInfoText != null)
+        if (bossAttackInfoText == null) return;
+
+        // 3 stage 미만: 공격 UI 숨김
+        if (unlockManager != null && !unlockManager.IsEnemyAttackUnlocked)
         {
-            if (isFrozen)
-                bossAttackInfoText.color = ICE_BLUE;
-            else
-            {
-                if (currentTurnCount <= 1) bossAttackInfoText.color = new Color(1f, 0.2f, 0.2f);
-                else if (currentTurnCount <= 3) bossAttackInfoText.color = new Color(1f, 0.8f, 0.2f);
-                else bossAttackInfoText.color = new Color(0.7f, 0.7f, 0.7f);
-            }
-            bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
+            bossAttackInfoText.gameObject.SetActive(false);
+            StopAttackInfoColorLoop();
+            return;
         }
+
+        // 보스 전환 중이면 UI 숨김 유지
+        if (isTransitioning)
+        {
+            StopAttackInfoColorLoop();
+            return;
+        }
+
+        bossAttackInfoText.gameObject.SetActive(true);
+
+        if (isFrozen)
+        {
+            StopAttackInfoColorLoop();
+            bossAttackInfoText.color = ICE_BLUE;
+        }
+        else if (currentTurnCount <= 1)
+        {
+            StopAttackInfoColorLoop();
+            bossAttackInfoText.color = new Color(1f, 0.2f, 0.2f);
+        }
+        else
+        {
+            // 색상 루프 시작 (반복)
+            StartAttackInfoColorLoop();
+        }
+        bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
+    }
+
+    void StartAttackInfoColorLoop()
+    {
+        if (attackInfoColorLoop != null) return; // 이미 실행 중
+        if (bossAttackInfoText == null) return;
+        bossAttackInfoText.color = attackInfoColorA;
+        attackInfoColorLoop = DOTween.Sequence();
+        attackInfoColorLoop.Append(bossAttackInfoText.DOColor(attackInfoColorB, attackInfoColorSpeed).SetEase(Ease.InOutSine));
+        attackInfoColorLoop.Append(bossAttackInfoText.DOColor(attackInfoColorA, attackInfoColorSpeed).SetEase(Ease.InOutSine));
+        attackInfoColorLoop.SetLoops(-1, LoopType.Restart);
+    }
+
+    void StopAttackInfoColorLoop()
+    {
+        if (attackInfoColorLoop != null) { attackInfoColorLoop.Kill(); attackInfoColorLoop = null; }
     }
 
     IEnumerator OnBossDefeatedCoroutine()
@@ -629,13 +691,22 @@ public class BossManager : MonoBehaviour
         {
             SelectNextBossImage();
 
-            float exponent = Mathf.Pow(1.5f, bossLevel - 1);
-            maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
-            if (bossLevel >= 39) maxHP = 2147483647;
+            if (bossLevel >= 1 && bossLevel <= 9 && bossLevel - 1 < tutorialHP.Length)
+            {
+                maxHP = tutorialHP[bossLevel - 1];
+                currentBossDamage = (bossLevel - 1 < tutorialATK.Length) ? tutorialATK[bossLevel - 1] : baseDamage;
+            }
+            else
+            {
+                float exponent = Mathf.Pow(1.5f, bossLevel - 1);
+                maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+                currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
+            }
+            if (bossLevel == 39) maxHP = stage39HP;
+            else if (bossLevel >= 40) maxHP = 2147483647;
             currentHP = maxHP;
 
             currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
-            currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
 
             if (bossLevel >= 40 && !isClearMode)
             {
@@ -685,6 +756,9 @@ public class BossManager : MonoBehaviour
             gameManager.UpdateTurnUI();
         }
 
+        // Continue 텍스트 갱신 (9 stage 해금 시)
+        if (gunSystem != null) gunSystem.UpdateContinueGuideText();
+
         isTransitioning = false;
     }
 
@@ -723,6 +797,7 @@ public class BossManager : MonoBehaviour
         guardAtkTurnCounter = 0;
         StopGuardColorAnimation();
         StopHPBarGlowAnimation();
+        StopAttackInfoColorLoop();
         HideGuardAtkSlider();
 
         if (bossPanelGroundImage != null && groundColorSaved)

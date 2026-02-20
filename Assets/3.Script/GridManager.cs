@@ -412,8 +412,8 @@ public class GridManager : MonoBehaviour
         else
             gunSystem.CheckGaugeAndFever();
 
-        // Fever 중이 아닐 때만 보스 턴 진행
-        if (bossManager != null && !gunSystem.IsFeverMode && !bossManager.IsFrozen())
+        // 보스 턴 진행 (freeze 중에도 Guard ATK는 진행해야 함)
+        if (bossManager != null)
         {
             bossManager.OnPlayerTurn();
         }
@@ -593,18 +593,8 @@ public class GridManager : MonoBehaviour
     // === 점수 UI ===
     void UpdateScoreUI()
     {
-        if (scoreText != null)
-            scoreText.text = score.ToString();
-
-        if (score > bestScore)
-        {
-            bestScore = score;
-            PlayerPrefs.SetString("BestScore", bestScore.ToString());
-            PlayerPrefs.Save();
-        }
-
-        if (bestScoreText != null)
-            bestScoreText.text = bestScore.ToString();
+        // Score/Best UI는 Damage Record로 대체됨 → 더 이상 갱신 안함
+        // GunSystem의 currentRecordText / bestRecordText가 대신 사용됨
     }
 
     // === Turn/Stage UI ===

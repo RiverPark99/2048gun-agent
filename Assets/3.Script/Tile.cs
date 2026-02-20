@@ -104,36 +104,31 @@ public class Tile : MonoBehaviour
     }
 
     // === 파티클 해상도 대응 ===
-    // Canvas Expand: 로컬 좌표 1290x2796 고정, tileSize≈268
-    // UIParticle이 내부적으로 scaleFactor 역수를 적용하므로
-    // scale = 3 / scaleFactor 로 보정해야 양쪽 해상도에서 동일
-    float GetCanvasScaleFactor()
-    {
-        Canvas canvas = GetComponentInParent<Canvas>();
-        if (canvas == null) return 1f;
-        Canvas root = canvas.rootCanvas;
-        return root != null ? root.scaleFactor : 1f;
-    }
+    // UIParticle.scale: Screen.width 비례 → 퍼지는 정도/속도 동일 비율
+    // 기준: 498px에서 scale=3
+    // 입자 크기: scale이 커지면 입자도 커지므로 역보정 (498/Screen.width)
+    static float ParticleScaleFactor() => 3f * ((float)Screen.width / 498f);
+    static float SizeCorrection() => 498f / (float)Screen.width;
 
     float GetAdaptiveParticleSize(float baseRatio)
     {
         if (rectTransform == null) return 15f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * baseRatio;
+        return tileSize * baseRatio * SizeCorrection();
     }
 
     float GetAdaptiveShapeRadius()
     {
         if (rectTransform == null) return 8f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * 0.08f; // 타일의 8% → 약 21 로컬
+        return tileSize * 0.08f;
     }
 
     float GetAdaptiveSpeed()
     {
         if (rectTransform == null) return 60f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * 0.5f; // 타일의 50% → 약 134 로컬/초
+        return tileSize * 0.5f;
     }
 
     void SpawnParticleAtPosition(Vector2 position, Color color, float sizeRatio, float lifetime)
@@ -205,10 +200,8 @@ public class Tile : MonoBehaviour
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default"));
 
-        // UIParticle: scaleFactor 보정으로 해상도 무관 동일 비율
-        float sf = GetCanvasScaleFactor();
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiP.scale = 3f / sf;
+        uiP.scale = ParticleScaleFactor();
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);

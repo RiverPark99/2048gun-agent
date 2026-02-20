@@ -64,7 +64,8 @@ public class GunSystem : MonoBehaviour
     private const int FREEZE_MOVE_COST = 2;
     private const int FREEZE_COMBO_BONUS = 2;
     private const int GUN_SHOT_COST = 20;
-    private const float FREEZE_TURN_MULTIPLIER = 1.06f;
+    [Header("Balance")]
+    [SerializeField] private float freezeTurnMultiplier = 1.06f;
     private const int MAX_CONTINUES = 2;
 
     private static readonly Color GUN_READY_MINT = new Color(0.6f, 0.95f, 0.85f);
@@ -147,11 +148,13 @@ public class GunSystem : MonoBehaviour
     public long PermanentAttackPower => permanentAttackPower;
     public long FeverMergeIncreaseAtk => feverMergeIncreaseAtk;
     public int ContinuesRemaining => MAX_CONTINUES - continueCount;
-    public float GetFreezeDamageMultiplier() { return Mathf.Pow(FREEZE_TURN_MULTIPLIER, freezeTurnCount); }
+    public float GetFreezeDamageMultiplier() { return Mathf.Pow(freezeTurnMultiplier, freezeTurnCount); }
 
     public void AddFreezeTotalDamage(long dmg)
     {
         freezeTotalDamage += dmg;
+        // 실시간 레코드 갱신
+        CheckAndUpdateDamageRecord();
         if (freezeTotalDamageText != null && freezeTotalDamageText.gameObject.activeSelf)
         {
             freezeTotalDamageText.text = $"{freezeTotalDamage:N0}";
@@ -597,6 +600,8 @@ public class GunSystem : MonoBehaviour
     public bool CanContinue()
     {
         if (cheatInfiniteContinue) return true;
+        // 9 stage 전엔 continue 불가
+        if (unlockManager != null && !unlockManager.IsFullGaugeUnlocked) return false;
         return continueCount < MAX_CONTINUES;
     }
 
@@ -606,12 +611,14 @@ public class GunSystem : MonoBehaviour
         UpdateContinueGuideText();
     }
 
-    void UpdateContinueGuideText()
+    public void UpdateContinueGuideText()
     {
         if (continueGuideText != null)
         {
             if (cheatInfiniteContinue)
                 continueGuideText.text = "∞";
+            else if (unlockManager != null && !unlockManager.IsFullGaugeUnlocked)
+                continueGuideText.text = "Unlock at 9";
             else
                 continueGuideText.text = $"{MAX_CONTINUES - continueCount}/{MAX_CONTINUES}";
         }
@@ -681,10 +688,8 @@ public class GunSystem : MonoBehaviour
         var renderer = ps.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
         renderer.material = new Material(Shader.Find("UI/Default")); renderer.sortingOrder = 1;
-        // UIParticle: scaleFactor 보정
-        Canvas rootCanvas = feverParticleSpawnPoint.GetComponentInParent<Canvas>();
-        float sf = (rootCanvas != null && rootCanvas.rootCanvas != null) ? rootCanvas.rootCanvas.scaleFactor : 1f;
-        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = 3f / sf;
+        float pScale = 3f * ((float)Screen.width / 498f);
+        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = pScale;
 
         activeFeverParticle = particleObj;
     }
@@ -698,7 +703,9 @@ public class GunSystem : MonoBehaviour
         while (bossBattle.IsBossTransitioning)
             yield return null;
 
-        yield return new WaitForSeconds(5.4f);
+        // Clear 모드(41+)는 빠르게, 일반은 보스 등장 애니메이션 대기
+        bool isClearMode = bossManager != null && bossManager.IsClearMode();
+        yield return new WaitForSeconds(isClearMode ? 0.8f : 5.4f);
 
         if (!isFeverMode) yield break;
 
@@ -841,6 +848,8 @@ public class GunSystem : MonoBehaviour
     void ShowGaugeChangeText(int change, bool isCombo = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || turnsUntilBulletText == null) return;
+        // Gun UI 미해금 시 텍스트 생성 안함
+        if (unlockManager != null && !unlockManager.IsGunUnlocked) return;
         GameObject obj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI txt = obj.GetComponent<TextMeshProUGUI>();
         if (txt != null)

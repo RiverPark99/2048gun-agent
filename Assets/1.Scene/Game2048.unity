@@ -1047,8 +1047,9 @@ MonoBehaviour:
   bossBattle: {fileID: 159172557}
   bossManager: {fileID: 178796534}
   unlockManager: {fileID: 159172561}
-  cheatMode: 1
-  cheatInfiniteContinue: 1
+  cheatMode: 0
+  cheatInfiniteContinue: 0
+  freezeTurnMultiplier: 1.06
 --- !u!114 &159172560
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1417,6 +1418,12 @@ MonoBehaviour:
   animationDuration: 0.5
   bossSpawnDelay: 1
   attackMotionDuration: 0.5
+  tutorialFixedHP: 300
+  tutorialFixedATK: 20
+  stage39HP: 2147483647
+  attackInfoColorA: {r: 0.7, g: 0.7, b: 0.7, a: 1}
+  attackInfoColorB: {r: 1, g: 0.85, b: 0.5, a: 1}
+  attackInfoColorSpeed: 1.5
   guardAtkSlider: {fileID: 497659431}
   guardAtkIncreaseTurns: 20
   stageColor_1_10: {r: 0.49019608, g: 0.49019608, b: 0.49019608, a: 1}
