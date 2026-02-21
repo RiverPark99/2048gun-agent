@@ -949,7 +949,7 @@ MonoBehaviour:
   bossBattle: {fileID: 159172557}
   bossManager: {fileID: 178796534}
   unlockManager: {fileID: 159172561}
-  swipeThresholdBase: 80
+  swipeThresholdBase: 45
 --- !u!114 &159172557
 MonoBehaviour:
   m_ObjectHideFlags: 0

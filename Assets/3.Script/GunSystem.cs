@@ -474,8 +474,8 @@ public class GunSystem : MonoBehaviour
 
     void AnimateAndHideFreezeUI()
     {
-        float fadeDelay = 1.5f;
-        float fadeDuration = 0.6f;
+        float stayDuration = 2.5f;   // 잔류 시간
+        float fadeDuration = 0.8f;   // 사라지는 시간
 
         if (freezeTurnText != null && freezeTurnText.gameObject.activeSelf)
         {
@@ -487,7 +487,7 @@ public class GunSystem : MonoBehaviour
             freezeTurnText.color = FREEZE_BLACK;
 
             DOTween.Sequence()
-                .AppendInterval(fadeDelay)
+                .AppendInterval(stayDuration)
                 .Append(cg.DOFade(0f, fadeDuration).SetEase(Ease.InQuad))
                 .OnComplete(() => {
                     if (freezeTurnText == null) return;
@@ -507,20 +507,35 @@ public class GunSystem : MonoBehaviour
             cg.alpha = 1f; rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
 
-            freezeTotalDamageText.color = FREEZE_BLACK;
-            rt.localScale = Vector3.one * 1.4f;
-            rt.DOScale(1f, 0.25f).SetEase(Ease.OutBack);
+            // 반짝반짝 효과 (주황↔흰색 3회 반복) → 픽스 (FREEZE_BLACK) → 잔류 → 페이드아웃
+            Color flashWhite = new Color(1f, 0.95f, 0.8f);
+            Color flashOrange = FREEZE_ORANGE;
 
-            DOTween.Sequence()
-                .AppendInterval(fadeDelay)
-                .Append(cg.DOFade(0f, fadeDuration).SetEase(Ease.InQuad))
-                .OnComplete(() => {
-                    if (freezeTotalDamageText == null) return;
-                    freezeTotalDamageText.gameObject.SetActive(false);
-                    cg.alpha = 1f; rt.localScale = Vector3.one;
-                    if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
-                    if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
-                });
+            // 픽스 시 살짝 확대 후 복귀
+            rt.localScale = Vector3.one * 1.3f;
+
+            Sequence seq = DOTween.Sequence();
+            // 반짝반짝 3회 (0.8초)
+            seq.Append(freezeTotalDamageText.DOColor(flashWhite, 0.12f).SetEase(Ease.InOutSine));
+            seq.Append(freezeTotalDamageText.DOColor(flashOrange, 0.12f).SetEase(Ease.InOutSine));
+            seq.Append(freezeTotalDamageText.DOColor(flashWhite, 0.12f).SetEase(Ease.InOutSine));
+            seq.Append(freezeTotalDamageText.DOColor(flashOrange, 0.12f).SetEase(Ease.InOutSine));
+            seq.Append(freezeTotalDamageText.DOColor(flashWhite, 0.10f).SetEase(Ease.InOutSine));
+            seq.Append(freezeTotalDamageText.DOColor(flashOrange, 0.10f).SetEase(Ease.InOutSine));
+            // 픽스: 검정으로 + 스케일 복귀
+            seq.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 0.15f).SetEase(Ease.OutQuad));
+            seq.Join(rt.DOScale(1f, 0.2f).SetEase(Ease.OutBack));
+            // 잔류
+            seq.AppendInterval(stayDuration);
+            // 페이드아웃
+            seq.Append(cg.DOFade(0f, fadeDuration).SetEase(Ease.InQuad));
+            seq.OnComplete(() => {
+                if (freezeTotalDamageText == null) return;
+                freezeTotalDamageText.gameObject.SetActive(false);
+                cg.alpha = 1f; rt.localScale = Vector3.one;
+                if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
+                if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
+            });
         }
     }
 
