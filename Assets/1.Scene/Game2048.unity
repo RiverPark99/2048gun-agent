@@ -1418,7 +1418,7 @@ MonoBehaviour:
   animationDuration: 0.5
   bossSpawnDelay: 1
   attackMotionDuration: 0.5
-  tutorialHP: c8000000f401000020030000c2010000d007000098080000f00a0000b80b000010270000
+  tutorialHP: c8000000f401000020030000c2010000e8030000b004000014050000dc05000034210000
   tutorialATK: 0a0000000a000000190000003a0000002300000024000000250000002600000028000000
   stage39HP: 2147483647
   attackInfoColorA: {r: 0.7, g: 0.7, b: 0.7, a: 1}
@@ -1864,8 +1864,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 80
-  m_fontSizeBase: 80
+  m_fontSize: 100
+  m_fontSizeBase: 100
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -3631,7 +3631,7 @@ RectTransform:
   m_GameObject: {fileID: 556155046}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.9, y: 0.9, z: 1}
+  m_LocalScale: {x: 0.8, y: 0.8, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 138865025}
