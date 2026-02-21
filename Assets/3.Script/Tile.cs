@@ -104,25 +104,28 @@ public class Tile : MonoBehaviour
     }
 
     // === 파티클 해상도 대응 ===
-    // UIParticle.scale: Screen.width 비례 → 퍼지는 정도/속도 동일 비율
-    // 기준: 498px에서 scale=3
-    // startSize/radius/speed: Canvas 로컬 단위 고정 → scaleFactor가 자동 화면 매핑
-    static float ParticleScaleFactor() => 3f * ((float)Screen.width / 498f);
+    // 498px 기준: scale=3, sf=0.386
+    // UIParticle이 size에 scale*sf 이중적용 → (scale*sf)^2.5 역보정
+    static float ScreenRatio() => (float)Screen.width / 498f;
+    static float AdaptiveScale() => 3f * ScreenRatio();
 
-    // scaleFactor가 입자 크기에 영향 → sf 역보정
-    // 498(sf=0.386) 기준으로 동일 화면 비율 유지
-    float GetScaleFactorSizeCorrection()
+    static float ParticleSizeCorrection()
     {
-        Canvas rootCanvas = GetComponentInParent<Canvas>();
-        float sf = (rootCanvas != null && rootCanvas.rootCanvas != null) ? rootCanvas.rootCanvas.scaleFactor : 0.386f;
-        return 0.386f / Mathf.Max(sf, 0.01f);
+        float sr = ScreenRatio();
+        float scale = 3f * sr;
+        float sf = (float)Screen.width / 1290f;
+        float correction = (scale * sf) / (3f * 0.386f);
+        return Mathf.Pow(correction, 2.7f);
     }
+
+    // 외부 스크립트에서 사용 (GunSystem, BossBattleSystem)
+    public static float ParticleSizeCorrectionStatic() => ParticleSizeCorrection();
 
     float GetAdaptiveParticleSize(float baseRatio)
     {
         if (rectTransform == null) return 15f;
         float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
-        return tileSize * baseRatio * GetScaleFactorSizeCorrection();
+        return tileSize * baseRatio / ParticleSizeCorrection();
     }
 
     float GetAdaptiveShapeRadius()
@@ -158,7 +161,6 @@ public class Tile : MonoBehaviour
         float adaptiveSize = GetAdaptiveParticleSize(sizeRatio);
         float adaptiveSpeed = GetAdaptiveSpeed();
         float adaptiveRadius = GetAdaptiveShapeRadius();
-        Debug.Log($"[Particle] Screen={Screen.width}, startSize={adaptiveSize:F1}, sfCorr={GetScaleFactorSizeCorrection():F3}");
         var main = ps.main;
         main.startLifetime = lifetime;
         main.startSpeed = adaptiveSpeed;
@@ -209,7 +211,7 @@ public class Tile : MonoBehaviour
         renderer.material = new Material(Shader.Find("UI/Default"));
 
         var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
-        uiP.scale = ParticleScaleFactor();
+        uiP.scale = AdaptiveScale();
 
         ps.Play();
         Destroy(particleObj, lifetime + 0.1f);

@@ -371,8 +371,7 @@ public class GridManager : MonoBehaviour
             {
                 gunSystem.AddMergeGauge(1);
                 gunSystem.ClearFeverPaybackIfNeeded();
-                gunSystem.ShowMergeGaugeChange(1, true);
-                Debug.Log($"🎯 {mergeCountThisTurn}콤보 달성! 게이지 +1 ({gunSystem.MergeGauge}/40)");
+                gunSystem.ShowMergeGaugeChange(1, true); // cap 도달 시 내부에서 차단됨
             }
 
             UpdateScoreUI();

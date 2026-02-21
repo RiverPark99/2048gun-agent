@@ -743,6 +743,8 @@ public class BossManager : MonoBehaviour
             yield return appearSeq.WaitForCompletion();
         }
 
+        isTransitioning = false; // UI 갱신 전에 해제해야 UpdateBossAttackUI가 정상 동작
+
         UpdateUI(true);
         SetBossUIActive(true);
         UpdateBossAttackUI();
@@ -758,8 +760,6 @@ public class BossManager : MonoBehaviour
 
         // Continue 텍스트 갱신 (9 stage 해금 시)
         if (gunSystem != null) gunSystem.UpdateContinueGuideText();
-
-        isTransitioning = false;
     }
 
     void SetupClearModeBoss()

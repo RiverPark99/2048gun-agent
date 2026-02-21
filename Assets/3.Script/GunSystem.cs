@@ -321,7 +321,12 @@ public class GunSystem : MonoBehaviour
     public void ShowMergeGaugeChange(int change, bool isCombo)
     {
         if (!isFeverMode)
+        {
+            // 게이지 측 도달 시 텍스트 안 보임
+            int cap = (unlockManager != null) ? unlockManager.GetGaugeCap() : GAUGE_MAX;
+            if (cap > 0 && mergeGauge >= cap) return;
             ShowGaugeChangeText(change, isCombo);
+        }
     }
 
     // === Freeze 턴 처리 ===
@@ -669,7 +674,8 @@ public class GunSystem : MonoBehaviour
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        main.startLifetime = 0.5f; main.startSpeed = 15f; main.startSize = 12f;
+        float psc = Tile.ParticleSizeCorrectionStatic();
+        main.startLifetime = 0.5f; main.startSpeed = 15f; main.startSize = 12f / psc;
         main.startColor = new Color(1f, 0.5f, 0f); main.maxParticles = 50;
         main.simulationSpace = ParticleSystemSimulationSpace.Local; main.playOnAwake = true; main.loop = true;
 
@@ -840,6 +846,18 @@ public class GunSystem : MonoBehaviour
         }
 
         StopEmergencyFlash();
+
+        // progress text 강제 초기화 (총 쓴 후 주황색/스케일 잔류 방지)
+        if (turnsUntilBulletText != null)
+        {
+            turnsUntilBulletText.DOKill();
+            RectTransform tr = turnsUntilBulletText.GetComponent<RectTransform>();
+            tr.DOKill();
+            tr.localScale = Vector3.one;
+            if (turnsTextInitialized)
+                tr.anchoredPosition = new Vector2(tr.anchoredPosition.x, turnsTextOriginalY);
+        }
+
         ExitGunMode();
         if (!gridManager.CanMove() && !hasBullet && !isFeverMode) bossBattle.GameOver();
     }

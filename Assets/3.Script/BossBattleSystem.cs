@@ -336,8 +336,9 @@ public class BossBattleSystem : MonoBehaviour
         fwRect.sizeDelta = Vector2.zero;
 
         ParticleSystem ps = fwObj.AddComponent<ParticleSystem>();
+        float psc = Tile.ParticleSizeCorrectionStatic();
         var main = ps.main;
-        main.startLifetime = 1.0f; main.startSpeed = 200f; main.startSize = 20f;
+        main.startLifetime = 1.0f; main.startSpeed = 200f; main.startSize = 20f / psc;
         main.maxParticles = 100; main.simulationSpace = ParticleSystemSimulationSpace.Local;
         main.playOnAwake = false; main.loop = false;
 
