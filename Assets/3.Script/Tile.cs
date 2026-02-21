@@ -104,22 +104,41 @@ public class Tile : MonoBehaviour
     }
 
     // === 파티클 해상도 대응 ===
-    // 498px 기준: scale=3, sf=0.386
-    // UIParticle이 size에 scale*sf 이중적용 → (scale*sf)^2.5 역보정
+    // 실측: 498px→보정1.0(OK), 1290px→보정~67(OK)
+    // 중간 해상도(1080등)도 부드럽게 보간
     static float ScreenRatio() => (float)Screen.width / 498f;
     static float AdaptiveScale() => 3f * ScreenRatio();
 
+    // Merge 파티클용 (해상도별 개별 대응)
     static float ParticleSizeCorrection()
     {
-        float sr = ScreenRatio();
-        float scale = 3f * sr;
-        float sf = (float)Screen.width / 1290f;
-        float correction = (scale * sf) / (3f * 0.386f);
-        return Mathf.Pow(correction, 2.7f);
+        int w = Screen.width;
+        if (w <= 498) return 1f;
+        if (w <= 600) return Mathf.Lerp(1f, 10f, Mathf.InverseLerp(498f, 600f, w));
+        if (w <= 1080) return Mathf.Lerp(10f, 55f, Mathf.InverseLerp(600f, 1080f, w));
+        return Mathf.Lerp(45f, 67f, Mathf.InverseLerp(1080f, 1290f, w));
     }
 
-    // 외부 스크립트에서 사용 (GunSystem, BossBattleSystem)
+    // Gun destroy 파티클용
+    static float GunParticleSizeCorrection()
+    {
+        int w = Screen.width;
+        if (w <= 498) return 1f;
+        if (w <= 1080) return Mathf.Lerp(1f, 35f, Mathf.InverseLerp(498f, 1080f, w));
+        return Mathf.Lerp(35f, 55f, Mathf.InverseLerp(1080f, 1290f, w));
+    }
+
+    // Fever/Firework 파티클용 (약한 보정)
+    static float SmallParticleSizeCorrection()
+    {
+        if (Screen.width <= 498) return 1f;
+        float t = Mathf.InverseLerp(498f, 1290f, (float)Screen.width);
+        return Mathf.Lerp(1f, 8f, Mathf.Clamp01(t));
+    }
+
     public static float ParticleSizeCorrectionStatic() => ParticleSizeCorrection();
+    public static float GunParticleSizeCorrectionStatic() => GunParticleSizeCorrection();
+    public static float SmallParticleSizeCorrectionStatic() => SmallParticleSizeCorrection();
 
     float GetAdaptiveParticleSize(float baseRatio)
     {
@@ -217,6 +236,72 @@ public class Tile : MonoBehaviour
         Destroy(particleObj, lifetime + 0.1f);
     }
 
+    // Gun destroy 전용 (별도 보정값 적용)
+    void SpawnParticleAtPositionWithCorrection(Vector2 position, Color color, float sizeRatio, float lifetime, float correction)
+    {
+        GameObject particleObj = new GameObject("GunParticle");
+        Transform gridContainer = transform.parent;
+        particleObj.transform.SetParent(gridContainer, false);
+
+        RectTransform particleRect = particleObj.AddComponent<RectTransform>();
+        particleRect.anchorMin = new Vector2(0.5f, 0.5f);
+        particleRect.anchorMax = new Vector2(0.5f, 0.5f);
+        particleRect.pivot = new Vector2(0.5f, 0.5f);
+        particleRect.anchoredPosition = position;
+        particleRect.sizeDelta = Vector2.zero;
+
+        ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
+
+        float tileSize = (rectTransform != null) ? Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) : 100f;
+        float adaptiveSize = tileSize * sizeRatio / correction;
+        float adaptiveSpeed = GetAdaptiveSpeed();
+        float adaptiveRadius = GetAdaptiveShapeRadius();
+
+        var main = ps.main;
+        main.startLifetime = lifetime;
+        main.startSpeed = adaptiveSpeed;
+        main.startSize = adaptiveSize;
+        main.startColor = color;
+        main.maxParticles = 80;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.playOnAwake = false;
+        main.loop = false;
+
+        var emission = ps.emission;
+        emission.enabled = true;
+        emission.rateOverTime = 0;
+        emission.SetBursts(new ParticleSystem.Burst[] { new ParticleSystem.Burst(0f, 50, 80) });
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = adaptiveRadius;
+
+        var colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient gradient = new Gradient();
+        gradient.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(color, 0.5f), new GradientColorKey(color, 1f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.8f, 0.5f), new GradientAlphaKey(0f, 1f) }
+        );
+        colorOverLifetime.color = new ParticleSystem.MinMaxGradient(gradient);
+
+        var sizeOverLifetime = ps.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        AnimationCurve curve = new AnimationCurve();
+        curve.AddKey(0f, 1f); curve.AddKey(1f, 0f);
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, curve);
+
+        var renderer = ps.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.material = new Material(Shader.Find("UI/Default"));
+
+        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>();
+        uiP.scale = AdaptiveScale();
+
+        ps.Play();
+        Destroy(particleObj, lifetime + 0.1f);
+    }
+
     public void SetValue(int newValue)
     {
         value = newValue;
@@ -297,8 +382,10 @@ public class Tile : MonoBehaviour
     public void PlayGunDestroyEffect()
     {
         Vector2 pos = GetComponent<RectTransform>().anchoredPosition;
-        SpawnParticleAtPosition(pos, new Color(1f, 0.84f, 0f), 0.9f, 0.4f);
-        SpawnParticleAtPosition(pos, Color.white, 1.1f, 0.2f);
+        float gunCorr = GunParticleSizeCorrection();
+        // Gun 파티클은 별도 보정
+        SpawnParticleAtPositionWithCorrection(pos, new Color(1f, 0.84f, 0f), 0.9f, 0.4f, gunCorr);
+        SpawnParticleAtPositionWithCorrection(pos, Color.white, 1.1f, 0.2f, gunCorr);
     }
 
     private System.Collections.IEnumerator PopAnimation()

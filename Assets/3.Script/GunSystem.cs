@@ -674,7 +674,7 @@ public class GunSystem : MonoBehaviour
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        float psc = Tile.ParticleSizeCorrectionStatic();
+        float psc = Tile.SmallParticleSizeCorrectionStatic();
         main.startLifetime = 0.5f; main.startSpeed = 15f; main.startSize = 12f / psc;
         main.startColor = new Color(1f, 0.5f, 0f); main.maxParticles = 50;
         main.simulationSpace = ParticleSystemSimulationSpace.Local; main.playOnAwake = true; main.loop = true;
@@ -953,13 +953,13 @@ public class GunSystem : MonoBehaviour
 
                 if (hitHalf || hitFull)
                 {
-                    // 큰 팝 효과 (느리게)
-                    tr.localScale = Vector3.one * 1.5f;
-                    tr.DOScale(1f, 0.6f).SetEase(Ease.OutBack);
+                    // 색상 효과만 (스케일 없음)
+                    tr.localScale = Vector3.one;
                     turnsUntilBulletText.DOKill();
                     Color origC = turnsUntilBulletText.color;
                     turnsUntilBulletText.color = new Color(1f, 0.6f, 0.1f);
-                    turnsUntilBulletText.DOColor(origC, 0.8f).SetDelay(0.3f);
+                    turnsUntilBulletText.DOColor(origC, 0.5f).SetDelay(0.2f)
+                        .OnComplete(() => { if (turnsUntilBulletText != null) turnsUntilBulletText.color = origC; });
                 }
                 else
                 {
