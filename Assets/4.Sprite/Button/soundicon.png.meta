@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: f5c6360dc3c50a149b710e311b9da9da
+guid: 80ef9d1303c22da40ad96e41a559f333
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 418810975400384992
-    second: finger2_0
+      213: 6523474295705429427
+    second: soundicon_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -139,13 +139,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: finger2_0
+      name: soundicon_0
       rect:
         serializedVersion: 2
-        x: 191
-        y: 104
-        width: 618
-        height: 853
+        x: 0
+        y: 0
+        width: 1024
+        height: 1024
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -154,8 +154,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 0e956c8fc5aefc500800000000000000
-      internalID: 418810975400384992
+      spriteID: 3b5e9e02f49088a50800000000000000
+      internalID: 6523474295705429427
       vertices: []
       indices: 
       edges: []
@@ -174,7 +174,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      finger2_0: 418810975400384992
+      soundicon_0: 6523474295705429427
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
