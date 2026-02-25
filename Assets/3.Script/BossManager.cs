@@ -50,13 +50,6 @@ public class BossManager : MonoBehaviour
     [Header("Enemy Data (ScriptableObject)")]
     [SerializeField] private EnemyData enemyData;
 
-    [Header("Fallback: Tutorial Stage 1~9 개별 설정 (HP / ATK)")]
-    [SerializeField] private int[] tutorialHP = new int[] { 100, 150, 200, 250, 300, 400, 500, 650, 800 };
-    [SerializeField] private int[] tutorialATK = new int[] { 10, 12, 14, 16, 18, 20, 22, 25, 28 };
-
-    [Header("Stage 39 HP")]
-    [SerializeField] private int stage39HP = 2147483647;
-
     [Header("Attack Info 색상 루프")]
     [SerializeField] private Color attackInfoColorA = new Color(0.7f, 0.7f, 0.7f);
     [SerializeField] private Color attackInfoColorB = new Color(1f, 0.85f, 0.5f);
@@ -949,20 +942,11 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            // Fallback: 기존 로직
-            if (level >= 1 && level <= 9 && level - 1 < tutorialHP.Length)
-            {
-                maxHP = tutorialHP[level - 1];
-                currentBossDamage = (level - 1 < tutorialATK.Length) ? tutorialATK[level - 1] : baseDamage;
-            }
-            else
-            {
-                float exponent = Mathf.Pow(1.5f, level - 1);
-                maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
-                currentBossDamage = baseDamage + ((level - 1) / atkGrowthInterval) * atkGrowthPerStep;
-            }
-            if (level == 39) maxHP = stage39HP;
-            else if (level >= 40) maxHP = 2147483647;
+            // Fallback: EnemyData 미할당 시 기본값
+            float exponent = Mathf.Pow(1.5f, level - 1);
+            maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+            currentBossDamage = baseDamage + ((level - 1) / atkGrowthInterval) * atkGrowthPerStep;
+            if (level >= 40) maxHP = 2147483647;
         }
     }
 

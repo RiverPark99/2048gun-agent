@@ -53,6 +53,7 @@ public class BossBattleSystem : MonoBehaviour
     [SerializeField] private GridManager gridManager;
     [SerializeField] private GunSystem gunSystem;
     [SerializeField] private PlayerHPSystem playerHP;
+    [SerializeField] private UnlockManager unlockManager;
 
     private bool isBossAttacking = false;
     private bool isBossTransitioning = false;
@@ -308,7 +309,8 @@ public class BossBattleSystem : MonoBehaviour
 
     public bool ShouldBlockInput()
     {
-        return isGameOver || gridManager.IsProcessing || isBossTransitioning || isBossAttacking || isChallengeClearShown;
+        return isGameOver || gridManager.IsProcessing || isBossTransitioning || isBossAttacking || isChallengeClearShown
+            || (unlockManager != null && unlockManager.IsUnlockAnimating);
     }
 
     // =====================================================

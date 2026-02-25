@@ -35,6 +35,9 @@ public class UnlockManager : MonoBehaviour
     [SerializeField] private Image fingerGuideImage;
     [SerializeField] private Button gunButtonRef; // Gun 버튼 위치 참조
 
+    [Header("해금 연출 암전 오버레이 (살짝 어두운 판)")]
+    [SerializeField] private Image unlockDimOverlay;
+
     // 해금 상태
     private bool enemyAttackUnlocked = false;
     private bool gunUIUnlocked = false;
@@ -50,6 +53,10 @@ public class UnlockManager : MonoBehaviour
     private bool fingerGuideDismissed = false;
     private Sequence fingerGuideAnim;
 
+    // UI 등장 애니메이션 중 입력 차단
+    private bool isUnlockAnimating = false;
+    public bool IsUnlockAnimating => isUnlockAnimating;
+
     public void Initialize()
     {
         enemyAttackUnlocked = false;
@@ -57,11 +64,13 @@ public class UnlockManager : MonoBehaviour
         fullGaugeUnlocked = false;
         fingerGuideShown = false;
         fingerGuideDismissed = false;
+        isUnlockAnimating = false;
 
         if (enemyAttackUIObj != null) enemyAttackUIObj.SetActive(false);
         if (gunUIObj != null) gunUIObj.SetActive(false);
         if (gaugeCoverObj != null) gaugeCoverObj.SetActive(true);
         if (fingerGuideImage != null) fingerGuideImage.gameObject.SetActive(false);
+        if (unlockDimOverlay != null) { unlockDimOverlay.color = new Color(unlockDimOverlay.color.r, unlockDimOverlay.color.g, unlockDimOverlay.color.b, 0f); unlockDimOverlay.gameObject.SetActive(false); }
     }
 
     // 보스 레벨 변경 시 호출 (BossManager에서 OnBossDefeated 후)
@@ -208,7 +217,7 @@ public class UnlockManager : MonoBehaviour
         if (fingerGuideAnim != null) { fingerGuideAnim.Kill(); fingerGuideAnim = null; }
     }
 
-    // UI 등장: 크게 시작 → 원래 사이즈로 축소 + 깜빡깜빡
+    // UI 등장: 1.1초 대기 → 크게 시작 → 축소 + 깜빡깜빡 (6회, 느림→빠름) + 입력차단
     void AnimateUIAppear(GameObject obj)
     {
         if (obj == null) return;
@@ -218,19 +227,56 @@ public class UnlockManager : MonoBehaviour
 
         RectTransform rt = obj.GetComponent<RectTransform>();
 
-        cg.alpha = 1f;
+        cg.alpha = 0f;
         if (rt != null) rt.localScale = Vector3.one * 1.8f;
 
+        isUnlockAnimating = true;
+
+        // 암전 오버레이 부드럽게 페이드인
+        if (unlockDimOverlay != null)
+        {
+            unlockDimOverlay.gameObject.SetActive(true);
+            Color oc = unlockDimOverlay.color; oc.a = 0f; unlockDimOverlay.color = oc;
+            unlockDimOverlay.DOKill();
+            unlockDimOverlay.DOFade(1f, 0.5f).SetEase(Ease.OutQuad).SetDelay(0.8f);
+        }
+
         Sequence seq = DOTween.Sequence();
+        // 1.1초 대기
+        seq.AppendInterval(1.1f);
+        seq.AppendCallback(() => { if (cg != null) cg.alpha = 1f; });
         // 크게 시작 → 원래 사이즈로
         if (rt != null)
             seq.Append(rt.DOScale(1f, 0.5f).SetEase(Ease.OutBack));
-        // 빠른 깜빡깜빡 (3회)
-        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
-        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
-        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
-        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
-        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
-        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
+        // 깜빡깜빡 6회 (느리게 → 빠르게 가속)
+        seq.Append(cg.DOFade(0.15f, 0.14f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.14f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.15f, 0.13f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.13f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.15f, 0.11f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.11f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.15f, 0.09f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.09f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.15f, 0.07f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.07f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.15f, 0.06f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.06f).SetEase(Ease.InOutSine));
+        // 완료 → 암전 페이드아웃 + 입력 차단 해제
+        seq.OnComplete(() =>
+        {
+            if (unlockDimOverlay != null)
+            {
+                unlockDimOverlay.DOKill();
+                unlockDimOverlay.DOFade(0f, 0.4f).SetEase(Ease.InQuad)
+                    .OnComplete(() => {
+                        if (unlockDimOverlay != null) unlockDimOverlay.gameObject.SetActive(false);
+                        isUnlockAnimating = false;
+                    });
+            }
+            else
+            {
+                isUnlockAnimating = false;
+            }
+        });
     }
 }
