@@ -1,0 +1,182 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1476c2a4a7c8a884791bd57c67d98c3c, type: 3}
+  m_Name: EnemyData
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyData
+  tutorialStages:
+  - stageName: Stage 1
+    hp: 300
+    atk: 0
+    turnInterval: 6
+  - stageName: Stage 2
+    hp: 800
+    atk: 0
+    turnInterval: 6
+  - stageName: Stage 3
+    hp: 1000
+    atk: 30
+    turnInterval: 4
+  - stageName: Stage 4
+    hp: 800
+    atk: 50
+    turnInterval: 6
+  - stageName: Stage 5
+    hp: 1500
+    atk: 35
+    turnInterval: 6
+  - stageName: Stage 6
+    hp: 1700
+    atk: 36
+    turnInterval: 6
+  - stageName: Stage 7
+    hp: 2000
+    atk: 37
+    turnInterval: 5
+  - stageName: Stage 8
+    hp: 2500
+    atk: 38
+    turnInterval: 5
+  - stageName: Stage 9
+    hp: 10000
+    atk: 40
+    turnInterval: 4
+  normalStages:
+  - stageName: Stage 10
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 11
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 12
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 13
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 14
+    hp: 200
+    atk: 20
+    turnInterval: 8
+  - stageName: Stage 15
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 16
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 17
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 18
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 19
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 20
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 21
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 22
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 23
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 24
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 25
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 26
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 27
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 28
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 29
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 30
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 31
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 32
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 33
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 34
+    hp: 200
+    atk: 20
+    turnInterval: 8
+  - stageName: Stage 35
+    hp: 200
+    atk: 20
+    turnInterval: 8
+  - stageName: Stage 36
+    hp: 200
+    atk: 20
+    turnInterval: 8
+  - stageName: Stage 37
+    hp: 200
+    atk: 20
+    turnInterval: 8
+  - stageName: Stage 38
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  - stageName: Stage 39
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  guardBoss:
+    stageName: Guard Boss (40)
+    hp: 200
+    atk: 20
+    turnInterval: 4
+  clearModeEnemy:
+    stageName: Clear Mode (41+)
+    hp: 200
+    atk: 20
+    turnInterval: 4

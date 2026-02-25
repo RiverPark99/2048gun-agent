@@ -66,6 +66,23 @@ public class GunSystem : MonoBehaviour
     private const int GUN_SHOT_COST = 20;
     [Header("Balance")]
     [SerializeField] private float freezeTurnMultiplier = 1.06f;
+
+    [Header("Freeze Tile Bonus Multiplier (최대 타일 값 기준)")]
+    [SerializeField] private float[] freezeTileBonusMultipliers = new float[]
+    {
+        1.0f,  // 128
+        1.05f, // 256
+        1.1f,  // 512
+        1.15f, // 1024
+        1.2f,  // 2048
+        1.3f,  // 4096
+        1.4f,  // 8192
+        1.5f,  // 16384
+        1.6f,  // 32768
+        1.8f,  // 65536
+        2.0f,  // 131072
+    };
+    // 인덱스: 0=128, 1=256, 2=512 ... 10=131072
     private const int MAX_CONTINUES = 2;
 
     private static readonly Color GUN_READY_MINT = new Color(0.6f, 0.95f, 0.85f);
@@ -148,7 +165,31 @@ public class GunSystem : MonoBehaviour
     public long PermanentAttackPower => permanentAttackPower;
     public long FeverMergeIncreaseAtk => feverMergeIncreaseAtk;
     public int ContinuesRemaining => MAX_CONTINUES - continueCount;
-    public float GetFreezeDamageMultiplier() { return Mathf.Pow(freezeTurnMultiplier, freezeTurnCount); }
+    public float GetFreezeDamageMultiplier()
+    {
+        float turnMult = Mathf.Pow(freezeTurnMultiplier, freezeTurnCount);
+        float tileMult = GetFreezeTileBonusMultiplier();
+        return turnMult * tileMult;
+    }
+
+    float GetFreezeTileBonusMultiplier()
+    {
+        if (gridManager == null) return 1f;
+        int maxTileValue = 0;
+        foreach (var tile in gridManager.ActiveTiles)
+        {
+            if (tile != null && tile.value > maxTileValue)
+                maxTileValue = tile.value;
+        }
+        // 128 = 2^7 → index 0, 256 = 2^8 → index 1 ...
+        if (maxTileValue < 128) return 1f;
+        int power = Mathf.RoundToInt(Mathf.Log(maxTileValue, 2)); // 128→7, 256→8
+        int index = power - 7; // 128→0, 256→1 ...
+        if (index < 0) return 1f;
+        if (index >= freezeTileBonusMultipliers.Length)
+            return freezeTileBonusMultipliers[freezeTileBonusMultipliers.Length - 1];
+        return freezeTileBonusMultipliers[index];
+    }
 
     public void AddFreezeTotalDamage(long dmg)
     {
@@ -305,6 +346,13 @@ public class GunSystem : MonoBehaviour
     }
 
     // === 게이지 ===
+    // UnlockManager에서 해금 직후 0/20 표시 보장용
+    public void ForceGaugeDisplayCap(int cap)
+    {
+        if (turnsUntilBulletText != null)
+            turnsUntilBulletText.text = $"{mergeGauge}/{cap}";
+    }
+
     public void AddMergeGauge(int amount)
     {
         int cap = (unlockManager != null) ? unlockManager.GetGaugeCap() : GAUGE_MAX;
@@ -726,7 +774,7 @@ public class GunSystem : MonoBehaviour
 
         // Clear 모드(41+)는 빠르게, 일반은 보스 등장 애니메이션 대기
         bool isClearMode = bossManager != null && bossManager.IsClearMode();
-        yield return new WaitForSeconds(isClearMode ? 0.8f : 5.4f);
+        yield return new WaitForSeconds(isClearMode ? 0.8f : 3.5f);
 
         if (!isFeverMode) yield break;
 
@@ -861,6 +909,9 @@ public class GunSystem : MonoBehaviour
         }
 
         StopEmergencyFlash();
+
+        // 손가락 튜토리얼 가이드 숨기기
+        if (unlockManager != null) unlockManager.DismissFingerGuide();
 
         // progress text 강제 초기화 (총 쓴 후 주황색/스케일 잔류 방지)
         if (turnsUntilBulletText != null)
@@ -1044,6 +1095,9 @@ public class GunSystem : MonoBehaviour
         }
 
         UpdateGunButtonAnimationIfNeeded(hasBullet || (isFeverMode && !feverBulletUsed));
+
+        // 손가락 튜토리얼 가이드 체크
+        if (unlockManager != null) unlockManager.CheckFingerGuide(mergeGauge);
     }
 
     public void UpdateGuideText()

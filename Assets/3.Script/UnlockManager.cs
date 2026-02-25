@@ -31,6 +31,10 @@ public class UnlockManager : MonoBehaviour
     [Header("Gun Gauge Cover (9 stage에서 비활성화)")]
     [SerializeField] private GameObject gaugeCoverObj;
 
+    [Header("튜토리얼 손가락 가이드 (Gun 버튼 안내)")]
+    [SerializeField] private Image fingerGuideImage;
+    [SerializeField] private Button gunButtonRef; // Gun 버튼 위치 참조
+
     // 해금 상태
     private bool enemyAttackUnlocked = false;
     private bool gunUIUnlocked = false;
@@ -41,16 +45,23 @@ public class UnlockManager : MonoBehaviour
     public bool IsGunUnlocked => gunUIUnlocked;
     public bool IsFullGaugeUnlocked => fullGaugeUnlocked;
 
+    // 손가락 튜토리얼 상태
+    private bool fingerGuideShown = false;
+    private bool fingerGuideDismissed = false;
+    private Sequence fingerGuideAnim;
+
     public void Initialize()
     {
         enemyAttackUnlocked = false;
         gunUIUnlocked = false;
         fullGaugeUnlocked = false;
+        fingerGuideShown = false;
+        fingerGuideDismissed = false;
 
-        // 초기: Enemy 공격 UI + Gun UI 숨김
         if (enemyAttackUIObj != null) enemyAttackUIObj.SetActive(false);
         if (gunUIObj != null) gunUIObj.SetActive(false);
         if (gaugeCoverObj != null) gaugeCoverObj.SetActive(true);
+        if (fingerGuideImage != null) fingerGuideImage.gameObject.SetActive(false);
     }
 
     // 보스 레벨 변경 시 호출 (BossManager에서 OnBossDefeated 후)
@@ -72,27 +83,34 @@ public class UnlockManager : MonoBehaviour
         if (newStage >= 7 && !gunUIUnlocked)
         {
             gunUIUnlocked = true;
+            // 해금 직후 0/20 표시 보장: GunSystem의 UpdateGunUI보다 먼저 실행
+            if (gunSystem != null) gunSystem.ForceGaugeDisplayCap(20);
             if (gunUIObj != null)
             {
                 gunUIObj.SetActive(true);
                 AnimateUIAppear(gunUIObj);
             }
-            // 가림막 활성 상태 유지 (반절만 보이도록)
             if (gaugeCoverObj != null) gaugeCoverObj.SetActive(true);
             Debug.Log("🔓 Unlock: Gun UI (half gauge)!");
         }
 
-        // 9 stage: 가림막 제거 → 전체 게이지
+        // 9 stage: 가림막 깜빡깜빡 후 제거 → 전체 게이지
         if (newStage >= 9 && !fullGaugeUnlocked)
         {
             fullGaugeUnlocked = true;
             if (gaugeCoverObj != null)
             {
-                // 가림막 페이드아웃 후 비활성화
                 CanvasGroup cg = gaugeCoverObj.GetComponent<CanvasGroup>();
                 if (cg == null) cg = gaugeCoverObj.AddComponent<CanvasGroup>();
-                cg.DOFade(0f, 0.5f).SetEase(Ease.OutQuad)
-                    .OnComplete(() => { if (gaugeCoverObj != null) gaugeCoverObj.SetActive(false); });
+                // 깜빡깜빡 (2초) 후 사라지기
+                Sequence coverSeq = DOTween.Sequence();
+                for (int i = 0; i < 6; i++)
+                {
+                    coverSeq.Append(cg.DOFade(0.15f, 0.12f).SetEase(Ease.InOutSine));
+                    coverSeq.Append(cg.DOFade(1f, 0.12f).SetEase(Ease.InOutSine));
+                }
+                coverSeq.Append(cg.DOFade(0f, 0.6f).SetEase(Ease.InQuad));
+                coverSeq.OnComplete(() => { if (gaugeCoverObj != null) gaugeCoverObj.SetActive(false); });
             }
             Debug.Log("🔓 Unlock: Full Gauge (40)!");
         }
@@ -137,22 +155,82 @@ public class UnlockManager : MonoBehaviour
         return fullGaugeUnlocked;
     }
 
-    // UI 등장 DOTween 효과
+    // === 손가락 튜토리얼 가이드 ===
+    // 게이지 20 이상이면 나타남 (1회성)
+    public void CheckFingerGuide(int gauge)
+    {
+        if (!gunUIUnlocked || fingerGuideDismissed || fingerGuideShown) return;
+        if (gauge >= 20)
+        {
+            fingerGuideShown = true;
+            ShowFingerGuide();
+        }
+    }
+
+    // 총 발사 시 손가락 숨기기
+    public void DismissFingerGuide()
+    {
+        if (!fingerGuideShown || fingerGuideDismissed) return;
+        fingerGuideDismissed = true;
+        StopFingerGuideAnim();
+        if (fingerGuideImage != null)
+        {
+            fingerGuideImage.DOKill();
+            fingerGuideImage.DOFade(0f, 0.3f).OnComplete(() => {
+                if (fingerGuideImage != null) fingerGuideImage.gameObject.SetActive(false);
+            });
+        }
+    }
+
+    void ShowFingerGuide()
+    {
+        if (fingerGuideImage == null || gunButtonRef == null) return;
+        fingerGuideImage.gameObject.SetActive(true);
+        fingerGuideImage.color = new Color(1f, 1f, 1f, 0.9f);
+
+        RectTransform fingerRT = fingerGuideImage.GetComponent<RectTransform>();
+        RectTransform gunBtnRT = gunButtonRef.GetComponent<RectTransform>();
+
+        Vector3 startPos = fingerRT.position;
+        Vector3 endPos = gunBtnRT.position;
+
+        StopFingerGuideAnim();
+        fingerGuideAnim = DOTween.Sequence();
+        fingerGuideAnim.Append(fingerRT.DOMove(endPos, 0.6f).SetEase(Ease.InOutSine));
+        fingerGuideAnim.AppendInterval(0.15f);
+        fingerGuideAnim.Append(fingerRT.DOMove(startPos, 0.6f).SetEase(Ease.InOutSine));
+        fingerGuideAnim.AppendInterval(0.15f);
+        fingerGuideAnim.SetLoops(-1, LoopType.Restart);
+    }
+
+    void StopFingerGuideAnim()
+    {
+        if (fingerGuideAnim != null) { fingerGuideAnim.Kill(); fingerGuideAnim = null; }
+    }
+
+    // UI 등장: 크게 시작 → 원래 사이즈로 축소 + 깜빡깜빡
     void AnimateUIAppear(GameObject obj)
     {
         if (obj == null) return;
 
-        // CanvasGroup 페이드인 + 스케일
         CanvasGroup cg = obj.GetComponent<CanvasGroup>();
         if (cg == null) cg = obj.AddComponent<CanvasGroup>();
 
         RectTransform rt = obj.GetComponent<RectTransform>();
 
-        cg.alpha = 0f;
-        if (rt != null) rt.localScale = Vector3.one * 0.8f;
+        cg.alpha = 1f;
+        if (rt != null) rt.localScale = Vector3.one * 1.8f;
 
-        DOTween.Sequence()
-            .Append(cg.DOFade(1f, 0.4f).SetEase(Ease.OutQuad))
-            .Join(rt != null ? rt.DOScale(1f, 0.4f).SetEase(Ease.OutBack) : cg.DOFade(1f, 0.01f));
+        Sequence seq = DOTween.Sequence();
+        // 크게 시작 → 원래 사이즈로
+        if (rt != null)
+            seq.Append(rt.DOScale(1f, 0.5f).SetEase(Ease.OutBack));
+        // 빠른 깜빡깜빡 (3회)
+        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(0.2f, 0.08f).SetEase(Ease.InOutSine));
+        seq.Append(cg.DOFade(1f, 0.08f).SetEase(Ease.InOutSine));
     }
 }

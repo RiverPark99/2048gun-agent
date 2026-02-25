@@ -228,8 +228,8 @@ public class PlayerHPSystem : MonoBehaviour
 
         bool hasText = (levelUpText != null);
 
-        // === Phase 1: 랜덤 텍스트 셔플 (3.5초) ===
-        float shuffleTime = 3.5f;
+        // === Phase 1: 랜덤 텍스트 셔플 (2.0초) ===
+        float shuffleTime = 2.0f;
         float elapsed = 0f;
         while (elapsed < shuffleTime)
         {

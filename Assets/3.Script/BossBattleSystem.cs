@@ -34,6 +34,21 @@ public class BossBattleSystem : MonoBehaviour
     [SerializeField] private GameObject challengeClearPanel;
     [SerializeField] private TextMeshProUGUI clearStatsText;
 
+    [Header("Combo Laser 색상 (1회, 2회, 3회, 4회, 5회+)")]
+    [SerializeField] private Color laserColor1 = Color.white;
+    [SerializeField] private Color laserColor2 = new Color(0.5f, 1f, 0.5f);
+    [SerializeField] private Color laserColor3 = new Color(1f, 0.6f, 0f);
+    [SerializeField] private Color laserColor4 = new Color(1f, 0.3f, 0f);
+    [SerializeField] private Color laserColor5Plus = new Color(1f, 0f, 1f);
+    [SerializeField] private Color laserColorFever = new Color(1f, 0.5f, 0f);
+
+    [Header("Damage 텍스트 색상 (1회, 2회, 3회, 4회, 5회+)")]
+    [SerializeField] private Color dmgTextColor1 = Color.white;
+    [SerializeField] private Color dmgTextColor2 = new Color(0.5f, 1f, 0.5f);
+    [SerializeField] private Color dmgTextColor3 = new Color(1f, 0.6f, 0f);
+    [SerializeField] private Color dmgTextColor4 = new Color(1f, 0.3f, 0f);
+    [SerializeField] private Color dmgTextColor5Plus = new Color(1f, 0f, 1f);
+
     [Header("References")]
     [SerializeField] private GridManager gridManager;
     [SerializeField] private GunSystem gunSystem;
@@ -91,12 +106,12 @@ public class BossBattleSystem : MonoBehaviour
             RectTransform monsterRect = bossManager.bossImageArea.GetComponent<RectTransform>();
             Vector3 bossPos = monsterRect.position;
 
-            Color laserColor = Color.white;
-            if (isFever) laserColor = new Color(1f, 0.5f, 0f);
-            else if (mergeCount >= 5) laserColor = new Color(1f, 0f, 1f);
-            else if (mergeCount >= 4) laserColor = new Color(1f, 0.3f, 0f);
-            else if (mergeCount >= 3) laserColor = new Color(1f, 0.6f, 0f);
-            else if (mergeCount >= 2) laserColor = new Color(0.5f, 1f, 0.5f);
+            Color laserColor = laserColor1;
+            if (isFever) laserColor = laserColorFever;
+            else if (mergeCount >= 5) laserColor = laserColor5Plus;
+            else if (mergeCount >= 4) laserColor = laserColor4;
+            else if (mergeCount >= 3) laserColor = laserColor3;
+            else if (mergeCount >= 2) laserColor = laserColor2;
 
             projectileManager.FireKnifeProjectile(fromPos, bossPos, laserColor, () =>
             {
@@ -136,16 +151,16 @@ public class BossBattleSystem : MonoBehaviour
                 if (comboNum >= 2)
                 {
                     damageText.text = $"{comboNum} Combo!\n-{damage:N0}";
-                    if (comboNum >= 5) damageText.color = new Color(1f, 0f, 1f);
-                    else if (comboNum >= 4) damageText.color = new Color(1f, 0.3f, 0f);
-                    else if (comboNum >= 3) damageText.color = new Color(1f, 0.6f, 0f);
-                    else damageText.color = new Color(0.5f, 1f, 0.5f);
+                    if (comboNum >= 5) damageText.color = dmgTextColor5Plus;
+                    else if (comboNum >= 4) damageText.color = dmgTextColor4;
+                    else if (comboNum >= 3) damageText.color = dmgTextColor3;
+                    else damageText.color = dmgTextColor2;
                     damageText.fontSize = Mathf.Min(48 + comboNum * 2, 60);
                 }
                 else
                 {
                     damageText.text = $"-{damage:N0}";
-                    damageText.color = Color.white;
+                    damageText.color = dmgTextColor1;
                     damageText.fontSize = 48;
                 }
             }

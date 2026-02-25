@@ -47,7 +47,10 @@ public class BossManager : MonoBehaviour
     [Header("Boss Attack Animation")]
     [SerializeField] private float attackMotionDuration = 0.3f;
 
-    [Header("Tutorial Stage 1~9 개별 설정 (HP / ATK)")]
+    [Header("Enemy Data (ScriptableObject)")]
+    [SerializeField] private EnemyData enemyData;
+
+    [Header("Fallback: Tutorial Stage 1~9 개별 설정 (HP / ATK)")]
     [SerializeField] private int[] tutorialHP = new int[] { 100, 150, 200, 250, 300, 400, 500, 650, 800 };
     [SerializeField] private int[] tutorialATK = new int[] { 10, 12, 14, 16, 18, 20, 22, 25, 28 };
 
@@ -63,6 +66,9 @@ public class BossManager : MonoBehaviour
     [Header("Guard ATK Slider (Enemy HP bar와 동일 구조)")]
     [SerializeField] private Slider guardAtkSlider;
     [SerializeField] private int guardAtkIncreaseTurns = 20;
+
+    [Header("Guard 해제 후 Clear 모드 배경 색상")]
+    [SerializeField] private Color clearModeGroundColor = new Color(0.2f, 0.15f, 0.3f, 1f);
 
     [Header("스테이지 배경 색상 (Inspector 설정)")]
     [SerializeField] private Color stageColor_1_10  = new Color(0.25f, 0.25f, 0.35f, 1f);
@@ -130,23 +136,9 @@ public class BossManager : MonoBehaviour
 
     void InitializeBoss()
     {
-        if (bossLevel >= 1 && bossLevel <= 9 && bossLevel - 1 < tutorialHP.Length)
-        {
-            maxHP = tutorialHP[bossLevel - 1];
-            currentBossDamage = (bossLevel - 1 < tutorialATK.Length) ? tutorialATK[bossLevel - 1] : baseDamage;
-        }
-        else
-        {
-            float exponent = Mathf.Pow(1.5f, bossLevel - 1);
-            maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
-            currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
-        }
-
-        if (bossLevel == 39) maxHP = stage39HP;
-        else if (bossLevel >= 40) maxHP = 2147483647;
+        ApplyEnemyStats(bossLevel);
 
         currentHP = maxHP;
-
         currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
         infiniteBossExtraDamage = 0;
@@ -319,7 +311,7 @@ public class BossManager : MonoBehaviour
         currentHP = maxHP;
 
         if (bossPanelGroundImage != null)
-            bossPanelGroundImage.DOColor(new Color(0.2f, 0.15f, 0.3f, 1f), 0.5f).SetEase(Ease.InOutQuad);
+            bossPanelGroundImage.DOColor(clearModeGroundColor, 0.5f).SetEase(Ease.InOutQuad);
 
         UpdateUI(true);
         if (gameManager != null) gameManager.UpdateTurnUI();
@@ -690,23 +682,8 @@ public class BossManager : MonoBehaviour
         else
         {
             SelectNextBossImage();
-
-            if (bossLevel >= 1 && bossLevel <= 9 && bossLevel - 1 < tutorialHP.Length)
-            {
-                maxHP = tutorialHP[bossLevel - 1];
-                currentBossDamage = (bossLevel - 1 < tutorialATK.Length) ? tutorialATK[bossLevel - 1] : baseDamage;
-            }
-            else
-            {
-                float exponent = Mathf.Pow(1.5f, bossLevel - 1);
-                maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
-                currentBossDamage = baseDamage + ((bossLevel - 1) / atkGrowthInterval) * atkGrowthPerStep;
-            }
-            if (bossLevel == 39) maxHP = stage39HP;
-            else if (bossLevel >= 40) maxHP = 2147483647;
+            ApplyEnemyStats(bossLevel);
             currentHP = maxHP;
-
-            currentTurnInterval = Mathf.Max(minTurnInterval, baseTurnInterval - Mathf.FloorToInt((bossLevel - 1) * 0.2f));
 
             if (bossLevel >= 40 && !isClearMode)
             {
@@ -958,6 +935,35 @@ public class BossManager : MonoBehaviour
 
         bossPanelGroundImage.DOKill();
         bossPanelGroundImage.DOColor(targetColor, 0.5f).SetEase(Ease.InOutQuad);
+    }
+
+    // === EnemyData 기반 스탯 적용 ===
+    void ApplyEnemyStats(int level)
+    {
+        if (enemyData != null)
+        {
+            var data = enemyData.GetStageData(level);
+            maxHP = data.hp;
+            currentBossDamage = data.atk;
+            currentTurnInterval = Mathf.Max(minTurnInterval, data.turnInterval);
+        }
+        else
+        {
+            // Fallback: 기존 로직
+            if (level >= 1 && level <= 9 && level - 1 < tutorialHP.Length)
+            {
+                maxHP = tutorialHP[level - 1];
+                currentBossDamage = (level - 1 < tutorialATK.Length) ? tutorialATK[level - 1] : baseDamage;
+            }
+            else
+            {
+                float exponent = Mathf.Pow(1.5f, level - 1);
+                maxHP = baseHP + Mathf.RoundToInt(hpIncreasePerLevel * (exponent - 1f) / 0.5f);
+                currentBossDamage = baseDamage + ((level - 1) / atkGrowthInterval) * atkGrowthPerStep;
+            }
+            if (level == 39) maxHP = stage39HP;
+            else if (level >= 40) maxHP = 2147483647;
+        }
     }
 
     public bool IsFrozen() { return isFrozen; }

@@ -34,7 +34,8 @@ public class Tile : MonoBehaviour
     private bool isMoving = false;
     private float moveSpeed = 12f;
 
-    private Color[] chocoGradient = new Color[]
+    [Header("Choco 타일 배경색 (2,4,8,16,32,64,128,256,512,1024,2048,4096)")]
+    [SerializeField] private Color[] chocoGradient = new Color[]
     {
         new Color(0.95f, 0.90f, 0.85f),
         new Color(0.90f, 0.85f, 0.75f),
@@ -50,7 +51,17 @@ public class Tile : MonoBehaviour
         new Color(0.0f, 0.0f, 0.0f),
     };
 
-    private Color[] berryGradient = new Color[]
+    [Header("Choco 밸류 텍스트색 (2,4,8,16,32,64,128,256,512,1024,2048,4096)")]
+    [SerializeField] private Color[] chocoTextColors = new Color[]
+    {
+        new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f),
+        new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f),
+        new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f),
+        new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f), new Color(1f, 0.84f, 0f),
+    };
+
+    [Header("Berry 타일 배경색 (2,4,8,16,32,64,128,256,512,1024,2048,4096)")]
+    [SerializeField] private Color[] berryGradient = new Color[]
     {
         new Color(1f, 0.80f, 0.85f),
         new Color(1f, 0.75f, 0.82f),
@@ -66,9 +77,17 @@ public class Tile : MonoBehaviour
         new Color(0.88f, 0.15f, 0.46f),
     };
 
-    private Color goldColor = new Color(1f, 0.84f, 0f);
-    private Color silverColor = new Color(0.9f, 0.9f, 0.95f);
-    private Color berryParticleColor = new Color(1f, 0.5f, 0.65f);
+    [Header("Berry 밸류 텍스트색 (2,4,8,16,32,64,128,256,512,1024,2048,4096)")]
+    [SerializeField] private Color[] berryTextColors = new Color[]
+    {
+        new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f),
+        new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f),
+        new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f),
+        new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f), new Color(0.9f, 0.9f, 0.95f),
+    };
+
+    [Header("파티클 색상")]
+    [SerializeField] private Color berryParticleColor = new Color(1f, 0.5f, 0.65f);
 
     void Awake()
     {
@@ -548,13 +567,13 @@ public class Tile : MonoBehaviour
 
         if (tileColor == TileColor.Choco)
         {
-            background.color = chocoGradient[colorIndex];
-            valueText.color = goldColor;
+            background.color = chocoGradient[Mathf.Clamp(colorIndex, 0, chocoGradient.Length - 1)];
+            valueText.color = (colorIndex < chocoTextColors.Length) ? chocoTextColors[colorIndex] : chocoTextColors[chocoTextColors.Length - 1];
         }
         else
         {
-            background.color = berryGradient[colorIndex];
-            valueText.color = silverColor;
+            background.color = berryGradient[Mathf.Clamp(colorIndex, 0, berryGradient.Length - 1)];
+            valueText.color = (colorIndex < berryTextColors.Length) ? berryTextColors[colorIndex] : berryTextColors[berryTextColors.Length - 1];
         }
 
         if (mergeParticle != null)
