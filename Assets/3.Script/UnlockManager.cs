@@ -83,7 +83,7 @@ public class UnlockManager : MonoBehaviour
             if (enemyAttackUIObj != null)
             {
                 enemyAttackUIObj.SetActive(true);
-                AnimateUIAppear(enemyAttackUIObj);
+                AnimateUIAppear(enemyAttackUIObj, true); // 암전 사용
             }
             Debug.Log("🔓 Unlock: Enemy Attack!");
         }
@@ -97,7 +97,7 @@ public class UnlockManager : MonoBehaviour
             if (gunUIObj != null)
             {
                 gunUIObj.SetActive(true);
-                AnimateUIAppear(gunUIObj);
+                AnimateUIAppear(gunUIObj, false); // 암전 없이
             }
             if (gaugeCoverObj != null) gaugeCoverObj.SetActive(true);
             Debug.Log("🔓 Unlock: Gun UI (half gauge)!");
@@ -218,7 +218,7 @@ public class UnlockManager : MonoBehaviour
     }
 
     // UI 등장: 1.1초 대기 → 크게 시작 → 축소 + 깜빡깜빡 (6회, 느림→빠름) + 입력차단
-    void AnimateUIAppear(GameObject obj)
+    void AnimateUIAppear(GameObject obj, bool useDim = false)
     {
         if (obj == null) return;
 
@@ -232,8 +232,8 @@ public class UnlockManager : MonoBehaviour
 
         isUnlockAnimating = true;
 
-        // 암전 오버레이 부드럽게 페이드인
-        if (unlockDimOverlay != null)
+        // 암전 오버레이 (3 stage 전용)
+        if (useDim && unlockDimOverlay != null)
         {
             unlockDimOverlay.gameObject.SetActive(true);
             Color oc = unlockDimOverlay.color; oc.a = 0f; unlockDimOverlay.color = oc;
@@ -262,9 +262,10 @@ public class UnlockManager : MonoBehaviour
         seq.Append(cg.DOFade(0.15f, 0.06f).SetEase(Ease.InOutSine));
         seq.Append(cg.DOFade(1f, 0.06f).SetEase(Ease.InOutSine));
         // 완료 → 암전 페이드아웃 + 입력 차단 해제
+        bool dimActive = useDim;
         seq.OnComplete(() =>
         {
-            if (unlockDimOverlay != null)
+            if (dimActive && unlockDimOverlay != null)
             {
                 unlockDimOverlay.DOKill();
                 unlockDimOverlay.DOFade(0f, 0.4f).SetEase(Ease.InQuad)
