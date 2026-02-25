@@ -56,6 +56,9 @@ public class BossManager : MonoBehaviour
     [SerializeField] private float attackInfoColorSpeed = 1.5f;
     private Sequence attackInfoColorLoop;
 
+    [Header("ATK 아이콘 이미지 (텍스트 색상/alpha 동기화)")]
+    [SerializeField] private Image atkIconImage;
+
     [Header("Guard ATK Slider (Enemy HP bar와 동일 구조)")]
     [SerializeField] private Slider guardAtkSlider;
     [SerializeField] private int guardAtkIncreaseTurns = 20;
@@ -548,8 +551,8 @@ public class BossManager : MonoBehaviour
 
         if (hpText != null)
         {
-            if (isGuardMode) hpText.text = "HP: Guard";
-            else hpText.text = $"HP: {currentHP:N0} / {maxHP:N0}";
+            if (isGuardMode) hpText.text = "HP : Guard";
+            else hpText.text = $"HP : {currentHP:N0} / {maxHP:N0}";
         }
 
         UpdateBossAttackUI();
@@ -574,7 +577,7 @@ public class BossManager : MonoBehaviour
             for (int i = 0; i < bonusTurnsAdded; i++) symbols += "□";
         }
 
-        return $"ATK: {GetEffectiveDamage():N0}\n{symbols}";
+        return $"+{GetEffectiveDamage():N0}    {symbols}";
     }
 
     void UpdateBossAttackUI()
@@ -602,11 +605,14 @@ public class BossManager : MonoBehaviour
         {
             StopAttackInfoColorLoop();
             bossAttackInfoText.color = ICE_BLUE;
+            SyncAtkIconColor(ICE_BLUE);
         }
         else if (currentTurnCount <= 1)
         {
             StopAttackInfoColorLoop();
-            bossAttackInfoText.color = new Color(1f, 0.2f, 0.2f);
+            Color redColor = new Color(1f, 0.2f, 0.2f);
+            bossAttackInfoText.color = redColor;
+            SyncAtkIconColor(redColor);
         }
         else
         {
@@ -621,15 +627,25 @@ public class BossManager : MonoBehaviour
         if (attackInfoColorLoop != null) return; // 이미 실행 중
         if (bossAttackInfoText == null) return;
         bossAttackInfoText.color = attackInfoColorA;
+        SyncAtkIconColor(attackInfoColorA);
         attackInfoColorLoop = DOTween.Sequence();
         attackInfoColorLoop.Append(bossAttackInfoText.DOColor(attackInfoColorB, attackInfoColorSpeed).SetEase(Ease.InOutSine));
+        if (atkIconImage != null)
+            attackInfoColorLoop.Join(atkIconImage.DOColor(attackInfoColorB, attackInfoColorSpeed).SetEase(Ease.InOutSine));
         attackInfoColorLoop.Append(bossAttackInfoText.DOColor(attackInfoColorA, attackInfoColorSpeed).SetEase(Ease.InOutSine));
+        if (atkIconImage != null)
+            attackInfoColorLoop.Join(atkIconImage.DOColor(attackInfoColorA, attackInfoColorSpeed).SetEase(Ease.InOutSine));
         attackInfoColorLoop.SetLoops(-1, LoopType.Restart);
     }
 
     void StopAttackInfoColorLoop()
     {
         if (attackInfoColorLoop != null) { attackInfoColorLoop.Kill(); attackInfoColorLoop = null; }
+    }
+
+    void SyncAtkIconColor(Color c)
+    {
+        if (atkIconImage != null) atkIconImage.color = c;
     }
 
     IEnumerator OnBossDefeatedCoroutine()

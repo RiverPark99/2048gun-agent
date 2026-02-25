@@ -87,6 +87,9 @@ public class PlayerHPSystem : MonoBehaviour
     public int[] ComboHeatRecover => comboHeatRecover;
     public LowHealthVignette LowHealthVignette => lowHealthVignette;
 
+    // Mix merge 기준 Berry 1개 회복력
+    public int GetMixHealPower() => Mathf.RoundToInt(mixHealPercent * maxHeat);
+
     public void Initialize()
     {
         if (heatSlider != null)

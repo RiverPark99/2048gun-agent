@@ -40,6 +40,13 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private TextMeshProUGUI freezeTurnText;
     [SerializeField] private TextMeshProUGUI freezeTotalDamageText;
 
+    [Header("아이콘 이미지 (텍스트 색상/alpha 동기화)")]
+    [SerializeField] private Image atkIconImage;       // 공격력 아이콘 (텍스트 옆)
+    [SerializeField] private Image boostIconImage;      // Boost 아이콘 (freezeTurnText 옆)
+
+    [Header("회복력 UI (Berry 1개 기준, challenge 3~ 표시)")]
+    [SerializeField] private TextMeshProUGUI healPowerText;  // "3 ♥" 형태
+
     [Header("Continue")]
     [SerializeField] private TextMeshProUGUI continueGuideText;
 
@@ -141,6 +148,14 @@ public class GunSystem : MonoBehaviour
     private Sequence freezeTurnColorAnim;
     private Sequence freezeTotalDmgColorAnim;
 
+    // 아이콘 색상 동기화
+    private Sequence atkIconFreezeAnim;
+    private Sequence boostIconFreezeAnim;
+    private Color atkIconOriginalColor;
+    private bool atkIconColorSaved = false;
+    private Color boostIconOriginalColor;
+    private bool boostIconColorSaved = false;
+
     // Freeze UI 원래 위치 저장
     private Vector2 freezeTurnOriginalPos;
     private bool freezeTurnPosSaved = false;
@@ -148,6 +163,11 @@ public class GunSystem : MonoBehaviour
     private bool freezeTotalDmgPosSaved = false;
     private Color freezeTotalDmgOriginalColor = Color.white;
     private bool freezeTotalDmgColorSaved = false;
+    private float freezeTotalDmgOriginalFontSize = 0f;
+    private bool freezeTotalDmgFontSizeSaved = false;
+
+    [Header("Freeze Total Damage 글자 크기 (자릿수별: 8,9,10,11,12자리)")]
+    [SerializeField] private float[] freezeDmgFontSizes = new float[] { 34f, 30f, 26f, 23f, 20f };
 
     // Continue 횟수
     private static int continueCount = 0;
@@ -199,6 +219,8 @@ public class GunSystem : MonoBehaviour
         if (freezeTotalDamageText != null && freezeTotalDamageText.gameObject.activeSelf)
         {
             freezeTotalDamageText.text = $"{freezeTotalDamage:N0}";
+            // 자릿수별 폰트 크기 조절 (8자리 이상)
+            ApplyFreezeDmgFontSize();
             RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
@@ -208,6 +230,23 @@ public class GunSystem : MonoBehaviour
                 rt.DOAnchorPosY(freezeTotalDmgOriginalPos.y + 4f, 0.08f).SetEase(Ease.OutQuad)
                     .OnComplete(() => { if (rt != null) rt.DOAnchorPosY(freezeTotalDmgOriginalPos.y, 0.1f).SetEase(Ease.InQuad); });
             }
+        }
+    }
+
+    void ApplyFreezeDmgFontSize()
+    {
+        if (freezeTotalDamageText == null || !freezeTotalDmgFontSizeSaved) return;
+        // N0 포맷의 실제 글자수 (콤마 포함)
+        int digitCount = freezeTotalDamageText.text.Length;
+        if (digitCount < 8)
+        {
+            freezeTotalDamageText.fontSize = freezeTotalDmgOriginalFontSize;
+        }
+        else
+        {
+            // 8자리=index0, 9=1, 10=2, 11=3, 12+=4
+            int idx = Mathf.Clamp(digitCount - 8, 0, freezeDmgFontSizes.Length - 1);
+            freezeTotalDamageText.fontSize = freezeDmgFontSizes[idx];
         }
     }
 
@@ -250,6 +289,7 @@ public class GunSystem : MonoBehaviour
         {
             if (!freezeTotalDmgPosSaved) { freezeTotalDmgOriginalPos = freezeTotalDamageText.GetComponent<RectTransform>().anchoredPosition; freezeTotalDmgPosSaved = true; }
             if (!freezeTotalDmgColorSaved) { freezeTotalDmgOriginalColor = freezeTotalDamageText.color; freezeTotalDmgColorSaved = true; }
+            if (!freezeTotalDmgFontSizeSaved) { freezeTotalDmgOriginalFontSize = freezeTotalDamageText.fontSize; freezeTotalDmgFontSizeSaved = true; }
             freezeTotalDamageText.gameObject.SetActive(false);
         }
 
@@ -258,6 +298,17 @@ public class GunSystem : MonoBehaviour
             atkOriginalColor = attackPowerText.color;
             atkColorSaved = true;
         }
+        if (atkIconImage != null && !atkIconColorSaved)
+        {
+            atkIconOriginalColor = atkIconImage.color;
+            atkIconColorSaved = true;
+        }
+        if (boostIconImage != null && !boostIconColorSaved)
+        {
+            boostIconOriginalColor = boostIconImage.color;
+            boostIconColorSaved = true;
+        }
+        if (healPowerText != null) healPowerText.gameObject.SetActive(false);
 
         if (cheatMode)
         {
@@ -301,6 +352,17 @@ public class GunSystem : MonoBehaviour
             attackPowerText.DOKill();
             attackPowerText.color = atkOriginalColor;
         }
+        if (atkIconImage != null && atkIconColorSaved)
+        {
+            atkIconImage.DOKill();
+            atkIconImage.color = atkIconOriginalColor;
+        }
+        if (boostIconImage != null && boostIconColorSaved)
+        {
+            boostIconImage.DOKill();
+            boostIconImage.color = boostIconOriginalColor;
+        }
+        if (healPowerText != null) healPowerText.gameObject.SetActive(false);
 
         if (cheatMode)
         {
@@ -462,7 +524,7 @@ public class GunSystem : MonoBehaviour
         SetProgressBarFreezeColor();
         StartFreezeColorLoops();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Freeze Turn 0"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0 (x1.00)"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
@@ -510,6 +572,7 @@ public class GunSystem : MonoBehaviour
             rt.DOKill(); rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
             if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
+            if (freezeTotalDmgFontSizeSaved) freezeTotalDamageText.fontSize = freezeTotalDmgOriginalFontSize;
             CanvasGroup cg = freezeTotalDamageText.GetComponent<CanvasGroup>();
             if (cg != null) cg.alpha = 1f;
         }
@@ -517,6 +580,16 @@ public class GunSystem : MonoBehaviour
         {
             attackPowerText.DOKill();
             if (atkColorSaved) { Color c = atkOriginalColor; c.a = 0.35f; attackPowerText.color = c; }
+        }
+        if (atkIconImage != null)
+        {
+            atkIconImage.DOKill();
+            if (atkIconColorSaved) { Color c = atkIconOriginalColor; c.a = 0.35f; atkIconImage.color = c; }
+        }
+        if (boostIconImage != null)
+        {
+            boostIconImage.DOKill();
+            if (boostIconColorSaved) boostIconImage.color = boostIconOriginalColor;
         }
     }
 
@@ -559,8 +632,8 @@ public class GunSystem : MonoBehaviour
             Color flashWhite = new Color(1f, 0.95f, 0.8f);
             Color flashOrange = FREEZE_ORANGE;
 
-            // 픽스 시 살짝 확대 후 복귀
-            rt.localScale = Vector3.one * 1.3f;
+            // 픽스 시 확대 후 복귀 (눈에 띄게)
+            rt.localScale = Vector3.one * 1.6f;
 
             Sequence seq = DOTween.Sequence();
             // 반짝반짝 3회 (0.8초)
@@ -583,6 +656,7 @@ public class GunSystem : MonoBehaviour
                 cg.alpha = 1f; rt.localScale = Vector3.one;
                 if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
                 if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
+                if (freezeTotalDmgFontSizeSaved) freezeTotalDamageText.fontSize = freezeTotalDmgOriginalFontSize;
             });
         }
     }
@@ -592,7 +666,7 @@ public class GunSystem : MonoBehaviour
         if (freezeTurnText != null && isFeverMode)
         {
             float mult = GetFreezeDamageMultiplier();
-            freezeTurnText.text = $"Freeze Turn {freezeTurnCount} (x{mult:F2})";
+            freezeTurnText.text = $"{freezeTurnCount} (x{mult:F2})";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
@@ -631,9 +705,31 @@ public class GunSystem : MonoBehaviour
             freezeTotalDamageText.DOKill();
             freezeTotalDamageText.color = FREEZE_ORANGE;
             freezeTotalDmgColorAnim = DOTween.Sequence();
-            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
-            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 0.7f).SetEase(Ease.InOutSine));
+            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_ORANGE, 0.7f).SetEase(Ease.InOutSine));
             freezeTotalDmgColorAnim.SetLoops(-1, LoopType.Restart);
+        }
+
+        // 아이콘 이미지 색상 동기화 (ATK 텍스트와 같은 주기)
+        if (atkIconImage != null)
+        {
+            atkIconImage.DOKill();
+            atkIconImage.color = FREEZE_ORANGE;
+            atkIconFreezeAnim = DOTween.Sequence();
+            atkIconFreezeAnim.Append(atkIconImage.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            atkIconFreezeAnim.Append(atkIconImage.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            atkIconFreezeAnim.SetLoops(-1, LoopType.Restart);
+        }
+
+        // Boost 아이콘 색상 동기화 (freezeTurnText와 같은 주기)
+        if (boostIconImage != null)
+        {
+            boostIconImage.DOKill();
+            boostIconImage.color = FREEZE_ORANGE;
+            boostIconFreezeAnim = DOTween.Sequence();
+            boostIconFreezeAnim.Append(boostIconImage.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            boostIconFreezeAnim.Append(boostIconImage.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            boostIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
     }
 
@@ -642,11 +738,23 @@ public class GunSystem : MonoBehaviour
         if (atkFreezeColorAnim != null) { atkFreezeColorAnim.Kill(); atkFreezeColorAnim = null; }
         if (freezeTurnColorAnim != null) { freezeTurnColorAnim.Kill(); freezeTurnColorAnim = null; }
         if (freezeTotalDmgColorAnim != null) { freezeTotalDmgColorAnim.Kill(); freezeTotalDmgColorAnim = null; }
+        if (atkIconFreezeAnim != null) { atkIconFreezeAnim.Kill(); atkIconFreezeAnim = null; }
+        if (boostIconFreezeAnim != null) { boostIconFreezeAnim.Kill(); boostIconFreezeAnim = null; }
 
         if (attackPowerText != null)
         {
             attackPowerText.DOKill();
             if (atkColorSaved) { Color c = atkOriginalColor; c.a = 0.35f; attackPowerText.color = c; }
+        }
+        if (atkIconImage != null)
+        {
+            atkIconImage.DOKill();
+            if (atkIconColorSaved) { Color c = atkIconOriginalColor; c.a = 0.35f; atkIconImage.color = c; }
+        }
+        if (boostIconImage != null)
+        {
+            boostIconImage.DOKill();
+            if (boostIconColorSaved) boostIconImage.color = boostIconOriginalColor;
         }
     }
 
@@ -711,7 +819,7 @@ public class GunSystem : MonoBehaviour
         StartFreezeColorLoops();
         FireFeverFreezeLaser();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "Freeze Turn 0"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0 (x1.00)"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
         UpdateGunUI();
     }
@@ -1045,16 +1153,22 @@ public class GunSystem : MonoBehaviour
                 attackTextInitialized = true;
             }
 
-            bool bulletReady = hasBullet || (isFeverMode && !feverBulletUsed);
-            string bulletIcon = bulletReady ? "\u25A0" : "\u25A1";
-            attackPowerText.text = $"{bulletIcon} ATK+{permanentAttackPower:N0}";
+            attackPowerText.text = $"+{permanentAttackPower:N0}";
 
             if (!isFeverMode)
             {
                 Color c = atkColorSaved ? atkOriginalColor : Color.black;
-                c.a = bulletReady ? 0.7f : 0.35f;
+                c.a = 0.35f;
                 if (atkFreezeColorAnim == null)
                     attackPowerText.color = c;
+            }
+
+            // atkIcon 색상/alpha 동기화 (freeze 중이 아닐 때)
+            if (atkIconImage != null && !isFeverMode && atkIconFreezeAnim == null)
+            {
+                Color ic = atkIconColorSaved ? atkIconOriginalColor : Color.black;
+                ic.a = attackPowerText.color.a;
+                atkIconImage.color = ic;
             }
 
             if (permanentAttackPower != lastPermanentAttackPower)
@@ -1098,6 +1212,9 @@ public class GunSystem : MonoBehaviour
 
         // 손가락 튜토리얼 가이드 체크
         if (unlockManager != null) unlockManager.CheckFingerGuide(mergeGauge);
+
+        // 회복력 UI 갱신
+        UpdateHealPowerUI();
     }
 
     public void UpdateGuideText()
@@ -1224,5 +1341,21 @@ public class GunSystem : MonoBehaviour
         StopProgressBarGlow();
         StopFreezeColorLoops();
         StopEmergencyFlash();
+    }
+
+    // === 회복력 UI (_13) ===
+    // challenge 3 이상에서 표시, 레벨업 후 즉시 반영
+    public void UpdateHealPowerUI()
+    {
+        if (healPowerText == null || playerHP == null || bossManager == null) return;
+        int stage = bossManager.GetBossLevel();
+        if (stage < 3)
+        {
+            healPowerText.gameObject.SetActive(false);
+            return;
+        }
+        healPowerText.gameObject.SetActive(true);
+        int healPower = playerHP.GetMixHealPower();
+        healPowerText.text = $"{healPower} \u2665";
     }
 }
