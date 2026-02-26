@@ -48,6 +48,9 @@ public class PlayerHPSystem : MonoBehaviour
     [SerializeField] private GameObject damageTextPrefab;
     [SerializeField] private Transform damageTextParent;
 
+    [Header("HP Bar Heal Flash")]
+    [SerializeField] private Color healFlashColor = new Color(0.2f, 1f, 0.4f);
+
     [Header("References")]
     [SerializeField] private GunSystem gunSystem;
 
@@ -501,14 +504,13 @@ public class PlayerHPSystem : MonoBehaviour
         }
     }
 
-    // _16: Heal laser 시 HP bar 초록색 점멸 후 원래색 복관 (0.2초)
+    // _16: HP 회복 시 HP bar 깠박임 (턴당 1회, 0.15초, 색상 SerializeField)
     public void FlashHealGreen()
     {
         if (heatBarImage == null) return;
         heatBarImage.DOKill();
-        heatBarImage.color = new Color(0.2f, 1f, 0.4f);
-        // heatSlider value 기반으로 최신 색상 계산해서 복원 (만탕 시에도 정확하게)
-        heatBarImage.DOColor(GetCurrentBarColor(), 0.2f).SetEase(Ease.OutQuad);
+        heatBarImage.color = healFlashColor;
+        heatBarImage.DOColor(GetCurrentBarColor(), 0.4f).SetEase(Ease.OutQuad);
     }
 
     // 현재 HP 비율 기준 bar 색상 (UpdateHeatUI와 동일한 로직)

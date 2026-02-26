@@ -87,8 +87,6 @@ public class BossManager : MonoBehaviour
     private int bonusTurnsConsumed = 0;
     private int bonusTurnsTotal = 0;
 
-    private Color originalAttackInfoColor = Color.white;
-    private bool attackInfoColorSaved = false;
     private static readonly Color ICE_BLUE = new Color(0.5f, 0.8f, 1f);
 
     private int infiniteBossExtraDamage = 0;
@@ -352,11 +350,15 @@ public class BossManager : MonoBehaviour
     void FlashAttackTextOrange()
     {
         if (bossAttackInfoText == null) return;
+        Color flashColor = new Color(1f, 0.6f, 0.1f);
         Color originalColor = bossAttackInfoText.color;
-        bossAttackInfoText.color = new Color(1f, 0.6f, 0.1f);
-        DOTween.Sequence()
-            .AppendInterval(0.3f)
-            .Append(bossAttackInfoText.DOColor(originalColor, 0.4f).SetEase(Ease.OutQuad));
+        bossAttackInfoText.color = flashColor;
+        if (atkIconImage != null) atkIconImage.color = flashColor;
+        Sequence seq = DOTween.Sequence();
+        seq.AppendInterval(0.3f);
+        seq.Append(bossAttackInfoText.DOColor(originalColor, 0.4f).SetEase(Ease.OutQuad));
+        if (atkIconImage != null)
+            seq.Join(atkIconImage.DOColor(originalColor, 0.4f).SetEase(Ease.OutQuad));
     }
 
     private int GetEffectiveDamage()
@@ -467,11 +469,16 @@ public class BossManager : MonoBehaviour
         if (bossAttackInfoText != null)
         {
             bossAttackInfoText.text = GetAttackTurnText(0);
-            if (attackBlinkAnimation != null) attackBlinkAnimation.Kill();
-            attackBlinkAnimation = DOTween.Sequence()
-                .Append(bossAttackInfoText.DOColor(Color.red, 0.4f))
-                .Append(bossAttackInfoText.DOColor(Color.white, 0.4f))
-                .SetLoops(-1, LoopType.Restart);
+            StopAttackInfoColorLoop();
+            if (attackBlinkAnimation != null) { attackBlinkAnimation.Kill(); attackBlinkAnimation = null; }
+            attackBlinkAnimation = DOTween.Sequence();
+            attackBlinkAnimation.Append(bossAttackInfoText.DOColor(Color.red, 0.4f));
+            if (atkIconImage != null)
+                attackBlinkAnimation.Join(atkIconImage.DOColor(Color.red, 0.4f));
+            attackBlinkAnimation.Append(bossAttackInfoText.DOColor(Color.white, 0.4f));
+            if (atkIconImage != null)
+                attackBlinkAnimation.Join(atkIconImage.DOColor(Color.white, 0.4f));
+            attackBlinkAnimation.SetLoops(-1, LoopType.Restart);
         }
 
         yield return new WaitForSeconds(0.25f);
@@ -515,6 +522,9 @@ public class BossManager : MonoBehaviour
         if (gameManager != null) gameManager.SetBossAttacking(false);
 
         if (attackBlinkAnimation != null) { attackBlinkAnimation.Kill(); attackBlinkAnimation = null; }
+        // 공격 깜박임 후 중간색 잔류 방지
+        if (bossAttackInfoText != null) bossAttackInfoText.DOKill();
+        if (atkIconImage != null) atkIconImage.DOKill();
 
         currentTurnCount = currentTurnInterval;
         bonusTurnsAdded = 0;
@@ -641,11 +651,24 @@ public class BossManager : MonoBehaviour
     void StopAttackInfoColorLoop()
     {
         if (attackInfoColorLoop != null) { attackInfoColorLoop.Kill(); attackInfoColorLoop = null; }
+        // Kill 후 중간 색상 잔류 방지: 텍스트와 아이콘 모두 DOKill
+        if (bossAttackInfoText != null) bossAttackInfoText.DOKill();
+        if (atkIconImage != null) atkIconImage.DOKill();
     }
 
     void SyncAtkIconColor(Color c)
     {
-        if (atkIconImage != null) atkIconImage.color = c;
+        if (atkIconImage != null)
+        {
+            atkIconImage.DOKill();
+            atkIconImage.color = c;
+        }
+        // 텍스트도 확실히 동기화
+        if (bossAttackInfoText != null)
+        {
+            bossAttackInfoText.DOKill();
+            bossAttackInfoText.color = c;
+        }
     }
 
     IEnumerator OnBossDefeatedCoroutine()
@@ -878,21 +901,14 @@ public class BossManager : MonoBehaviour
         if (frozen)
         {
             StopBossIdleAnimation();
-            if (bossAttackInfoText != null)
-            {
-                if (!attackInfoColorSaved)
-                {
-                    originalAttackInfoColor = bossAttackInfoText.color;
-                    attackInfoColorSaved = true;
-                }
-                bossAttackInfoText.color = ICE_BLUE;
-            }
+            StopAttackInfoColorLoop();
+            if (attackBlinkAnimation != null) { attackBlinkAnimation.Kill(); attackBlinkAnimation = null; }
+            SyncAtkIconColor(ICE_BLUE);
         }
         else
         {
             if (!isTransitioning)
                 StartBossIdleAnimation();
-            attackInfoColorSaved = false;
             UpdateBossAttackUI();
         }
     }

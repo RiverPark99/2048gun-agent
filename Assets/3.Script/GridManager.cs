@@ -216,10 +216,7 @@ public class GridManager : MonoBehaviour
                                     Vector3 berryPos = targetTile.transform.position;
                                     Vector3 heatUIPos = playerHP.HeatText.transform.position;
                                     Color berryColor = new Color(1f, 0.4f, 0.6f);
-                                    // _16: heal laser 도달 시 HP bar 초록 점멸
-                                    pm.FireKnifeProjectile(berryPos, heatUIPos, berryColor, () => {
-                                        if (playerHP != null) playerHP.FlashHealGreen();
-                                    });
+                                    pm.FireKnifeProjectile(berryPos, heatUIPos, berryColor, null);
                                 }
 
                                 if (!gunSystem.IsFeverMode)
@@ -368,6 +365,13 @@ public class GridManager : MonoBehaviour
 
             if (netChange != 0)
                 playerHP.ShowHeatChangeText(netChange);
+
+            // _16: HP 회복 시 HP bar 깠박임 (턴당 1회, 회복량 0이면 미발동)
+            if (netChange > 0)
+                playerHP.FlashHealGreen();
+
+            // _6: progress bar/text 깠박임 (턴당 1회)
+            gunSystem.FlashEndOfTurn(mergeCountThisTurn > 0);
 
             // 콤보 게이지 보너스 (Freeze 중이 아닐 때만)
             if (!gunSystem.IsFeverMode && mergeCountThisTurn >= 2)

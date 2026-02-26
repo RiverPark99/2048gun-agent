@@ -29,6 +29,15 @@ public class GunSystem : MonoBehaviour
     [Header("Gauge Change Text 크기 (_7)")]
     [SerializeField] private float gaugeChangeTextSize = 42f;
 
+    [Header("DOTween 효과 튜닝")]
+    [SerializeField] private float chargePopScale = 1.5f;
+    [SerializeField] private float chargeReturnDuration = 0.4f;
+    [SerializeField] private float freezePopScale = 1.8f;
+    [SerializeField] private float freezeReturnDuration = 0.5f;
+    [SerializeField] private Color progressBarFlashColor = Color.white;
+    [SerializeField] private Color progressTextFreezeColor = new Color(0.9f, 0.15f, 0.15f);
+    [SerializeField] private Color gunModeGlowColor = new Color(0.3f, 0.3f, 0.3f, 0.5f);
+
     [Header("Freeze Effects")]
     [SerializeField] private Transform feverParticleSpawnPoint;
     [SerializeField] private Image feverBackgroundImage;
@@ -185,11 +194,9 @@ public class GunSystem : MonoBehaviour
     private float healTextOriginalY = 0f;
     private bool healTextInitialized = false;
 
-    // _6: progress bar 흰색 반짝
-    private int lastMergeGaugeForFlash = 0;
 
-    // _11: Freeze 중 progress text 색상 루프
-    private Sequence progressTextFreezeAnim;
+
+    // _11: Freeze 중 progress text 붉은색 고정
     private Color progressTextOriginalColor;
     private bool progressTextColorSaved = false;
 
@@ -327,6 +334,12 @@ public class GunSystem : MonoBehaviour
         }
         if (healPowerText != null) healPowerText.gameObject.SetActive(false);
 
+        if (turnsUntilBulletText != null && !progressTextColorSaved)
+        {
+            progressTextOriginalColor = turnsUntilBulletText.color;
+            progressTextColorSaved = true;
+        }
+
         if (cheatMode)
         {
             permanentAttackPower += 200000000;
@@ -351,7 +364,7 @@ public class GunSystem : MonoBehaviour
         feverBulletUsed = false; isGunMode = false;
         freezeTurnCount = 0; freezeTotalDamage = 0;
         lastPermanentAttackPower = 0; lastMergeGauge = -1;
-        lastBulletCountState = ""; lastMergeGaugeForFlash = 0;
+        lastBulletCountState = "";
 
         if (gunButtonHeartbeat != null) { gunButtonHeartbeat.Kill(); gunButtonHeartbeat = null; }
         StopFreezeColorLoops();
@@ -750,17 +763,12 @@ public class GunSystem : MonoBehaviour
             boostIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
 
-        // _11: progress text (40/40) 빨간색↔주황색 루프
+        // _11: progress text (40/40) 붉은색 고정
         if (turnsUntilBulletText != null)
         {
             if (!progressTextColorSaved) { progressTextOriginalColor = turnsUntilBulletText.color; progressTextColorSaved = true; }
             turnsUntilBulletText.DOKill();
-            Color freezeRed = new Color(0.9f, 0.15f, 0.15f);
-            turnsUntilBulletText.color = freezeRed;
-            progressTextFreezeAnim = DOTween.Sequence();
-            progressTextFreezeAnim.Append(turnsUntilBulletText.DOColor(FREEZE_ORANGE, 0.8f).SetEase(Ease.InOutSine));
-            progressTextFreezeAnim.Append(turnsUntilBulletText.DOColor(freezeRed, 0.8f).SetEase(Ease.InOutSine));
-            progressTextFreezeAnim.SetLoops(-1, LoopType.Restart);
+            turnsUntilBulletText.color = progressTextFreezeColor;
         }
     }
 
@@ -788,8 +796,7 @@ public class GunSystem : MonoBehaviour
             if (boostIconColorSaved) boostIconImage.color = boostIconOriginalColor;
         }
 
-        // _11: progress text 루프 정지 + 원래색 복원
-        if (progressTextFreezeAnim != null) { progressTextFreezeAnim.Kill(); progressTextFreezeAnim = null; }
+        // _11: progress text 붉은색 해제 + 원래색 복원
         if (turnsUntilBulletText != null)
         {
             turnsUntilBulletText.DOKill();
@@ -801,14 +808,22 @@ public class GunSystem : MonoBehaviour
     {
         if (progressBarFill == null) return;
         Image fillImg = progressBarFill.GetComponent<Image>();
-        if (fillImg != null) fillImg.color = new Color(0.9f, 0.2f, 0.2f);
+        if (fillImg != null)
+        {
+            fillImg.DOKill();
+            fillImg.color = new Color(0.9f, 0.2f, 0.2f);
+        }
     }
 
     void RestoreProgressBarColor()
     {
         if (progressBarFill == null || !progressBarColorSaved) return;
         Image fillImg = progressBarFill.GetComponent<Image>();
-        if (fillImg != null) fillImg.color = progressBarOriginalColor;
+        if (fillImg != null)
+        {
+            fillImg.DOKill();
+            fillImg.color = progressBarOriginalColor;
+        }
     }
 
     // === Continue ===
@@ -1105,7 +1120,7 @@ public class GunSystem : MonoBehaviour
     }
 
     // === BulletCount 상태 변경 DOTween 효과 ===
-    // _4: CHARGE/FREEZE! 바운스 효과 (FREEZE!는 더 크게, 복구 느리게)
+    // _4: CHARGE/FREEZE! 바운스 효과 (SerializeField 튜닝)
     void AnimateBulletCountChange(string newState)
     {
         if (bulletCountText == null) return;
@@ -1119,8 +1134,8 @@ public class GunSystem : MonoBehaviour
         bool isFreeze = (newState == "FREEZE!");
         bool isCharge = (newState == "CHARGE");
 
-        float popScale = isFreeze ? 1.8f : (isCharge ? 1.5f : 1.3f);
-        float returnDur = isFreeze ? 0.5f : (isCharge ? 0.4f : 0.25f);
+        float popScale = isFreeze ? freezePopScale : (isCharge ? chargePopScale : 1.3f);
+        float returnDur = isFreeze ? freezeReturnDuration : (isCharge ? chargeReturnDuration : 0.25f);
 
         rt.localScale = Vector3.one * popScale;
         rt.DOScale(1f, returnDur).SetEase(Ease.OutBack);
@@ -1241,14 +1256,7 @@ public class GunSystem : MonoBehaviour
             progressBarFill.DOKill();
             progressBarFill.DOSizeDelta(new Vector2(targetW, progressBarFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
 
-            // _6: 게이지 증가 시 progress bar 흰색 반짝 (튜토리얼 cap 도달 시 미발동)
-            if (mergeGauge > lastMergeGaugeForFlash && !isFeverMode)
-            {
-                int cap = (unlockManager != null) ? unlockManager.GetGaugeCap() : GAUGE_MAX;
-                if (cap > 0 && mergeGauge < cap)
-                    FlashProgressBarWhite();
-            }
-            lastMergeGaugeForFlash = mergeGauge;
+
         }
 
         if (gunButtonImage != null && !isEmergencyFlashing)
@@ -1346,9 +1354,12 @@ public class GunSystem : MonoBehaviour
         StopProgressBarGlow();
         if (progressBarGlowOverlay == null) return;
         progressBarGlowOverlay.gameObject.SetActive(true);
-        Color c = progressBarGlowOverlay.color; c.a = 0f; progressBarGlowOverlay.color = c;
+        Color baseColor = gunModeGlowColor;
+        baseColor.a = 0f;
+        progressBarGlowOverlay.color = baseColor;
+        float targetAlpha = gunModeGlowColor.a;
         progressBarGlowAnim = DOTween.Sequence();
-        progressBarGlowAnim.Append(progressBarGlowOverlay.DOFade(0.5f, 0.5f).SetEase(Ease.InOutSine));
+        progressBarGlowAnim.Append(progressBarGlowOverlay.DOFade(targetAlpha, 0.5f).SetEase(Ease.InOutSine));
         progressBarGlowAnim.Append(progressBarGlowOverlay.DOFade(0f, 0.5f).SetEase(Ease.InOutSine));
         progressBarGlowAnim.SetLoops(-1, LoopType.Restart);
     }
@@ -1364,15 +1375,34 @@ public class GunSystem : MonoBehaviour
         }
     }
 
-    // _6: 게이지 증가 시 progress bar 흰색 반짝 (0.15초 하얀색 → 원래색)
-    void FlashProgressBarWhite()
+    // _6 + _11: 턴당 1회 progress bar/text 깠박임 (GridManager.MoveCoroutine 끝에서 호출)
+    public void FlashEndOfTurn(bool hadMerge)
     {
-        if (progressBarFill == null || !progressBarColorSaved) return;
-        Image fillImg = progressBarFill.GetComponent<Image>();
-        if (fillImg == null) return;
-        fillImg.DOKill();
-        fillImg.color = Color.white;
-        fillImg.DOColor(progressBarOriginalColor, 0.25f).SetEase(Ease.OutQuad);
+        if (!hadMerge || isFeverMode) return;
+
+        // 튜토리얼 cap 도달 시 미발동 (20/20 등 풀 카운트)
+        int cap = (unlockManager != null) ? unlockManager.GetGaugeCap() : GAUGE_MAX;
+        if (cap > 0 && mergeGauge >= cap) return;
+
+        // progress bar 깠박임
+        if (progressBarFill != null && progressBarColorSaved)
+        {
+            Image fillImg = progressBarFill.GetComponent<Image>();
+            if (fillImg != null)
+            {
+                fillImg.DOKill();
+                fillImg.color = progressBarFlashColor;
+                fillImg.DOColor(progressBarOriginalColor, 0.4f).SetEase(Ease.OutQuad);
+            }
+        }
+
+        // progress text 깠박임
+        if (turnsUntilBulletText != null && progressTextColorSaved)
+        {
+            turnsUntilBulletText.DOKill();
+            turnsUntilBulletText.color = progressBarFlashColor;
+            turnsUntilBulletText.DOColor(progressTextOriginalColor, 0.4f).SetEase(Ease.OutQuad);
+        }
     }
 
     // === HP bar 배경 ===
