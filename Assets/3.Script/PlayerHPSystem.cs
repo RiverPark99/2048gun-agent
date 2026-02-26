@@ -48,6 +48,9 @@ public class PlayerHPSystem : MonoBehaviour
     [SerializeField] private GameObject damageTextPrefab;
     [SerializeField] private Transform damageTextParent;
 
+    [Header("References")]
+    [SerializeField] private GunSystem gunSystem;
+
     // HP 상태
     private int currentHeat = 100;
     private bool isLevelUpAnimating = false;
@@ -87,8 +90,8 @@ public class PlayerHPSystem : MonoBehaviour
     public int[] ComboHeatRecover => comboHeatRecover;
     public LowHealthVignette LowHealthVignette => lowHealthVignette;
 
-    // Mix merge 기준 Berry 1개 회복력
-    public int GetMixHealPower() => Mathf.RoundToInt(mixHealPercent * maxHeat);
+    // Mix merge 기준 Berry 1개 회복력 (내림)
+    public int GetMixHealPower() => Mathf.FloorToInt(mixHealPercent * maxHeat);
 
     public void Initialize()
     {
@@ -265,7 +268,7 @@ public class PlayerHPSystem : MonoBehaviour
             tr.DOScale(1f, popDuration).SetEase(Ease.OutBack);
         }
 
-        // === Phase 3: 실제 HP 증가 + 회복 ===
+        // === Phase 3: 실제 HP 증가 + 회복 + 회복력 UI 즉시 반영 ===
         maxHeat += finalIncrease;
         int oldHeat = currentHeat;
         currentHeat = maxHeat;
@@ -274,6 +277,9 @@ public class PlayerHPSystem : MonoBehaviour
         int recovery = currentHeat - oldHeat;
         if (recovery > 0)
             ShowHeatChangeText(recovery);
+
+        // 회복력 UI 즉시 갱신 (레벨업과 동시)
+        if (gunSystem != null) gunSystem.UpdateHealPowerUI();
 
         Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 

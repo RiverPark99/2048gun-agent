@@ -46,6 +46,7 @@ public class GunSystem : MonoBehaviour
 
     [Header("회복력 UI (Berry 1개 기준, challenge 3~ 표시)")]
     [SerializeField] private TextMeshProUGUI healPowerText;  // "3 ♥" 형태
+    [SerializeField] private Image healIconImage;             // 회복력 아이콘 이미지 (선택)
 
     [Header("Continue")]
     [SerializeField] private TextMeshProUGUI continueGuideText;
@@ -175,6 +176,11 @@ public class GunSystem : MonoBehaviour
     // Damage Record
     private long currentSessionBestDamage = 0;  // 현재 판 최고
     private long allTimeBestDamage = 0;          // 전체 최고 (PlayerPrefs)
+
+    // 회복력 UI 추적
+    private int lastHealPower = -1;
+    private float healTextOriginalY = 0f;
+    private bool healTextInitialized = false;
 
     // === 프로퍼티 ===
     public bool IsFeverMode => isFeverMode;
@@ -363,6 +369,7 @@ public class GunSystem : MonoBehaviour
             boostIconImage.color = boostIconOriginalColor;
         }
         if (healPowerText != null) healPowerText.gameObject.SetActive(false);
+        lastHealPower = -1;
 
         if (cheatMode)
         {
@@ -1344,7 +1351,7 @@ public class GunSystem : MonoBehaviour
     }
 
     // === 회복력 UI (_13) ===
-    // challenge 3 이상에서 표시, 레벨업 후 즉시 반영
+    // challenge 3 이상에서 표시, 레벨업 후 즉시 반영, 변경 시 DOTween
     public void UpdateHealPowerUI()
     {
         if (healPowerText == null || playerHP == null || bossManager == null) return;
@@ -1355,7 +1362,43 @@ public class GunSystem : MonoBehaviour
             return;
         }
         healPowerText.gameObject.SetActive(true);
+
+        if (!healTextInitialized)
+        {
+            healTextOriginalY = healPowerText.GetComponent<RectTransform>().anchoredPosition.y;
+            healTextInitialized = true;
+        }
+
         int healPower = playerHP.GetMixHealPower();
         healPowerText.text = $"{healPower} \u2665";
+
+        // 값 변경 시 DOTween 효과 (HP 텍스트와 동일 스타일)
+        if (lastHealPower >= 0 && healPower != lastHealPower)
+        {
+            RectTransform rt = healPowerText.GetComponent<RectTransform>();
+            rt.DOKill();
+            healPowerText.DOKill();
+
+            // 튝 올라갔다 복귀
+            rt.DOAnchorPosY(healTextOriginalY + 8f, 0.12f).SetEase(Ease.OutQuad)
+                .OnComplete(() => {
+                    if (rt != null) rt.DOAnchorPosY(healTextOriginalY, 0.12f).SetEase(Ease.InQuad);
+                });
+
+            // 색상 강조 (green flash)
+            Color origColor = healPowerText.color;
+            healPowerText.color = new Color(0.3f, 1f, 0.5f);
+            healPowerText.DOColor(origColor, 0.5f).SetDelay(0.2f);
+
+            // 아이콘도 같이 강조
+            if (healIconImage != null)
+            {
+                healIconImage.DOKill();
+                Color iconOrig = healIconImage.color;
+                healIconImage.color = new Color(0.3f, 1f, 0.5f);
+                healIconImage.DOColor(iconOrig, 0.5f).SetDelay(0.2f);
+            }
+        }
+        lastHealPower = healPower;
     }
 }
