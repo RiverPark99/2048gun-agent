@@ -49,6 +49,13 @@ public class BossBattleSystem : MonoBehaviour
     [SerializeField] private Color dmgTextColor4 = new Color(1f, 0.3f, 0f);
     [SerializeField] private Color dmgTextColor5Plus = new Color(1f, 0f, 1f);
 
+    [Header("Damage 텍스트 폰트 크기")]
+    [SerializeField] private float dmgFontSize1 = 48f;
+    [SerializeField] private float dmgFontSizeGun = 54f;
+    [SerializeField] private float dmgFontSizeComboBase = 48f;
+    [SerializeField] private float dmgFontSizeComboPerLevel = 2f;
+    [SerializeField] private float dmgFontSizeComboMax = 60f;
+
     [Header("References")]
     [SerializeField] private GridManager gridManager;
     [SerializeField] private GunSystem gunSystem;
@@ -143,26 +150,26 @@ public class BossBattleSystem : MonoBehaviour
         {
             if (isGunDamage)
             {
-                damageText.text = $"-{damage:N0}";
+                damageText.text = $"{damage:N0}";
                 damageText.color = isChoco ? new Color(1f, 0.84f, 0f) : Color.yellow;
-                damageText.fontSize = 54;
+                damageText.fontSize = dmgFontSizeGun;
             }
             else
             {
                 if (comboNum >= 2)
                 {
-                    damageText.text = $"{comboNum} Combo!\n-{damage:N0}";
+                    damageText.text = $"{comboNum} Combo!\n{damage:N0}";
                     if (comboNum >= 5) damageText.color = dmgTextColor5Plus;
                     else if (comboNum >= 4) damageText.color = dmgTextColor4;
                     else if (comboNum >= 3) damageText.color = dmgTextColor3;
                     else damageText.color = dmgTextColor2;
-                    damageText.fontSize = Mathf.Min(48 + comboNum * 2, 60);
+                    damageText.fontSize = Mathf.Min(dmgFontSizeComboBase + comboNum * dmgFontSizeComboPerLevel, dmgFontSizeComboMax);
                 }
                 else
                 {
-                    damageText.text = $"-{damage:N0}";
+                    damageText.text = $"{damage:N0}";
                     damageText.color = dmgTextColor1;
-                    damageText.fontSize = 48;
+                    damageText.fontSize = dmgFontSize1;
                 }
             }
 
@@ -173,11 +180,27 @@ public class BossBattleSystem : MonoBehaviour
             CanvasGroup canvasGroup = damageObj.GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = damageObj.AddComponent<CanvasGroup>();
 
+            // 반짝반짝 + 픽스 + 올라가며 페이드아웃 (freeze total damage 스타일)
+            Color finalColor = damageText.color;
+            Color flashWhite = new Color(1f, 0.95f, 0.8f);
+
+            // 확대 시작
+            damageRect.localScale = Vector3.one * 1.5f;
+
             Sequence damageSequence = DOTween.Sequence();
-            damageSequence.Append(damageRect.DOAnchorPosY(damageRect.anchoredPosition.y + 150f, 1.2f).SetEase(Ease.OutCubic));
-            damageSequence.Join(canvasGroup.DOFade(0f, 1.2f).SetEase(Ease.InCubic));
-            damageSequence.Insert(0f, damageRect.DOScale(1.2f, 0.15f).SetEase(Ease.OutQuad));
-            damageSequence.Insert(0.15f, damageRect.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
+            // Phase 1: 반짝반짝 3회 (0.6초)
+            damageSequence.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
+            damageSequence.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
+            damageSequence.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
+            damageSequence.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
+            damageSequence.Append(damageText.DOColor(flashWhite, 0.06f).SetEase(Ease.InOutSine));
+            damageSequence.Append(damageText.DOColor(finalColor, 0.06f).SetEase(Ease.InOutSine));
+            // Phase 2: 픽스 (스케일 복귀 + 색상 고정)
+            damageSequence.Join(damageRect.DOScale(1f, 0.3f).SetEase(Ease.OutBack));
+            // Phase 3: 잘럐 후 올라가며 페이드아웃
+            damageSequence.AppendInterval(0.15f);
+            damageSequence.Append(damageRect.DOAnchorPosY(damageRect.anchoredPosition.y + 120f, 0.8f).SetEase(Ease.OutCubic));
+            damageSequence.Join(canvasGroup.DOFade(0f, 0.8f).SetEase(Ease.InCubic));
             damageSequence.OnComplete(() => { if (damageObj != null) Destroy(damageObj); });
         }
     }

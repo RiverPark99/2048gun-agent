@@ -13,7 +13,7 @@ using DG.Tweening;
 
 public class GunSystem : MonoBehaviour
 {
-    [Header("Gun UI")]
+    [Header("Gun UI (40 Max - 기본)")]
     [SerializeField] private Button gunButton;
     [SerializeField] private TextMeshProUGUI bulletCountText;
     [SerializeField] private TextMeshProUGUI turnsUntilBulletText;
@@ -21,6 +21,16 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private TextMeshProUGUI gunModeGuideText;
     [SerializeField] private Image gunButtonImage;
     [SerializeField] private RectTransform progressBarFill;
+
+    [Header("Gun UI (20 Max - 초반용)")]
+    [SerializeField] private Button gunButton20;
+    [SerializeField] private TextMeshProUGUI bulletCountText20;
+    [SerializeField] private TextMeshProUGUI turnsUntilBulletText20;
+    [SerializeField] private TextMeshProUGUI gunModeGuideText20;
+    [SerializeField] private Image gunButtonImage20;
+    [SerializeField] private RectTransform progressBarFill20;
+    [SerializeField] private GameObject gunUI20Root;  // 20 UI 부모 객체
+    [SerializeField] private GameObject gunUI40Root;  // 40 UI 부모 객체
 
     [Header("Gauge Change Text")]
     [SerializeField] private GameObject damageTextPrefab;
@@ -200,6 +210,16 @@ public class GunSystem : MonoBehaviour
     private Color progressTextOriginalColor;
     private bool progressTextColorSaved = false;
 
+    // 20/40 UI 활성 상태
+    private bool isUsing40UI = false;
+    // 40 UI 원본 참조 보관 (Initialize에서 저장)
+    private Button gunButton40_ref;
+    private TextMeshProUGUI bulletCountText40_ref;
+    private TextMeshProUGUI turnsUntilBulletText40_ref;
+    private TextMeshProUGUI gunModeGuideText40_ref;
+    private Image gunButtonImage40_ref;
+    private RectTransform progressBarFill40_ref;
+
     // === 프로퍼티 ===
     public bool IsFeverMode => isFeverMode;
     public bool IsGunMode => isGunMode;
@@ -274,8 +294,117 @@ public class GunSystem : MonoBehaviour
         }
     }
 
+    // 20/40 UI 전환: 40 UI로 교체
+    public void SwitchToGunUI40()
+    {
+        if (isUsing40UI) return;
+        isUsing40UI = true;
+
+        // 활성 변수를 40 UI로 교체
+        gunButton = gunButton40_ref;
+        bulletCountText = bulletCountText40_ref;
+        turnsUntilBulletText = turnsUntilBulletText40_ref;
+        gunModeGuideText = gunModeGuideText40_ref;
+        gunButtonImage = gunButtonImage40_ref;
+        progressBarFill = progressBarFill40_ref;
+
+        // UI 객체 활성/비활성
+        if (gunUI20Root != null) gunUI20Root.SetActive(false);
+        if (gunUI40Root != null)
+        {
+            gunUI40Root.SetActive(true);
+            // CanvasGroup alpha 보장 (비활성 상태에서 0으로 남아있을 수 있음)
+            CanvasGroup cg40 = gunUI40Root.GetComponent<CanvasGroup>();
+            if (cg40 != null) cg40.alpha = 1f;
+        }
+
+        // 40 UI 초기화
+        if (gunButton != null) gunButton.onClick.RemoveAllListeners();
+        if (gunButton != null) gunButton.onClick.AddListener(ToggleGunMode);
+
+        // 40 UI progress bar 색상 저장 (강제 갱신)
+        progressBarColorSaved = false;
+        if (progressBarFill != null)
+        {
+            Image fillImg = progressBarFill.GetComponent<Image>();
+            if (fillImg != null) { progressBarOriginalColor = fillImg.color; progressBarColorSaved = true; }
+        }
+
+        // progress text 원래색 저장 (40 UI용)
+        progressTextColorSaved = false;
+        if (turnsUntilBulletText != null)
+        {
+            progressTextOriginalColor = turnsUntilBulletText.color;
+            progressTextColorSaved = true;
+        }
+
+        // 상태 초기화
+        turnsTextInitialized = false;
+        lastBulletCountState = "";
+        lastMergeGauge = -1;
+        lastGunButtonAnimationState = false;
+
+        UpdateGunUI();
+        Debug.Log("🔫 Gun UI → 40 Max 전환!");
+    }
+
+    // 20/40 UI 전환: 20 UI로 복귀 (Reset 시)
+    void SwitchToGunUI20()
+    {
+        if (!isUsing40UI) return;
+        isUsing40UI = false;
+
+        gunButton = gunButton20;
+        bulletCountText = bulletCountText20;
+        turnsUntilBulletText = turnsUntilBulletText20;
+        gunModeGuideText = gunModeGuideText20;
+        gunButtonImage = gunButtonImage20;
+        progressBarFill = progressBarFill20;
+
+        if (gunUI40Root != null) gunUI40Root.SetActive(false);
+        if (gunUI20Root != null) gunUI20Root.SetActive(true);
+
+        if (gunButton != null) gunButton.onClick.RemoveAllListeners();
+        if (gunButton != null) gunButton.onClick.AddListener(ToggleGunMode);
+
+        if (progressBarFill != null)
+        {
+            Image fillImg = progressBarFill.GetComponent<Image>();
+            if (fillImg != null) { progressBarOriginalColor = fillImg.color; progressBarColorSaved = true; }
+        }
+        if (turnsUntilBulletText != null)
+        {
+            progressTextOriginalColor = turnsUntilBulletText.color;
+            progressTextColorSaved = true;
+        }
+
+        turnsTextInitialized = false;
+        lastBulletCountState = "";
+        lastMergeGauge = -1;
+    }
+
     public void Initialize()
     {
+        // 40 UI 원본 참조 보관
+        gunButton40_ref = gunButton;
+        bulletCountText40_ref = bulletCountText;
+        turnsUntilBulletText40_ref = turnsUntilBulletText;
+        gunModeGuideText40_ref = gunModeGuideText;
+        gunButtonImage40_ref = gunButtonImage;
+        progressBarFill40_ref = progressBarFill;
+
+        // 초기에는 20 UI 사용
+        isUsing40UI = false;
+        gunButton = gunButton20;
+        bulletCountText = bulletCountText20;
+        turnsUntilBulletText = turnsUntilBulletText20;
+        gunModeGuideText = gunModeGuideText20;
+        gunButtonImage = gunButtonImage20;
+        progressBarFill = progressBarFill20;
+
+        if (gunUI40Root != null) gunUI40Root.SetActive(false);
+        // gunUI20Root는 UnlockManager에서 gunUIObj로 관리
+
         if (freezeImage1 == null)
         {
             GameObject obj = GameObject.Find("infoFreeze");
@@ -359,6 +488,7 @@ public class GunSystem : MonoBehaviour
 
     public void ResetState()
     {
+        SwitchToGunUI20();
         mergeGauge = 0; hasBullet = false; isFeverMode = false;
         feverMergeIncreaseAtk = 1; permanentAttackPower = 0;
         feverBulletUsed = false; isGunMode = false;
@@ -848,7 +978,7 @@ public class GunSystem : MonoBehaviour
             if (cheatInfiniteContinue)
                 continueGuideText.text = "∞";
             else if (unlockManager != null && !unlockManager.IsFullGaugeUnlocked)
-                continueGuideText.text = "Unlock at 9";
+                continueGuideText.text = "Unlock at 8";
             else
                 continueGuideText.text = $"{MAX_CONTINUES - continueCount}/{MAX_CONTINUES}";
         }
@@ -1251,7 +1381,8 @@ public class GunSystem : MonoBehaviour
 
         if (progressBarFill != null)
         {
-            float progress = Mathf.Clamp01((float)mergeGauge / GAUGE_MAX);
+            int barMax = isUsing40UI ? GAUGE_MAX : GAUGE_FOR_BULLET;
+            float progress = Mathf.Clamp01((float)mergeGauge / barMax);
             float targetW = progressBarFill.parent.GetComponent<RectTransform>().rect.width * progress;
             progressBarFill.DOKill();
             progressBarFill.DOSizeDelta(new Vector2(targetW, progressBarFill.sizeDelta.y), 0.3f).SetEase(Ease.OutQuad);
