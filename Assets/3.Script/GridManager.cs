@@ -216,7 +216,10 @@ public class GridManager : MonoBehaviour
                                     Vector3 berryPos = targetTile.transform.position;
                                     Vector3 heatUIPos = playerHP.HeatText.transform.position;
                                     Color berryColor = new Color(1f, 0.4f, 0.6f);
-                                    pm.FireKnifeProjectile(berryPos, heatUIPos, berryColor, null);
+                                    // _16: heal laser 도달 시 HP bar 초록 점멸
+                                    pm.FireKnifeProjectile(berryPos, heatUIPos, berryColor, () => {
+                                        if (playerHP != null) playerHP.FlashHealGreen();
+                                    });
                                 }
 
                                 if (!gunSystem.IsFeverMode)

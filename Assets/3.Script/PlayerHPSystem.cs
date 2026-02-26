@@ -501,6 +501,34 @@ public class PlayerHPSystem : MonoBehaviour
         }
     }
 
+    // _16: Heal laser 시 HP bar 초록색 점멸 후 원래색 복관 (0.2초)
+    public void FlashHealGreen()
+    {
+        if (heatBarImage == null) return;
+        heatBarImage.DOKill();
+        heatBarImage.color = new Color(0.2f, 1f, 0.4f);
+        // heatSlider value 기반으로 최신 색상 계산해서 복원 (만탕 시에도 정확하게)
+        heatBarImage.DOColor(GetCurrentBarColor(), 0.2f).SetEase(Ease.OutQuad);
+    }
+
+    // 현재 HP 비율 기준 bar 색상 (UpdateHeatUI와 동일한 로직)
+    Color GetCurrentBarColor()
+    {
+        float hp = (float)currentHeat / maxHeat;
+        if (hp >= 0.8f)
+            return new Color(1f, 0.3f, 0.55f);
+        else if (hp >= 0.4f)
+        {
+            float t = (hp - 0.4f) / 0.4f;
+            return Color.Lerp(new Color(1f, 0.6f, 0.75f), new Color(1f, 0.3f, 0.55f), t);
+        }
+        else
+        {
+            float t = hp / 0.4f;
+            return Color.Lerp(new Color(1f, 0.75f, 0.85f), new Color(1f, 0.6f, 0.75f), t);
+        }
+    }
+
     // === 피격 플래시 효과 ===
     IEnumerator FlashOrangeOnDamage()
     {
