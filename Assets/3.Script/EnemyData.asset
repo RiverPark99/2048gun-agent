@@ -22,7 +22,7 @@ MonoBehaviour:
     atk: 0
     turnInterval: 6
   - stageName: Stage 3
-    hp: 1000
+    hp: 900
     atk: 30
     turnInterval: 4
   - stageName: Stage 4
@@ -30,11 +30,11 @@ MonoBehaviour:
     atk: 50
     turnInterval: 6
   - stageName: Stage 5
-    hp: 1300
+    hp: 900
     atk: 35
     turnInterval: 6
   - stageName: Stage 6
-    hp: 1500
+    hp: 1000
     atk: 36
     turnInterval: 6
   - stageName: Stage 7
