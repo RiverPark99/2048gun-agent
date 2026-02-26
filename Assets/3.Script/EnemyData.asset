@@ -27,15 +27,15 @@ MonoBehaviour:
     turnInterval: 4
   - stageName: Stage 4
     hp: 800
-    atk: 50
+    atk: 48
     turnInterval: 6
   - stageName: Stage 5
     hp: 850
-    atk: 35
+    atk: 34
     turnInterval: 6
   - stageName: Stage 6
     hp: 950
-    atk: 36
+    atk: 35
     turnInterval: 6
   - stageName: Stage 7
     hp: 1800
