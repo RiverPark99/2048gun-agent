@@ -69,7 +69,7 @@ MonoBehaviour:
   - stageName: Stage 14
     hp: 70000
     atk: 53
-    turnInterval: 8
+    turnInterval: 4
   - stageName: Stage 15
     hp: 100000
     atk: 55
