@@ -87,7 +87,7 @@ MonoBehaviour:
     atk: 63
     turnInterval: 4
   - stageName: Stage 19
-    hp: 700000
+    hp: 600000
     atk: 64
     turnInterval: 4
   - stageName: Stage 20
@@ -95,20 +95,20 @@ MonoBehaviour:
     atk: 70
     turnInterval: 4
   - stageName: Stage 21
-    hp: 800000
-    atk: 72
+    hp: 500000
+    atk: 74
     turnInterval: 4
   - stageName: Stage 22
-    hp: 10000000
-    atk: 75
+    hp: 8000000
+    atk: 76
     turnInterval: 4
   - stageName: Stage 23
     hp: 16000000
-    atk: 77
+    atk: 78
     turnInterval: 4
   - stageName: Stage 24
     hp: 20000000
-    atk: 80
+    atk: 81
     turnInterval: 4
   - stageName: Stage 25
     hp: 30000000
@@ -116,67 +116,67 @@ MonoBehaviour:
     turnInterval: 6
   - stageName: Stage 26
     hp: 32000000
-    atk: 82
+    atk: 84
     turnInterval: 4
   - stageName: Stage 27
     hp: 34000000
-    atk: 85
+    atk: 86
     turnInterval: 4
   - stageName: Stage 28
     hp: 40000000
-    atk: 86
+    atk: 88
     turnInterval: 5
   - stageName: Stage 29
     hp: 42000000
-    atk: 88
+    atk: 90
     turnInterval: 4
   - stageName: Stage 30
     hp: 200000000
-    atk: 90
+    atk: 92
     turnInterval: 4
   - stageName: Stage 31
     hp: 130000000
-    atk: 89
+    atk: 95
     turnInterval: 4
   - stageName: Stage 32
     hp: 150000000
-    atk: 92
+    atk: 105
     turnInterval: 4
   - stageName: Stage 33
     hp: 150000000
-    atk: 95
+    atk: 110
     turnInterval: 4
   - stageName: Stage 34
     hp: 200000000
-    atk: 97
+    atk: 115
     turnInterval: 4
   - stageName: Stage 35
     hp: 300000000
-    atk: 99
+    atk: 117
     turnInterval: 4
   - stageName: Stage 36
     hp: 400000000
-    atk: 100
+    atk: 120
     turnInterval: 4
   - stageName: Stage 37
     hp: 550000000
-    atk: 105
+    atk: 125
     turnInterval: 4
   - stageName: Stage 38
     hp: 700000000
-    atk: 107
+    atk: 130
     turnInterval: 4
   - stageName: Stage 39
     hp: 1000000000
-    atk: 110
+    atk: 132
     turnInterval: 4
   guardBoss:
     stageName: Guard Boss (40)
     hp: 2147483647
-    atk: 110
+    atk: 134
     turnInterval: 4
   clearModeEnemy:
     stageName: Clear Mode (41+)
     hp: 2147483647
-    atk: 120
+    atk: 135
     turnInterval: 4
