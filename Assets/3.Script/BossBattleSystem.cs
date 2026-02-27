@@ -1,7 +1,7 @@
 // =====================================================
-// BossBattleSystem.cs - v6.6
+// BossBattleSystem.cs - v7.1
 // Boss 전투, 데미지, 게임오버, Challenge Clear UI
-// Continue 횟수 제한, 데미지 텍스트 N0 포맷
+// Pause 시스템, Continue 횟수 제한, 데미지 텍스트 N0 포맷
 // =====================================================
 
 using UnityEngine;
@@ -23,9 +23,20 @@ public class BossBattleSystem : MonoBehaviour
     [SerializeField] private Button quitButton;
     [SerializeField] private Button continueButton;
 
+    [Header("Pause UI")]
+    [SerializeField] private Button pauseButton;
+    [SerializeField] private GameObject pausePanel;
+    [SerializeField] private Button pauseResumeButton;
+    [SerializeField] private Button pauseRestartButton;
+    [SerializeField] private Button pauseGoToTitleButton;
+    [SerializeField] private string titleSceneName = "Title";
+
     [Header("Damage Text")]
     [SerializeField] private GameObject damageTextPrefab;
     [SerializeField] private Transform damageTextParent;
+
+    [Header("Damage Text 위치 오프셋 (Y축, 위로 올리려면 양수)")]
+    [SerializeField] private float dmgTextYOffset = 0f;
 
     [Header("Low Health Effect")]
     [SerializeField] private LowHealthVignette lowHealthVignette;
@@ -66,6 +77,7 @@ public class BossBattleSystem : MonoBehaviour
     private bool isBossTransitioning = false;
     private bool isGameOver = false;
     private bool isChallengeClearShown = false;
+    private bool isPaused = false;
 
     private ProjectileManager projectileManager;
 
@@ -73,6 +85,7 @@ public class BossBattleSystem : MonoBehaviour
     public bool IsBossTransitioning => isBossTransitioning;
     public bool IsGameOver => isGameOver;
     public bool IsChallengeClearShown => isChallengeClearShown;
+    public bool IsPaused => isPaused;
     public LowHealthVignette LowHealthVignette => lowHealthVignette;
 
     public void Initialize()
@@ -86,11 +99,24 @@ public class BossBattleSystem : MonoBehaviour
         if (quitButton != null)
             quitButton.onClick.AddListener(QuitGame);
 
+        // Pause 버튼
+        if (pauseButton != null)
+            pauseButton.onClick.AddListener(TogglePause);
+        if (pauseResumeButton != null)
+            pauseResumeButton.onClick.AddListener(ResumePause);
+        if (pauseRestartButton != null)
+            pauseRestartButton.onClick.AddListener(PauseRestart);
+        if (pauseGoToTitleButton != null)
+            pauseGoToTitleButton.onClick.AddListener(PauseGoToTitle);
+
         if (gameOverPanel != null)
             gameOverPanel.SetActive(false);
         if (challengeClearPanel != null)
             challengeClearPanel.SetActive(false);
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
 
+        isPaused = false;
         UpdateContinueButtonState();
     }
 
@@ -100,11 +126,54 @@ public class BossBattleSystem : MonoBehaviour
         isBossAttacking = false;
         isBossTransitioning = false;
         isChallengeClearShown = false;
+        isPaused = false;
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
         if (challengeClearPanel != null) challengeClearPanel.SetActive(false);
+        if (pausePanel != null) pausePanel.SetActive(false);
+        Time.timeScale = 1f;
     }
 
     public ProjectileManager GetProjectileManager() { return projectileManager; }
+
+    // === Pause ===
+    public void TogglePause()
+    {
+        if (isGameOver || isChallengeClearShown) return;
+        if (isPaused) ResumePause();
+        else
+        {
+            isPaused = true;
+            Time.timeScale = 0f;
+            if (pausePanel != null) pausePanel.SetActive(true);
+        }
+    }
+
+    void ResumePause()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;
+        if (pausePanel != null) pausePanel.SetActive(false);
+    }
+
+    void PauseRestart()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;
+        if (pausePanel != null) pausePanel.SetActive(false);
+        RestartGame();
+    }
+
+    void PauseGoToTitle()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;
+        if (pausePanel != null) pausePanel.SetActive(false);
+        DOTween.KillAll();
+        if (!string.IsNullOrEmpty(titleSceneName))
+            SceneManager.LoadScene(titleSceneName);
+        else
+            SceneManager.LoadScene(0);
+    }
 
     // === Boss 데미지 투사체 발사 ===
     public void FireDamageProjectile(Vector3 fromPos, long damage, int mergeCount, bool isFever)
@@ -138,19 +207,22 @@ public class BossBattleSystem : MonoBehaviour
         }
     }
 
-    // === 데미지 텍스트 (N0 포맷) ===
+    // === 데미지 텍스트 (N0 포맷, 반짝+올라감 동시) ===
     public void ShowDamageText(long damage, int comboNum, bool isGunDamage, bool isChoco = false)
     {
         if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
 
         GameObject damageObj = Instantiate(damageTextPrefab, damageTextParent);
+        // 다른 UI 위에 표시되도록 sibling order 최상단
+        damageObj.transform.SetAsLastSibling();
         TextMeshProUGUI damageText = damageObj.GetComponent<TextMeshProUGUI>();
 
         if (damageText != null)
         {
+            // 1콤보 이하도 \n + 수치로 줄맞춤
             if (isGunDamage)
             {
-                damageText.text = $"{damage:N0}";
+                damageText.text = $"\n{damage:N0}";
                 damageText.color = isChoco ? new Color(1f, 0.84f, 0f) : Color.yellow;
                 damageText.fontSize = dmgFontSizeGun;
             }
@@ -167,7 +239,7 @@ public class BossBattleSystem : MonoBehaviour
                 }
                 else
                 {
-                    damageText.text = $"{damage:N0}";
+                    damageText.text = $"\n{damage:N0}";
                     damageText.color = dmgTextColor1;
                     damageText.fontSize = dmgFontSize1;
                 }
@@ -176,32 +248,34 @@ public class BossBattleSystem : MonoBehaviour
             RectTransform damageRect = damageObj.GetComponent<RectTransform>();
             RectTransform hpTextRect = hpText.GetComponent<RectTransform>();
             damageRect.position = hpTextRect.position;
+            // Y 오프셋 적용
+            if (dmgTextYOffset != 0f)
+                damageRect.anchoredPosition += new Vector2(0f, dmgTextYOffset);
 
             CanvasGroup canvasGroup = damageObj.GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = damageObj.AddComponent<CanvasGroup>();
 
-            // 반짝반짝 + 픽스 + 올라가며 페이드아웃 (freeze total damage 스타일)
+            // 반짝 + 스케일축소 + 올라가며 페이드아웃 (모두 동시)
             Color finalColor = damageText.color;
             Color flashWhite = new Color(1f, 0.95f, 0.8f);
-
-            // 확대 시작
             damageRect.localScale = Vector3.one * 1.5f;
+            float startY = damageRect.anchoredPosition.y;
 
-            Sequence damageSequence = DOTween.Sequence();
-            // Phase 1: 반짝반짝 3회 (0.6초)
-            damageSequence.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
-            damageSequence.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
-            damageSequence.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
-            damageSequence.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
-            damageSequence.Append(damageText.DOColor(flashWhite, 0.06f).SetEase(Ease.InOutSine));
-            damageSequence.Append(damageText.DOColor(finalColor, 0.06f).SetEase(Ease.InOutSine));
-            // Phase 2: 픽스 (스케일 복귀 + 색상 고정)
-            damageSequence.Join(damageRect.DOScale(1f, 0.3f).SetEase(Ease.OutBack));
-            // Phase 3: 잘럐 후 올라가며 페이드아웃
-            damageSequence.AppendInterval(0.15f);
-            damageSequence.Append(damageRect.DOAnchorPosY(damageRect.anchoredPosition.y + 120f, 0.8f).SetEase(Ease.OutCubic));
-            damageSequence.Join(canvasGroup.DOFade(0f, 0.8f).SetEase(Ease.InCubic));
-            damageSequence.OnComplete(() => { if (damageObj != null) Destroy(damageObj); });
+            Sequence seq = DOTween.Sequence();
+            // 반짝반짝 3회 (색상, 0.44초) — 동시에 스케일 복귀 + 올라감 + 페이드 시작
+            seq.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
+            seq.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
+            seq.Append(damageText.DOColor(flashWhite, 0.08f).SetEase(Ease.InOutSine));
+            seq.Append(damageText.DOColor(finalColor, 0.08f).SetEase(Ease.InOutSine));
+            seq.Append(damageText.DOColor(flashWhite, 0.06f).SetEase(Ease.InOutSine));
+            seq.Append(damageText.DOColor(finalColor, 0.06f).SetEase(Ease.InOutSine));
+            // 스케일: 0초부터 0.3초간 1.5→1.0 (반짝과 동시)
+            seq.Insert(0f, damageRect.DOScale(1f, 0.3f).SetEase(Ease.OutBack));
+            // 올라감: 0초부터 전체 1.2초
+            seq.Insert(0f, damageRect.DOAnchorPosY(startY + 120f, 1.2f).SetEase(Ease.OutCubic));
+            // 페이드: 0.5초부터 (반짝 끝난 뒤) 0.7초간
+            seq.Insert(0.5f, canvasGroup.DOFade(0f, 0.7f).SetEase(Ease.InCubic));
+            seq.OnComplete(() => { if (damageObj != null) Destroy(damageObj); });
         }
     }
 
@@ -257,7 +331,6 @@ public class BossBattleSystem : MonoBehaviour
         gunSystem.CleanupFeverEffects();
         gunSystem.UpdateGunUI();
 
-        // v6.6: Continue 버튼 상태 업데이트
         UpdateContinueButtonState();
 
         if (gameOverPanel != null)
@@ -295,7 +368,6 @@ public class BossBattleSystem : MonoBehaviour
         }
     }
 
-    // v6.6: Continue 버튼 활성/비활성
     void UpdateContinueButtonState()
     {
         if (continueButton == null) return;
@@ -332,7 +404,7 @@ public class BossBattleSystem : MonoBehaviour
 
     public bool ShouldBlockInput()
     {
-        return isGameOver || gridManager.IsProcessing || isBossTransitioning || isBossAttacking || isChallengeClearShown
+        return isGameOver || isPaused || gridManager.IsProcessing || isBossTransitioning || isBossAttacking || isChallengeClearShown
             || (unlockManager != null && unlockManager.IsUnlockAnimating);
     }
 

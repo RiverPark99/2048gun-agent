@@ -587,7 +587,7 @@ public class BossManager : MonoBehaviour
             for (int i = 0; i < bonusTurnsAdded; i++) symbols += "□";
         }
 
-        return $"+{GetEffectiveDamage():N0}    {symbols}";
+        return $"{GetEffectiveDamage():N0}    {symbols}";
     }
 
     void UpdateBossAttackUI()

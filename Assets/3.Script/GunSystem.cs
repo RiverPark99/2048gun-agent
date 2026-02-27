@@ -113,7 +113,7 @@ public class GunSystem : MonoBehaviour
         2.0f,  // 131072
     };
     // 인덱스: 0=128, 1=256, 2=512 ... 10=131072
-    private const int MAX_CONTINUES = 2;
+    private const int MAX_CONTINUES = 3;
 
     private static readonly Color GUN_READY_MINT = new Color(0.6f, 0.95f, 0.85f);
     private static readonly Color FREEZE_ORANGE = new Color(1f, 0.6f, 0.1f, 1f);
@@ -960,7 +960,7 @@ public class GunSystem : MonoBehaviour
     public bool CanContinue()
     {
         if (cheatInfiniteContinue) return true;
-        // 9 stage 전엔 continue 불가
+        // 7 stage 전엔 continue 불가
         if (unlockManager != null && !unlockManager.IsFullGaugeUnlocked) return false;
         return continueCount < MAX_CONTINUES;
     }
@@ -978,7 +978,7 @@ public class GunSystem : MonoBehaviour
             if (cheatInfiniteContinue)
                 continueGuideText.text = "∞";
             else if (unlockManager != null && !unlockManager.IsFullGaugeUnlocked)
-                continueGuideText.text = "Unlock at 8";
+                continueGuideText.text = "Unlock at 7";  // fullGaugeUnlocked at stage 7
             else
                 continueGuideText.text = $"{MAX_CONTINUES - continueCount}/{MAX_CONTINUES}";
         }
@@ -1127,6 +1127,8 @@ public class GunSystem : MonoBehaviour
         if (gridManager.ActiveTiles.Count <= 2) return;
 
         isGunMode = true;
+        // 손가락 튜토리얼: gun mode 진입만으로 해제
+        if (unlockManager != null) unlockManager.DismissFingerGuide();
         if (gunModeGuideText != null) { gunModeGuideText.gameObject.SetActive(true); gunModeGuideText.text = "Cancel"; }
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(true);
         gridManager.UpdateTileBorders();
@@ -1347,7 +1349,7 @@ public class GunSystem : MonoBehaviour
                 attackTextInitialized = true;
             }
 
-            attackPowerText.text = $"+{permanentAttackPower:N0}";
+            attackPowerText.text = $"{permanentAttackPower:N0}";
 
             if (!isFeverMode)
             {

@@ -1,5 +1,5 @@
 // =====================================================
-// UnlockManager.cs - v7.0
+// UnlockManager.cs - v7.1
 // 단계적 UI/기능 해금 (Player 학습용 튜토리얼)
 // Stage 진행에 따라 기능을 점진적으로 해금
 // =====================================================
@@ -7,8 +7,8 @@
 // 2. ~2 stage: Player만 공격 + Choco 타일만
 // 3. 3 stage~: Enemy 공격 시작 + 공격 UI 활성화 + Berry만
 // 4. 5 stage~: Choco+Berry 혼합 (기존 로직)
-// 5. 6 stage~: Gun UI 반절 표시 (0/20), gauge 20 cap, freeze 불가
-// 6. 8 stage~: Gun UI 전체 (0/40), gauge 40 cap, 가림막 비활성화
+// 5. 5 stage~: Gun UI 반절 표시 (0/20), gauge 20 cap, freeze 불가
+// 6. 7 stage~: Gun UI 전체 (0/40), gauge 40 cap, 가림막 비활성화
 // 7. 새 UI는 DOTween으로 등장
 
 using UnityEngine;
@@ -25,10 +25,10 @@ public class UnlockManager : MonoBehaviour
     [Header("Enemy Attack UI (3 stage에서 활성화)")]
     [SerializeField] private GameObject enemyAttackUIObj;
 
-    [Header("Gun UI (6 stage에서 활성화)")]
+    [Header("Gun UI (5 stage에서 활성화)")]
     [SerializeField] private GameObject gunUIObj;
 
-    [Header("Gun Gauge Cover (8 stage에서 비활성화)")]
+    [Header("Gun Gauge Cover (7 stage에서 비활성화)")]
     [SerializeField] private GameObject gaugeCoverObj;
 
     [Header("튜토리얼 손가락 가이드 (Gun 버튼 안내)")]
@@ -100,8 +100,8 @@ public class UnlockManager : MonoBehaviour
             Debug.Log("🔓 Unlock: Enemy Attack + Heal Power UI!");
         }
 
-        // 6 stage: Gun UI 반절 표시
-        if (newStage >= 6 && !gunUIUnlocked)
+        // 5 stage: Gun UI 반절 표시
+        if (newStage >= 5 && !gunUIUnlocked)
         {
             gunUIUnlocked = true;
             // 해금 직후 0/20 표시 보장: GunSystem의 UpdateGunUI보다 먼저 실행
@@ -115,8 +115,8 @@ public class UnlockManager : MonoBehaviour
             Debug.Log("🔓 Unlock: Gun UI (half gauge)!");
         }
 
-        // 8 stage: 20 UI → 40 UI 전환 + 가림막 제거
-        if (newStage >= 8 && !fullGaugeUnlocked)
+        // 7 stage: 20 UI → 40 UI 전환 + 가림막 제거
+        if (newStage >= 7 && !fullGaugeUnlocked)
         {
             fullGaugeUnlocked = true;
             // 20 UI → 40 UI 전환
@@ -190,7 +190,7 @@ public class UnlockManager : MonoBehaviour
         }
     }
 
-    // 총 발사 시 손가락 숨기기
+    // Gun 모드 진입 또는 총 발사 시 손가락 숨기기
     public void DismissFingerGuide()
     {
         if (!fingerGuideShown || fingerGuideDismissed) return;
