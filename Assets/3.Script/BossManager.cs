@@ -66,6 +66,16 @@ public class BossManager : MonoBehaviour
     [Header("Guard 해제 후 Clear 모드 배경 색상")]
     [SerializeField] private Color clearModeGroundColor = new Color(0.2f, 0.15f, 0.3f, 1f);
 
+    [Header("41 Stage 이후 Enemy color (Clear/Infinite 모드)")]
+    [SerializeField] private Color infiniteEnemyColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);
+
+    [Header("공격 1턴 전 경고 색상 (bossImageArea에 적용)")]
+    [SerializeField] private Color attackWarningColor = new Color(1f, 0.2f, 0.2f, 1.0f);
+    [SerializeField] private float attackWarningFadeDuration = 0.35f;
+
+    [Header("Freeze 상태 Enemy color (Guard Boss외)")]
+    [SerializeField] private Color freezeEnemyColor = new Color(0.45f, 0.75f, 1.0f, 1.0f);
+
     [Header("스테이지 배경 색상 (Inspector 설정)")]
     [SerializeField] private Color stageColor_1_10  = new Color(0.25f, 0.25f, 0.35f, 1f);
     [SerializeField] private Color stageColor_11_20 = new Color(0.65f, 0.78f, 0.9f, 1f);
@@ -88,6 +98,10 @@ public class BossManager : MonoBehaviour
     private int bonusTurnsTotal = 0;
 
     private static readonly Color ICE_BLUE = new Color(0.5f, 0.8f, 1f);
+    // bossImageArea freeze 색상 애니메이션
+    private Sequence freezeEnemyColorAnim;
+    // bossImageArea 경고색 기준 (Material 원본색)
+    private Color bossMatOriginalColor = new Color(1.0f, 0.75f, 0.5f, 1.0f);
 
     private int infiniteBossExtraDamage = 0;
     private bool pendingDamageIncrease = false;
@@ -508,6 +522,8 @@ public class BossManager : MonoBehaviour
                 .SetEase(Ease.OutBack).WaitForCompletion();
 
             bossImageArea.transform.localPosition = originalPos;
+            // 공격 후 원래색 복원
+            RestoreEnemyColorAfterAttack();
         }
         else
         {
@@ -517,6 +533,7 @@ public class BossManager : MonoBehaviour
                 gameManager.TakeBossAttack(GetEffectiveDamage());
                 CameraShake.Instance?.ShakeMedium();
             }
+            RestoreEnemyColorAfterAttack();
         }
 
         if (gameManager != null) gameManager.SetBossAttacking(false);
@@ -623,6 +640,8 @@ public class BossManager : MonoBehaviour
             Color redColor = new Color(1f, 0.2f, 0.2f);
             bossAttackInfoText.color = redColor;
             SyncAtkIconColor(redColor);
+            // bossImageArea도 경고색으로 부드럽게 변경
+            FlashEnemyWarningColor();
         }
         else
         {
@@ -630,6 +649,39 @@ public class BossManager : MonoBehaviour
             StartAttackInfoColorLoop();
         }
         bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
+    }
+
+    // 1턴 임박: bossImageArea를 경고색으로 부드럽게 변경
+    void FlashEnemyWarningColor()
+    {
+        if (bossImageArea == null || bossImageArea.material == null) return;
+        // 이미 전환 중이면 중복 실행 방지
+        if (bossImageArea.material.GetColor("_Color") == attackWarningColor) return;
+        bossMatOriginalColor = bossImageArea.material.GetColor("_Color");
+        bossImageArea.material.DOKill();
+        bossImageArea.material.SetColor("_Color", bossMatOriginalColor);
+        DOTween.To(
+            () => bossImageArea.material.GetColor("_Color"),
+            x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+            attackWarningColor, attackWarningFadeDuration
+        ).SetEase(Ease.InOutSine);
+    }
+
+    // 공격 후 bossImageArea 원래색 복원
+    void RestoreEnemyColorAfterAttack()
+    {
+        if (bossImageArea == null || bossImageArea.material == null) return;
+        if (isFrozen) return; // Freeze 중이면 복원 대신 Freeze색 적용
+        if (isGuardMode) return; // Guard는 자체 루프 유지
+        Color targetColor = isClearMode || (bossLevel >= 41 && !isGuardMode)
+            ? infiniteEnemyColor
+            : new Color(1.0f, 0.75f, 0.5f, 1.0f);
+        bossImageArea.material.DOKill();
+        DOTween.To(
+            () => bossImageArea.material.GetColor("_Color"),
+            x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+            targetColor, attackWarningFadeDuration
+        ).SetEase(Ease.InOutSine);
     }
 
     void StartAttackInfoColorLoop()
@@ -753,6 +805,13 @@ public class BossManager : MonoBehaviour
         }
 
         isTransitioning = false; // UI 갱신 전에 해제해야 UpdateBossAttackUI가 정상 동작
+
+        // Freeze 유지 중이면 새 보스도 즉시 파란색으로
+        if (isFrozen && !isGuardMode && bossImageArea != null && bossImageArea.material != null)
+        {
+            bossImageArea.material.DOKill();
+            bossImageArea.material.SetColor("_Color", freezeEnemyColor);
+        }
 
         UpdateUI(true);
         SetBossUIActive(true);
@@ -880,7 +939,7 @@ public class BossManager : MonoBehaviour
     {
         if (bossImageArea == null) return;
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", new Color(0.9f, 0.2f, 0.15f, 1.0f));
+        mat.SetColor("_Color", infiniteEnemyColor);
         bossImageArea.material = mat;
     }
 
@@ -904,9 +963,34 @@ public class BossManager : MonoBehaviour
             StopAttackInfoColorLoop();
             if (attackBlinkAnimation != null) { attackBlinkAnimation.Kill(); attackBlinkAnimation = null; }
             SyncAtkIconColor(ICE_BLUE);
+
+            // Guard Boss(이미 붉은색 루프 중)는 유지, 그 외는 Freeze색 적용
+            if (!isGuardMode && bossImageArea != null && bossImageArea.material != null)
+            {
+                if (freezeEnemyColorAnim != null) { freezeEnemyColorAnim.Kill(); freezeEnemyColorAnim = null; }
+                bossImageArea.material.DOKill();
+                DOTween.To(
+                    () => bossImageArea.material.GetColor("_Color"),
+                    x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+                    freezeEnemyColor, 0.5f
+                ).SetEase(Ease.InOutSine);
+            }
         }
         else
         {
+            // Freeze 해제: 원래 색상으로 복원
+            if (!isGuardMode && bossImageArea != null && bossImageArea.material != null)
+            {
+                Color restoreColor = (isClearMode || bossLevel >= 41)
+                    ? infiniteEnemyColor
+                    : new Color(1.0f, 0.75f, 0.5f, 1.0f);
+                bossImageArea.material.DOKill();
+                DOTween.To(
+                    () => bossImageArea.material.GetColor("_Color"),
+                    x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+                    restoreColor, 0.5f
+                ).SetEase(Ease.InOutSine);
+            }
             if (!isTransitioning)
                 StartBossIdleAnimation();
             UpdateBossAttackUI();

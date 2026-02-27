@@ -51,6 +51,7 @@ public class GunSystem : MonoBehaviour
     [Header("Freeze Effects")]
     [SerializeField] private Transform feverParticleSpawnPoint;
     [SerializeField] private Image feverBackgroundImage;
+    [SerializeField] private Image feverBackgroundImage2; // 동일 글로잉 효과 추가 이미지
     [SerializeField] private Image freezeImage1;
 
     [Header("Gun Mode Visual")]
@@ -61,6 +62,7 @@ public class GunSystem : MonoBehaviour
     [Header("Freeze UI")]
     [SerializeField] private TextMeshProUGUI freezeTurnText;
     [SerializeField] private TextMeshProUGUI freezeTotalDamageText;
+    [SerializeField] private TextMeshProUGUI freezeMaxTileText; // Freeze 중 최대값 타일 숫자 표시 (boostIcon과 동일 색상/타이밍)
 
     [Header("아이콘 이미지 (텍스트 색상/alpha 동기화)")]
     [SerializeField] private Image atkIconImage;       // 공격력 아이콘 (텍스트 옆)
@@ -76,6 +78,27 @@ public class GunSystem : MonoBehaviour
     [Header("Damage Record (Score/Best 대체)")]
     [SerializeField] private TextMeshProUGUI currentRecordText;  // 현재 판 최고 데미지
     [SerializeField] private TextMeshProUGUI bestRecordText;     // 전체 최고 데미지 (PlayerPrefs 저장)
+
+    [Header("데미지 계산식 표시 텍스트 (TMP Rich Text)")]
+    [SerializeField] private TextMeshProUGUI damageFormulaText;  // 계산식 표시용 텍스트
+    [SerializeField] private int formulaLineBreakThreshold = 24; // 이 글자 수 초과 시 연산자 뒤 줄바꿈
+
+    [Header("계산식 색상 - 타일 값")]
+    [SerializeField] private Color formulaChocoColor     = new Color(0.55f, 0.35f, 0.15f);  // 갈색  - Choco 타일 숫자
+    [SerializeField] private Color formulaBerryColor     = new Color(1.00f, 0.45f, 0.65f);  // 핑크  - Berry 타일 숫자
+    [SerializeField] private Color formulaMixChocoColor  = new Color(0.55f, 0.35f, 0.15f);  // 갈색  - Mix 중 Choco 쪽 숫자
+    [SerializeField] private Color formulaMixBerryColor  = new Color(1.00f, 0.45f, 0.65f);  // 핑크  - Mix 중 Berry 쪽 숫자
+    [Header("계산식 색상 - 배율 연산자")]
+    [SerializeField] private Color formulaChocoMultColor = new Color(0.80f, 0.50f, 0.10f);  // 진황  - Choco ×4 연산자
+    [SerializeField] private Color formulaBerryMultColor = new Color(0.90f, 0.30f, 0.55f);  // 진핑크 - Berry ×1 연산자
+    [SerializeField] private Color formulaMixMultColor   = new Color(0.70f, 0.40f, 0.75f);  // 라일락 - Mix ×2 연산자
+    [Header("계산식 색상 - 콤보/추공/Freeze")]
+    [SerializeField] private Color formulaCombo2Color    = new Color(1.00f, 0.85f, 0.30f);  // 노랑  - 콤보×2
+    [SerializeField] private Color formulaCombo3Color    = new Color(1.00f, 0.60f, 0.10f);  // 주황  - 콤보×3
+    [SerializeField] private Color formulaCombo4Color    = new Color(1.00f, 0.30f, 0.10f);  // 빨강  - 콤보×4
+    [SerializeField] private Color formulaCombo5Color    = new Color(0.85f, 0.10f, 0.90f);  // 보라  - 콤보×5+
+    [SerializeField] private Color formulaAtkColor       = new Color(0.15f, 0.15f, 0.15f);  // 검정  - 추가공격력
+    [SerializeField] private Color formulaFreezeColor    = new Color(0.40f, 0.75f, 1.00f);  // 파랑  - Freeze 배율
 
     [Header("References")]
     [SerializeField] private GridManager gridManager;
@@ -178,6 +201,9 @@ public class GunSystem : MonoBehaviour
     private bool atkIconColorSaved = false;
     private Color boostIconOriginalColor;
     private bool boostIconColorSaved = false;
+
+    // freezeMaxTileText 색상 루프
+    private Sequence freezeMaxTileColorAnim;
 
     // Freeze UI 원래 위치 저장
     private Vector2 freezeTurnOriginalPos;
@@ -502,6 +528,7 @@ public class GunSystem : MonoBehaviour
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
+        UnmountFeverBG2();
         if (gunModeOverlayImage != null) gunModeOverlayImage.gameObject.SetActive(false);
         ForceResetFreezeUITransforms();
         if (freezeTurnText != null) freezeTurnText.gameObject.SetActive(false);
@@ -670,6 +697,7 @@ public class GunSystem : MonoBehaviour
             feverBackgroundImage.DOKill();
             feverBackgroundImage.DOFade(0.7f, 0.5f).SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo);
         }
+        MountFeverBG2();
 
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
         if (bossManager != null) bossManager.SetFrozen(true);
@@ -686,7 +714,7 @@ public class GunSystem : MonoBehaviour
         SetProgressBarFreezeColor();
         StartFreezeColorLoops();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0 (x1.00)"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
@@ -705,6 +733,7 @@ public class GunSystem : MonoBehaviour
 
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
+        UnmountFeverBG2();
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
         if (bossManager != null) bossManager.SetFrozen(false);
 
@@ -833,14 +862,25 @@ public class GunSystem : MonoBehaviour
     {
         if (freezeTurnText != null && isFeverMode)
         {
-            float mult = GetFreezeDamageMultiplier();
-            freezeTurnText.text = $"{freezeTurnCount} (x{mult:F2})";
+            // 소수점 배율 제거 — 턴 수만 표시
+            freezeTurnText.text = $"{freezeTurnCount}";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
             rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
                 .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
         }
+        // 최대 타일 값 갱신
+        UpdateFreezeMaxTileUI();
+    }
+
+    void UpdateFreezeMaxTileUI()
+    {
+        if (freezeMaxTileText == null) return;
+        if (!isFeverMode) { freezeMaxTileText.gameObject.SetActive(false); return; }
+        if (gridManager == null) return;
+        int maxVal = gridManager.GetMaxTileValue();
+        freezeMaxTileText.text = maxVal > 0 ? $"{maxVal:N0}" : "";
     }
 
     // === 주황↔검정 색상 루프 ===
@@ -900,6 +940,19 @@ public class GunSystem : MonoBehaviour
             boostIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
 
+        // freezeMaxTileText — boostIcon과 동일 주기(1.2f)
+        if (freezeMaxTileText != null)
+        {
+            freezeMaxTileText.gameObject.SetActive(true);
+            freezeMaxTileText.DOKill();
+            freezeMaxTileText.color = FREEZE_ORANGE;
+            freezeMaxTileColorAnim = DOTween.Sequence();
+            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
+            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeMaxTileColorAnim.SetLoops(-1, LoopType.Restart);
+            UpdateFreezeMaxTileUI();
+        }
+
         // _11: progress text (40/40) 붉은색 고정
         if (turnsUntilBulletText != null)
         {
@@ -916,6 +969,8 @@ public class GunSystem : MonoBehaviour
         if (freezeTotalDmgColorAnim != null) { freezeTotalDmgColorAnim.Kill(); freezeTotalDmgColorAnim = null; }
         if (atkIconFreezeAnim != null) { atkIconFreezeAnim.Kill(); atkIconFreezeAnim = null; }
         if (boostIconFreezeAnim != null) { boostIconFreezeAnim.Kill(); boostIconFreezeAnim = null; }
+        if (freezeMaxTileColorAnim != null) { freezeMaxTileColorAnim.Kill(); freezeMaxTileColorAnim = null; }
+        if (freezeMaxTileText != null) { freezeMaxTileText.DOKill(); freezeMaxTileText.gameObject.SetActive(false); }
 
         if (attackPowerText != null)
         {
@@ -1004,17 +1059,16 @@ public class GunSystem : MonoBehaviour
             feverBackgroundImage.DOKill();
             feverBackgroundImage.DOFade(0.7f, 0.5f).SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo);
         }
+        MountFeverBG2();
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(true);
         if (bossManager != null) { bossManager.SetFrozen(true); bossManager.ResetBonusTurns(); }
         SetProgressBarFreezeColor();
         StartFreezeColorLoops();
         FireFeverFreezeLaser();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0 (x1.00)"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
-        // Freeze 타일 텍스트 색상 루프
-        if (gridManager != null) gridManager.StartAllTileFreezeLoop();
         UpdateGunUI();
     }
 
@@ -1025,6 +1079,23 @@ public class GunSystem : MonoBehaviour
         if (pm == null || gunButton == null || bossManager == null || bossManager.bossImageArea == null) return;
         RectTransform monsterRect = bossManager.bossImageArea.GetComponent<RectTransform>();
         pm.FireFreezeLaser(gunButton.transform.position, monsterRect.position, new Color(0.5f, 0.85f, 1f, 0.9f), null);
+    }
+
+    // feverBackgroundImage2: feverBackgroundImage와 동일한 글로잉 효과
+    void MountFeverBG2()
+    {
+        if (feverBackgroundImage2 == null) return;
+        feverBackgroundImage2.gameObject.SetActive(true);
+        Color c = feverBackgroundImage2.color; c.a = 1.0f; feverBackgroundImage2.color = c;
+        feverBackgroundImage2.DOKill();
+        feverBackgroundImage2.DOFade(0.7f, 0.5f).SetEase(Ease.InOutSine).SetLoops(-1, LoopType.Yoyo);
+    }
+
+    void UnmountFeverBG2()
+    {
+        if (feverBackgroundImage2 == null) return;
+        feverBackgroundImage2.DOKill();
+        feverBackgroundImage2.gameObject.SetActive(false);
     }
 
     // === Fever 파티클 (Screen.width 보정) ===
@@ -1603,6 +1674,7 @@ public class GunSystem : MonoBehaviour
 
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
+        UnmountFeverBG2();
         if (freezeImage1 != null) freezeImage1.gameObject.SetActive(false);
         if (bossManager != null) bossManager.SetFrozen(false);
         RestoreProgressBarColor();
@@ -1610,6 +1682,147 @@ public class GunSystem : MonoBehaviour
         StopProgressBarGlow();
         StopFreezeColorLoops();
         StopEmergencyFlash();
+    }
+
+    // === 데미지 계산식 표시 ===
+    // 형식: (a+b)×4 + (c+d)×2 + (e+f)×4 [×콤보] [+ATK] [×freeze]
+    // - Choco머지: (val+val)×4  Berry머지: (val+val)×1  Mix머지: (chocoVal+berryVal)×2
+    // - 각 타일 숫자는 Choco갈/Berry핑 색, ×N 연산자는 mergeType별 SerializeField 색
+    public void ShowDamageFormula(
+        System.Collections.Generic.List<GridManager.MergeEntry> entries,
+        int mergeCount,
+        float comboMultiplierBase,
+        long atkBonus,
+        bool isFreeze,
+        float freezeMultiplier
+    )
+    {
+        if (damageFormulaText == null) return;
+        if (entries == null || entries.Count == 0) { damageFormulaText.text = ""; return; }
+
+        string H(Color c) => ColorUtility.ToHtmlStringRGB(c);
+
+        // 타일 색상 헬퍼: TileColor → formula색
+        Color TileC(TileColor tc)
+            => tc == TileColor.Berry ? formulaBerryColor : formulaChocoColor;
+
+        // ─ 1부: 각 머지별 "(a+b)×N" 파트 리스트
+        // 접두어: 첫 항목 없음, 이후 '+'
+        var mergeParts = new System.Collections.Generic.List<string>();
+        foreach (var e in entries)
+        {
+            int v = e.tileVal; // 타일 하나 값 (두 타일 모두 같음)
+
+            string innerStr;
+            Color multColor;
+            string multStr;
+
+            if (e.mergeType == GridManager.MergeType.Mix)
+            {
+                // Mix: Choco쪽 + Berry쪽 — 색상 다름
+                // color1, color2 중 어느 쪽이 Choco/Berry인지 판단
+                Color cA = TileC(e.color1);
+                Color cB = TileC(e.color2);
+                innerStr = $"<color=#{H(cA)}>{v:N0}</color>+<color=#{H(cB)}>{v:N0}</color>";
+                multColor = formulaMixMultColor;
+                multStr = "×2";
+            }
+            else if (e.mergeType == GridManager.MergeType.Berry)
+            {
+                // Berry+Berry
+                Color cCol = formulaBerryColor;
+                innerStr = $"<color=#{H(cCol)}>{v:N0}</color>+<color=#{H(cCol)}>{v:N0}</color>";
+                multColor = formulaBerryMultColor;
+                multStr = "×1";
+            }
+            else
+            {
+                // Choco+Choco
+                Color cCol = formulaChocoColor;
+                innerStr = $"<color=#{H(cCol)}>{v:N0}</color>+<color=#{H(cCol)}>{v:N0}</color>";
+                multColor = formulaChocoMultColor;
+                multStr = "×4";
+            }
+
+            mergeParts.Add($"({innerStr})<color=#{H(multColor)}>{multStr}</color>");
+        }
+
+        // ─ 2부이후: 콤보/ATK/Freeze 파트
+        var tailParts = new System.Collections.Generic.List<string>();
+        if (mergeCount > 1)
+        {
+            float comboMult = Mathf.Pow(comboMultiplierBase, mergeCount - 1);
+            Color comboColor = mergeCount == 2 ? formulaCombo2Color
+                             : mergeCount == 3 ? formulaCombo3Color
+                             : mergeCount == 4 ? formulaCombo4Color
+                             :                   formulaCombo5Color;
+            tailParts.Add("×" + $"<color=#{H(comboColor)}>{comboMult:F2}</color>");
+        }
+        if (atkBonus > 0)
+            tailParts.Add("+" + $"<color=#{H(formulaAtkColor)}>{atkBonus:N0}</color>");
+        if (isFreeze)
+            tailParts.Add("×" + $"<color=#{H(formulaFreezeColor)}>{freezeMultiplier:F2}</color>");
+
+        // ─ 줄바꿈 로직
+        // mergeParts는 '+'로 연결, tailParts는 천첫 문자가 연산자
+        var sb = new System.Text.StringBuilder();
+        int lineLen = 0;
+
+        // mergeParts 조립
+        for (int i = 0; i < mergeParts.Count; i++)
+        {
+            string raw = StripRichTags(mergeParts[i]);
+            if (i == 0)
+            {
+                sb.Append(mergeParts[i]);
+                lineLen = raw.Length;
+            }
+            else
+            {
+                // 접두어 '+' 포함
+                int addLen = 1 + raw.Length; // '+' + 콘텐츠
+                if (lineLen + addLen > formulaLineBreakThreshold)
+                {
+                    sb.Append("+\n");
+                    sb.Append(mergeParts[i]);
+                    lineLen = raw.Length;
+                }
+                else
+                {
+                    sb.Append("+");
+                    sb.Append(mergeParts[i]);
+                    lineLen += addLen;
+                }
+            }
+        }
+
+        // tailParts 조립 (연산자가 접두어)
+        foreach (var part in tailParts)
+        {
+            char op = part[0];
+            int rawLen = StripRichTags(part).Length;
+            if (lineLen + rawLen > formulaLineBreakThreshold)
+            {
+                sb.Append(op); sb.Append("\n");
+                sb.Append(part.Substring(1));
+                lineLen = rawLen - 1;
+            }
+            else
+            {
+                sb.Append(part);
+                lineLen += rawLen;
+            }
+        }
+
+        damageFormulaText.text = sb.ToString();
+    }
+
+    static string StripRichTags(string s)
+        => System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
+
+    public void ClearDamageFormula()
+    {
+        if (damageFormulaText != null) damageFormulaText.text = "";
     }
 
     // === 회복력 UI (_13) ===
