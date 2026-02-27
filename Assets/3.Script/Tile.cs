@@ -21,9 +21,23 @@ public class Tile : MonoBehaviour
     [SerializeField] private ParticleSystem mergeParticle;
     private Coffee.UIExtensions.UIParticle uiParticle;
 
-    private Outline borderOutline;
-    private bool isProtected = false;
+    // === Outline 우선순위 관리 (1개의 Outline 컴포넌트를 공유) ===
+    // 우선순위: Gun(보호/깜박임) > Freeze(전체 테두리) > Glow(128이상 최대값)
+    private Outline tileOutline;
+    private bool isGunProtected = false;   // Gun 모드 보호 상태
+    private bool isGunBlinking = false;    // Gun 모드 깜박임 상태
+    private bool isFreezeOutline = false;  // Freeze 모드 테두리
+    private bool isGlowing = false;        // 일반 128이상 glow
     private Coroutine blinkCoroutine;
+    private Sequence glowOutlineAnim;
+
+    [Header("Outline 색상 설정")]
+    [SerializeField] private Color gunProtectColor    = new Color(0.8f, 0.8f, 0.9f, 1f);
+    [SerializeField] private Color gunBlinkColor      = new Color(1f,   1f,   0.3f, 1f);
+    [SerializeField] private Color glowRedColor       = new Color(0.95f, 0.1f, 0.05f, 1f); // Glow/Freeze 루프 붉은색
+    [SerializeField] private Vector2 gunProtectDist   = new Vector2(8f, 8f);
+    [SerializeField] private Vector2 gunBlinkDist     = new Vector2(6f, 6f);
+    [SerializeField] private float   glowLoopSpeed    = 1.0f; // 색상 루프 한 방향 시간(초)
 
     private Coroutine ultrasonicCoroutine;
     private bool isUltrasonicActive = false;
@@ -114,11 +128,8 @@ public class Tile : MonoBehaviour
 
     void OnDestroy()
     {
-        if (blinkCoroutine != null)
-        {
-            StopCoroutine(blinkCoroutine);
-            blinkCoroutine = null;
-        }
+        if (blinkCoroutine != null) { StopCoroutine(blinkCoroutine); blinkCoroutine = null; }
+        if (glowOutlineAnim != null) { glowOutlineAnim.Kill(); glowOutlineAnim = null; }
         StopUltrasonicEffect();
     }
 
@@ -447,38 +458,25 @@ public class Tile : MonoBehaviour
         transform.localScale = Vector3.one;
     }
 
+    // Gun 모드: 보호(isProtected=true) 또는 깜박임(shouldBlink=true) 또는 해제
     public void SetProtected(bool protected_, bool shouldBlink = false)
     {
-        isProtected = protected_;
+        isGunProtected = protected_;
+        isGunBlinking  = shouldBlink && !protected_;
 
         if (blinkCoroutine != null) { StopCoroutine(blinkCoroutine); blinkCoroutine = null; }
 
-        if (borderOutline == null)
-        {
-            borderOutline = background.gameObject.GetComponent<Outline>();
-            if (borderOutline == null) borderOutline = background.gameObject.AddComponent<Outline>();
-        }
-
-        if (isProtected)
-        {
-            borderOutline.effectColor = new Color(0.8f, 0.8f, 0.9f, 1f);
-            borderOutline.effectDistance = new Vector2(8f, 8f);
-            borderOutline.enabled = true;
+        if (!isGunProtected && !isGunBlinking)
             StopUltrasonicEffect();
-        }
-        else if (shouldBlink)
+        else if (isGunBlinking)
         {
-            borderOutline.effectColor = new Color(1f, 1f, 0.3f, 1f);
-            borderOutline.effectDistance = new Vector2(6f, 6f);
-            borderOutline.enabled = true;
             blinkCoroutine = StartCoroutine(BlinkBorder());
             StartUltrasonicEffect();
         }
         else
-        {
-            borderOutline.enabled = false;
             StopUltrasonicEffect();
-        }
+
+        RefreshOutline();
     }
 
     void StartUltrasonicEffect()
@@ -548,17 +546,97 @@ public class Tile : MonoBehaviour
 
     System.Collections.IEnumerator BlinkBorder()
     {
-        if (borderOutline == null) yield break;
-        Color brightColor = new Color(1f, 1f, 0.3f, 1f);
-        Color dimColor = new Color(1f, 1f, 0.3f, 0.2f);
+        Outline ol = GetOrCreateOutline();
+        Color brightColor = gunBlinkColor;
+        Color dimColor = new Color(gunBlinkColor.r, gunBlinkColor.g, gunBlinkColor.b, 0.2f);
         float duration = 0.6f;
         while (true)
         {
             float elapsed = 0f;
-            while (elapsed < duration) { if (borderOutline == null || !borderOutline.enabled) yield break; elapsed += Time.deltaTime; borderOutline.effectColor = Color.Lerp(brightColor, dimColor, elapsed/duration); yield return null; }
+            while (elapsed < duration)
+            {
+                if (ol == null || !ol.enabled) yield break;
+                elapsed += Time.deltaTime;
+                ol.effectColor = Color.Lerp(brightColor, dimColor, elapsed / duration);
+                yield return null;
+            }
             elapsed = 0f;
-            while (elapsed < duration) { if (borderOutline == null || !borderOutline.enabled) yield break; elapsed += Time.deltaTime; borderOutline.effectColor = Color.Lerp(dimColor, brightColor, elapsed/duration); yield return null; }
+            while (elapsed < duration)
+            {
+                if (ol == null || !ol.enabled) yield break;
+                elapsed += Time.deltaTime;
+                ol.effectColor = Color.Lerp(dimColor, brightColor, elapsed / duration);
+                yield return null;
+            }
         }
+    }
+
+    // === Outline 단일 컴포넌트 취득 ===
+    Outline GetOrCreateOutline()
+    {
+        if (tileOutline != null) return tileOutline;
+        tileOutline = background.gameObject.GetComponent<Outline>();
+        if (tileOutline == null) tileOutline = background.gameObject.AddComponent<Outline>();
+        return tileOutline;
+    }
+
+    // === 우선순위에 따라 Outline 상태 결정 ===
+    void RefreshOutline()
+    {
+        Outline ol = GetOrCreateOutline();
+
+        // 우선순위 1: Gun 보호
+        if (isGunProtected)
+        {
+            if (glowOutlineAnim != null) { glowOutlineAnim.Kill(); glowOutlineAnim = null; }
+            ol.effectColor   = gunProtectColor;
+            ol.effectDistance = gunProtectDist;
+            ol.enabled = true;
+            return;
+        }
+
+        // 우선순위 2: Gun 깜박임 (BlinkBorder 코루틴이 색상 직접 제어하므로 여기선 enable만)
+        if (isGunBlinking)
+        {
+            if (glowOutlineAnim != null) { glowOutlineAnim.Kill(); glowOutlineAnim = null; }
+            ol.effectColor    = gunBlinkColor;
+            ol.effectDistance  = gunBlinkDist;
+            ol.enabled = true;
+            return;
+        }
+
+        // 우선순위 3 & 4: Freeze(최대값 타일) 또는 일반 Glow — 동일한 내부채움 효과
+        if (isFreezeOutline || isGlowing)
+        {
+            // Outline dist = 타일 크기 절반 → 내부를 가득 채워 전체가 빛나는 효과
+            float halfSize = (rectTransform != null)
+                ? Mathf.Max(rectTransform.rect.width, rectTransform.rect.height) * 0.5f
+                : 60f;
+            Vector2 fillDist = new Vector2(halfSize, halfSize);
+
+            // 시작 색상: 현재 배경색 (타일 색상 루프의 기준점)
+            Color tileCol = background != null ? background.color : Color.white;
+            Color redCol  = glowRedColor;
+
+            ol.effectDistance = fillDist;
+            ol.effectColor    = tileCol;
+            ol.enabled = true;
+
+            if (glowOutlineAnim != null) glowOutlineAnim.Kill();
+            glowOutlineAnim = DOTween.Sequence();
+            // 타일 배경색 → 붉은색
+            glowOutlineAnim.Append(
+                DOTween.To(() => ol.effectColor, x => { if (ol != null) ol.effectColor = x; }, redCol, glowLoopSpeed).SetEase(Ease.InOutSine));
+            // 붉은색 → 타일 배경색
+            glowOutlineAnim.Append(
+                DOTween.To(() => ol.effectColor, x => { if (ol != null) ol.effectColor = x; }, tileCol, glowLoopSpeed).SetEase(Ease.InOutSine));
+            glowOutlineAnim.SetLoops(-1, LoopType.Restart);
+            return;
+        }
+
+        // 모두 해제
+        if (glowOutlineAnim != null) { glowOutlineAnim.Kill(); glowOutlineAnim = null; }
+        ol.enabled = false;
     }
 
     private void UpdateAppearance()
@@ -568,12 +646,12 @@ public class Tile : MonoBehaviour
         if (tileColor == TileColor.Choco)
         {
             background.color = chocoGradient[Mathf.Clamp(colorIndex, 0, chocoGradient.Length - 1)];
-            valueText.color = (colorIndex < chocoTextColors.Length) ? chocoTextColors[colorIndex] : chocoTextColors[chocoTextColors.Length - 1];
+            valueText.color  = (colorIndex < chocoTextColors.Length) ? chocoTextColors[colorIndex] : chocoTextColors[chocoTextColors.Length - 1];
         }
         else
         {
             background.color = berryGradient[Mathf.Clamp(colorIndex, 0, berryGradient.Length - 1)];
-            valueText.color = (colorIndex < berryTextColors.Length) ? berryTextColors[colorIndex] : berryTextColors[berryTextColors.Length - 1];
+            valueText.color  = (colorIndex < berryTextColors.Length) ? berryTextColors[colorIndex] : berryTextColors[berryTextColors.Length - 1];
         }
 
         if (mergeParticle != null)
@@ -582,4 +660,36 @@ public class Tile : MonoBehaviour
             main.startColor = background.color;
         }
     }
+
+    // Freeze 텍스트 루프 삭제됨 — 하위 호환용 빈 스텁 (GridManager 호출부 에러 방지)
+    public void StartFreezeTextLoop(float timeOffset = 0f) { }
+    public void StopFreezeTextLoop() { }
+
+    // === Freeze 외곽선 (최대값 타일에만 — GridManager에서 제어) ===
+    public void SetFreezeOutline(bool enable)
+    {
+        if (isFreezeOutline == enable) return;
+        isFreezeOutline = enable;
+        RefreshOutline();
+    }
+
+    // === 128이상 최대값 Glow ===
+    public void StartGlowEffect()
+    {
+        if (isGlowing) return;
+        if (value < 128) return;
+        isGlowing = true;
+        RefreshOutline();
+    }
+
+    public void StopGlowEffect()
+    {
+        if (!isGlowing) return;
+        isGlowing = false;
+        isFreezeOutline = false; // Glow 해제 시 Freeze 외곽선도 함께 해제
+        RefreshOutline();
+    }
+
+    // 현재 타일 배경색 (GridManager에서 참조 가능)
+    public Color GetCurrentBackgroundColor() => background != null ? background.color : Color.white;
 }

@@ -538,6 +538,7 @@ public class GunSystem : MonoBehaviour
         RestoreProgressBarColor();
         StopHPBarGunModeAnim();
         StopEmergencyFlash();
+        StopSlowGunButtonLoop();
         UpdateGunUI();
     }
 
@@ -689,12 +690,18 @@ public class GunSystem : MonoBehaviour
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
+
+        // Freeze 타일 텍스트 색상 루프 시작
+        if (gridManager != null) gridManager.StartAllTileFreezeLoop();
     }
 
     void EndFever()
     {
         // Damage record 갱신
         CheckAndUpdateDamageRecord();
+
+        // Freeze 타일 텍스트 색상 루프 종료
+        if (gridManager != null) gridManager.StopAllTileFreezeLoop();
 
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
@@ -1005,6 +1012,9 @@ public class GunSystem : MonoBehaviour
 
         if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0 (x1.00)"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
+
+        // Freeze 타일 텍스트 색상 루프
+        if (gridManager != null) gridManager.StartAllTileFreezeLoop();
         UpdateGunUI();
     }
 
@@ -1064,9 +1074,9 @@ public class GunSystem : MonoBehaviour
         while (bossBattle.IsBossTransitioning)
             yield return null;
 
-        // Clear 모드(41+)는 빠르게, 일반은 보스 등장 애니메이션 대기
+        // Clear 모드(41+)는 빠르게+0.6초 딜레이, 일반은 보스 등장 애니메이션 대기
         bool isClearMode = bossManager != null && bossManager.IsClearMode();
-        yield return new WaitForSeconds(isClearMode ? 0.8f : 3.5f);
+        yield return new WaitForSeconds(isClearMode ? 1.4f : 3.5f);
 
         if (!isFeverMode) yield break;
 
@@ -1479,6 +1489,33 @@ public class GunSystem : MonoBehaviour
         if (emergencyGunFlash != null) { emergencyGunFlash.Kill(); emergencyGunFlash = null; }
         isEmergencyFlashing = false;
         if (gunButtonImage != null) { Color c = gunButtonImage.color; c.a = 1f; gunButtonImage.color = c; }
+    }
+
+    // === 느린 gun 버튼 색상 루프 (위험 HP + gun 있음) ===
+    private Sequence slowGunColorLoop;
+    private bool isSlowGunLooping = false;
+
+    public void StartSlowGunButtonLoop()
+    {
+        if (isSlowGunLooping || isEmergencyFlashing) return;
+        if (gunButtonImage == null) return;
+        isSlowGunLooping = true;
+
+        Color colorA = GUN_READY_MINT;
+        Color colorB = new Color(1f, 0.85f, 0.3f); // 노란 경고색
+        gunButtonImage.color = colorA;
+
+        slowGunColorLoop = DOTween.Sequence();
+        slowGunColorLoop.Append(gunButtonImage.DOColor(colorB, 0.8f).SetEase(Ease.InOutSine));
+        slowGunColorLoop.Append(gunButtonImage.DOColor(colorA, 0.8f).SetEase(Ease.InOutSine));
+        slowGunColorLoop.SetLoops(-1, LoopType.Restart);
+    }
+
+    public void StopSlowGunButtonLoop()
+    {
+        if (!isSlowGunLooping) return;
+        isSlowGunLooping = false;
+        if (slowGunColorLoop != null) { slowGunColorLoop.Kill(); slowGunColorLoop = null; }
     }
 
     // === Progress bar glow ===

@@ -44,6 +44,8 @@ public class BossBattleSystem : MonoBehaviour
     [Header("Challenge Clear UI")]
     [SerializeField] private GameObject challengeClearPanel;
     [SerializeField] private TextMeshProUGUI clearStatsText;
+    [SerializeField] private TextMeshProUGUI clearBestRecordText;
+    [SerializeField] private TextMeshProUGUI clearNewRecordText;
 
     [Header("Combo Laser 색상 (1회, 2회, 3회, 4회, 5회+)")]
     [SerializeField] private Color laserColor1 = Color.white;
@@ -80,6 +82,7 @@ public class BossBattleSystem : MonoBehaviour
     private bool isPaused = false;
 
     private ProjectileManager projectileManager;
+    private Sequence clearNewRecordAnim;
 
     public bool IsBossAttacking => isBossAttacking;
     public bool IsBossTransitioning => isBossTransitioning;
@@ -425,11 +428,62 @@ public class BossBattleSystem : MonoBehaviour
             cg.DOFade(1f, 0.5f).SetEase(Ease.InOutQuad);
         }
 
+        // Total Damage + Turn 표시
         if (clearStatsText != null)
         {
-            long clearScore = gridManager != null ? gridManager.Score : 0;
+            long totalDmg = gunSystem != null ? gunSystem.PermanentAttackPower : 0;
+            // Freeze total damage가 더 정확
+            string bestStr = PlayerPrefs.GetString("BestFreezeDamage", "0");
+            long bestRecord = 0;
+            long.TryParse(bestStr, out bestRecord);
+
             int clearTurn = gridManager != null ? gridManager.CurrentTurn : 0;
-            clearStatsText.text = $"Score: {clearScore:N0}\nTurn: {clearTurn}";
+            clearStatsText.text = $"Total Damage: {bestRecord:N0}\nTurn: {clearTurn}";
+        }
+
+        // Challenge 최고기록
+        if (clearBestRecordText != null)
+        {
+            string bestStr = PlayerPrefs.GetString("BestClearTurn", "");
+            int prevBestTurn = 0;
+            if (!string.IsNullOrEmpty(bestStr)) int.TryParse(bestStr, out prevBestTurn);
+
+            int currentTurn = gridManager != null ? gridManager.CurrentTurn : 0;
+            bool isNewRecord = (prevBestTurn == 0 || currentTurn < prevBestTurn);
+
+            if (isNewRecord)
+            {
+                PlayerPrefs.SetString("BestClearTurn", currentTurn.ToString());
+                PlayerPrefs.Save();
+                clearBestRecordText.text = $"Best: {currentTurn} Turns";
+            }
+            else
+            {
+                clearBestRecordText.text = $"Best: {prevBestTurn} Turns";
+            }
+
+            // New Record 표시 + 색상 루프
+            if (clearNewRecordText != null)
+            {
+                if (isNewRecord)
+                {
+                    clearNewRecordText.gameObject.SetActive(true);
+                    clearNewRecordText.text = "NEW RECORD!";
+                    Color goldA = new Color(1f, 0.84f, 0f);
+                    Color goldB = new Color(1f, 0.5f, 0f);
+                    clearNewRecordText.color = goldA;
+
+                    if (clearNewRecordAnim != null) clearNewRecordAnim.Kill();
+                    clearNewRecordAnim = DOTween.Sequence();
+                    clearNewRecordAnim.Append(clearNewRecordText.DOColor(goldB, 0.6f).SetEase(Ease.InOutSine));
+                    clearNewRecordAnim.Append(clearNewRecordText.DOColor(goldA, 0.6f).SetEase(Ease.InOutSine));
+                    clearNewRecordAnim.SetLoops(-1, LoopType.Restart);
+                }
+                else
+                {
+                    clearNewRecordText.gameObject.SetActive(false);
+                }
+            }
         }
 
         SpawnClearFirework();

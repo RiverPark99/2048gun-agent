@@ -236,6 +236,16 @@ public class GridManager : MonoBehaviour
                                 playerHP.AddHeat(mixHeal);
                                 totalMergedValue += mergedValue; // 기본 + 1배 추가 = 2배
 
+                                // 핑크 레이저 (Berry merge와 동일)
+                                ProjectileManager pm2 = bossBattle.GetProjectileManager();
+                                if (pm2 != null && playerHP.HeatText != null)
+                                {
+                                    Vector3 mixPos = targetTile.transform.position;
+                                    Vector3 heatUIPos2 = playerHP.HeatText.transform.position;
+                                    Color mixColor = new Color(1f, 0.4f, 0.6f);
+                                    pm2.FireKnifeProjectile(mixPos, heatUIPos2, mixColor, null);
+                                }
+
                                 if (!gunSystem.IsFeverMode)
                                 {
                                     gunSystem.AddMergeGauge(1);
@@ -404,6 +414,9 @@ public class GridManager : MonoBehaviour
     {
         SpawnTile();
 
+        // 최고 타일 glow 갱신 (머지 후)
+        UpdateTopTileGlow();
+
         // Freeze 중: 이동 비용 -2, 콤보 보너스 +2*combo, 20/40 도달시 종료
         if (gunSystem.IsFeverMode)
         {
@@ -483,6 +496,13 @@ public class GridManager : MonoBehaviour
 
         tileObj.transform.localScale = Vector3.zero;
         StartCoroutine(ScaleInAnimation(tileObj));
+
+        // Freeze 중이면 새 타일도 외곽선 적용
+        if (gunSystem != null && gunSystem.IsFeverMode)
+            tile.SetFreezeOutline(true);
+
+        // 최고 타일 glow 갱신
+        UpdateTopTileGlow();
 
         if (gunSystem != null && gunSystem.IsGunMode)
             UpdateTileBorders();
@@ -693,4 +713,52 @@ public class GridManager : MonoBehaviour
 
     // 하위 호환용
     public void ResetInfiniteBossMoveCount() { }
+
+    // === Freeze 외곽선 (최대값 타일에만) ===
+    public void StartAllTileFreezeLoop()
+    {
+        // Freeze 시 최대값 타일에만 외곽선 적용 (UpdateTopTileGlow와 동일 로직)
+        UpdateTopTileGlow();
+    }
+
+    public void StopAllTileFreezeLoop()
+    {
+        foreach (var tile in activeTiles)
+            if (tile != null) tile.SetFreezeOutline(false);
+        // Glow도 재갱신 (40UI 해금 여부에 따라)
+        UpdateTopTileGlow();
+    }
+
+    // === 최고 타일 Glow + Freeze 외곽선 (128 이상, 가장 높은 값, 40/40 해금 이후만) ===
+    public void UpdateTopTileGlow()
+    {
+        if (activeTiles.Count == 0) return;
+
+        // 40/40 해금 여부 (unlockManager.IsFullGaugeUnlocked)
+        bool glowEnabled = (unlockManager != null && unlockManager.IsFullGaugeUnlocked);
+
+        int maxValue = 0;
+        foreach (var tile in activeTiles)
+            if (tile != null && tile.value > maxValue)
+                maxValue = tile.value;
+
+        bool isTopTile(Tile t) => t.value == maxValue && maxValue >= 128;
+
+        foreach (var tile in activeTiles)
+        {
+            if (tile == null) continue;
+
+            bool shouldGlow   = glowEnabled && isTopTile(tile);
+            bool shouldFreeze = glowEnabled && gunSystem != null && gunSystem.IsFeverMode && isTopTile(tile);
+
+            if (shouldGlow)
+                tile.StartGlowEffect();
+            else
+                tile.StopGlowEffect(); // 내부에서 FreezeOutline도 해제
+
+            // Freeze 외곽선은 Glow 위에 덮음 (우선순위 3, RefreshOutline에서 처리)
+            if (shouldFreeze)
+                tile.SetFreezeOutline(true);
+        }
+    }
 }

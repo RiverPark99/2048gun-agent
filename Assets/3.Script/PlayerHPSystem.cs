@@ -413,6 +413,17 @@ public class PlayerHPSystem : MonoBehaviour
             else
                 lowHealthVignette.UpdateVignette(currentHeat, maxHeat);
         }
+
+        // 1대 맞으면 죽을 피 + gun 있으면 느린 색상 루프
+        if (gunSystem != null && lowHealthVignette != null)
+        {
+            bool oneHitDeath = lowHealthVignette.IsVignetteAtMax(currentHeat) && currentHeat > 0;
+            bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
+            if (oneHitDeath && hasGun)
+                gunSystem.StartSlowGunButtonLoop();
+            else
+                gunSystem.StopSlowGunButtonLoop();
+        }
     }
 
     // === 위험 HP 깜빡임 (붉은색↔흰색) ===
