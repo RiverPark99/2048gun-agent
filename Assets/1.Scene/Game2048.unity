@@ -1030,7 +1030,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 1730788840}
+  m_Material: {fileID: 1539805631}
   m_Color: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
@@ -1349,14 +1349,14 @@ MonoBehaviour:
   laserColor1: {r: 0.7311321, g: 0.9393408, b: 1, a: 1}
   laserColor2: {r: 0.5254902, g: 0.91764706, b: 0.8039216, a: 1}
   laserColor3: {r: 1, g: 0.37961733, b: 0, a: 1}
-  laserColor4: {r: 0.86346644, g: 0.4292453, b: 1, a: 1}
-  laserColor5Plus: {r: 0.8627451, g: 0.42745098, b: 1, a: 1}
+  laserColor4: {r: 0.8666667, g: 0.43137255, b: 1, a: 1}
+  laserColor5Plus: {r: 0.7294118, g: 0.43137255, b: 1, a: 1}
   laserColorFever: {r: 1, g: 0.5, b: 0, a: 1}
   dmgTextColor1: {r: 0.73333335, g: 0.9411765, b: 1, a: 1}
   dmgTextColor2: {r: 0.5222944, g: 0.9150943, b: 0.803859, a: 1}
   dmgTextColor3: {r: 1, g: 0.38039216, b: 0, a: 1}
   dmgTextColor4: {r: 0.8666667, g: 0.43137255, b: 1, a: 1}
-  dmgTextColor5Plus: {r: 0.8627451, g: 0.42745098, b: 1, a: 1}
+  dmgTextColor5Plus: {r: 0.7294118, g: 0.43137255, b: 1, a: 1}
   dmgFontSize1: 120
   dmgFontSizeGun: 120
   dmgFontSizeComboBase: 124
@@ -1465,10 +1465,10 @@ MonoBehaviour:
   formulaChocoMultColor: {r: 0.8, g: 0.5, b: 0.1, a: 1}
   formulaBerryMultColor: {r: 0.9, g: 0.3, b: 0.55, a: 1}
   formulaMixMultColor: {r: 0.7, g: 0.4, b: 0.75, a: 1}
-  formulaCombo2Color: {r: 0.7294118, g: 0.9411765, b: 1, a: 1}
-  formulaCombo3Color: {r: 0.5254902, g: 0.91764706, b: 0.8039216, a: 1}
-  formulaCombo4Color: {r: 1, g: 0.38039216, b: 0, a: 1}
-  formulaCombo5Color: {r: 0.8627451, g: 0.42745098, b: 1, a: 1}
+  formulaCombo2Color: {r: 0.52156866, g: 0.9137255, b: 0.8039216, a: 1}
+  formulaCombo3Color: {r: 1, g: 0.38039216, b: 0, a: 1}
+  formulaCombo4Color: {r: 0.8627451, g: 0.42745098, b: 1, a: 1}
+  formulaCombo5Color: {r: 0.7294118, g: 0.43137255, b: 1, a: 1}
   formulaAtkColor: {r: 0.15, g: 0.15, b: 0.15, a: 1}
   formulaFreezeColor: {r: 1, g: 0.5000185, b: 0, a: 1}
   gridManager: {fileID: 159172560}
@@ -3099,7 +3099,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -5274,7 +5274,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.14509805, g: 0.14117648, b: 0.13725491, a: 1}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -8950,6 +8950,47 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!21 &1539805631
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: UI/RoundedCorners/RoundedCorners
+  m_Shader: {fileID: 4800000, guid: 0bd2ec5d73751e34a814274a454bec41, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _ColorMask: 15
+    - _Stencil: 0
+    - _StencilComp: 8
+    - _StencilOp: 0
+    - _StencilReadMask: 255
+    - _StencilWriteMask: 255
+    - _UseUIAlphaClip: 0
+    m_Colors:
+    - _OuterUV: {r: 0.0026548854, g: 0, b: 0.998687, a: 1}
+    - _WidthHeightRadius: {r: 360, g: 128, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
 --- !u!1 &1540040936
 GameObject:
   m_ObjectHideFlags: 0
@@ -10177,47 +10218,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1695587185}
   m_CullTransparentMesh: 1
---- !u!21 &1730788840
-Material:
-  serializedVersion: 8
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: UI/RoundedCorners/RoundedCorners
-  m_Shader: {fileID: 4800000, guid: 0bd2ec5d73751e34a814274a454bec41, type: 3}
-  m_Parent: {fileID: 0}
-  m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
-  m_InvalidKeywords: []
-  m_LightmapFlags: 4
-  m_EnableInstancingVariants: 0
-  m_DoubleSidedGI: 0
-  m_CustomRenderQueue: -1
-  stringTagMap: {}
-  disabledShaderPasses: []
-  m_LockedProperties: 
-  m_SavedProperties:
-    serializedVersion: 3
-    m_TexEnvs:
-    - _MainTex:
-        m_Texture: {fileID: 0}
-        m_Scale: {x: 1, y: 1}
-        m_Offset: {x: 0, y: 0}
-    m_Ints: []
-    m_Floats:
-    - _ColorMask: 15
-    - _Stencil: 0
-    - _StencilComp: 8
-    - _StencilOp: 0
-    - _StencilReadMask: 255
-    - _StencilWriteMask: 255
-    - _UseUIAlphaClip: 0
-    m_Colors:
-    - _OuterUV: {r: 0.0026548854, g: 0, b: 0.998687, a: 1}
-    - _WidthHeightRadius: {r: 360, g: 128, b: 0, a: 0}
-  m_BuildTextureStacks: []
-  m_AllowLocking: 1
 --- !u!21 &1733033098
 Material:
   serializedVersion: 8
