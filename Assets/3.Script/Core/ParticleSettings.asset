@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: ParticleSettings
   m_EditorClassIdentifier: Assembly-CSharp::ParticleSettings
   resolutionEntries:
-  - label: Mobile 360p
+  - label: laptop
     maxScreenWidth: 498
     mergeParticleSizeCorrection: 1
     gunParticleSizeCorrection: 1
@@ -25,19 +25,19 @@ MonoBehaviour:
     gunParticleSizeCorrection: 4
     smallParticleSizeCorrection: 2
     uiParticleScale: 3.6
-  - label: Mobile HD
+  - label: android
     maxScreenWidth: 1080
     mergeParticleSizeCorrection: 55
     gunParticleSizeCorrection: 35
     smallParticleSizeCorrection: 6
     uiParticleScale: 6.5
-  - label: Mobile FHD+
+  - label: Iphone
     maxScreenWidth: 1290
     mergeParticleSizeCorrection: 67
     gunParticleSizeCorrection: 55
     smallParticleSizeCorrection: 8
     uiParticleScale: 7.8
-  - label: Tablet / PC
+  - label: custom
     maxScreenWidth: 9999
     mergeParticleSizeCorrection: 80
     gunParticleSizeCorrection: 65
