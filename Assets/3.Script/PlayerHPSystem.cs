@@ -51,6 +51,9 @@ public class PlayerHPSystem : MonoBehaviour
     [Header("HP Bar Heal Flash")]
     [SerializeField] private Color healFlashColor = new Color(0.2f, 1f, 0.4f);
 
+    [Header("체력 변화 텍스트 크기")]
+    [SerializeField] private float heatChangeTextSize = 40f;
+
     [Header("References")]
     [SerializeField] private GunSystem gunSystem;
 
@@ -281,9 +284,6 @@ public class PlayerHPSystem : MonoBehaviour
         if (recovery > 0)
             ShowHeatChangeText(recovery);
 
-        // 회복력 UI 즉시 갱신 (레벨업과 동시)
-        if (gunSystem != null) gunSystem.UpdateHealPowerUI();
-
         Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 
         yield return new WaitForSeconds(1.0f);
@@ -491,7 +491,7 @@ public class PlayerHPSystem : MonoBehaviour
                 heatChangeText.color = new Color(0.5f, 0.8f, 1f);
             }
 
-            heatChangeText.fontSize = 40;
+            heatChangeText.fontSize = heatChangeTextSize;
 
             RectTransform heatChangeRect = heatChangeObj.GetComponent<RectTransform>();
             RectTransform heatTextRect = heatText.GetComponent<RectTransform>();

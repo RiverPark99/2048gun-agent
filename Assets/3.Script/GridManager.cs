@@ -354,12 +354,14 @@ public class GridManager : MonoBehaviour
                 // ATK 보너스 추가
                 baseDamage += gunSystem.PermanentAttackPower;
 
-                // ⭐ v6.5: Freeze 중 턴별 1.14배율 누적
+                // ⭐ v6.5: Freeze 중 턴별 배율 누적
+                // freezeMultiplier를 여기서 한 번만 계산 → 데미지·표시 모두 동일 값 사용
+                float freezeMultiplierForThisTurn = 1f;
                 if (gunSystem.IsFeverMode)
                 {
-                    float freezeMultiplier = gunSystem.GetFreezeDamageMultiplier();
-                    baseDamage = (long)(baseDamage * freezeMultiplier);
-                    Debug.Log($"❄️ Freeze DMG x{freezeMultiplier:F2}");
+                    freezeMultiplierForThisTurn = gunSystem.GetFreezeDamageMultiplier();
+                    baseDamage = (long)(baseDamage * freezeMultiplierForThisTurn);
+                    Debug.Log($"❄️ Freeze DMG x{freezeMultiplierForThisTurn:F2}");
                 }
 
                 long damage = baseDamage;
@@ -368,14 +370,14 @@ public class GridManager : MonoBehaviour
                 if (gunSystem.IsFeverMode)
                     gunSystem.AddFreezeTotalDamage(damage);
 
-                // 데미지 계산식 표시
+                // 데미지 계산식 표시 (freezeMultiplier는 위에서 구한 값 재사용)
                 gunSystem.ShowDamageFormula(
                     mergeEntries,
                     mergeCountThisTurn,
                     comboMultiplierBase,
                     gunSystem.PermanentAttackPower,
                     gunSystem.IsFeverMode,
-                    gunSystem.IsFeverMode ? gunSystem.GetFreezeDamageMultiplier() : 1f
+                    freezeMultiplierForThisTurn
                 );
 
                 bossBattle.FireDamageProjectile(lastMergedTilePosition, damage, mergeCountThisTurn, gunSystem.IsFeverMode);
@@ -427,8 +429,7 @@ public class GridManager : MonoBehaviour
                 yield break;
             }
 
-            // 머지 없으면 계산식 지우기
-            if (totalMergedValue == 0) gunSystem.ClearDamageFormula();
+            // 머지 없으면 계산식은 유지 (5초 후 자동 사라짐)
 
             yield return new WaitForSeconds(0.2f);
             AfterMove();

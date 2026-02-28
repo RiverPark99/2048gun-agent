@@ -651,20 +651,13 @@ public class BossManager : MonoBehaviour
         bossAttackInfoText.text = GetAttackTurnText(currentTurnCount);
     }
 
-    // 1턴 임박: bossImageArea를 경고색으로 부드럽게 변경
+    // 1턴 임박: bossImageArea를 경고색으로 변경 (즉시 적용)
     void FlashEnemyWarningColor()
     {
         if (bossImageArea == null || bossImageArea.material == null) return;
-        // 이미 전환 중이면 중복 실행 방지
-        if (bossImageArea.material.GetColor("_Color") == attackWarningColor) return;
-        bossMatOriginalColor = bossImageArea.material.GetColor("_Color");
+        if (isGuardMode) return; // Guard는 자체 루프 유지
         bossImageArea.material.DOKill();
-        bossImageArea.material.SetColor("_Color", bossMatOriginalColor);
-        DOTween.To(
-            () => bossImageArea.material.GetColor("_Color"),
-            x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
-            attackWarningColor, attackWarningFadeDuration
-        ).SetEase(Ease.InOutSine);
+        bossImageArea.material.SetColor("_Color", attackWarningColor);
     }
 
     // 공격 후 bossImageArea 원래색 복원
@@ -978,18 +971,26 @@ public class BossManager : MonoBehaviour
         }
         else
         {
-            // Freeze 해제: 원래 색상으로 복원
+            // Freeze 해제: 원래 색상으로 복원 — 단, 1턴 임박면 경고색 우선
             if (!isGuardMode && bossImageArea != null && bossImageArea.material != null)
             {
-                Color restoreColor = (isClearMode || bossLevel >= 41)
-                    ? infiniteEnemyColor
-                    : new Color(1.0f, 0.75f, 0.5f, 1.0f);
                 bossImageArea.material.DOKill();
-                DOTween.To(
-                    () => bossImageArea.material.GetColor("_Color"),
-                    x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
-                    restoreColor, 0.5f
-                ).SetEase(Ease.InOutSine);
+                if (currentTurnCount <= 1)
+                {
+                    // 1턴 임박: 경고색 즉시
+                    bossImageArea.material.SetColor("_Color", attackWarningColor);
+                }
+                else
+                {
+                    Color restoreColor = (isClearMode || bossLevel >= 41)
+                        ? infiniteEnemyColor
+                        : new Color(1.0f, 0.75f, 0.5f, 1.0f);
+                    DOTween.To(
+                        () => bossImageArea.material.GetColor("_Color"),
+                        x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+                        restoreColor, 0.5f
+                    ).SetEase(Ease.InOutSine);
+                }
             }
             if (!isTransitioning)
                 StartBossIdleAnimation();

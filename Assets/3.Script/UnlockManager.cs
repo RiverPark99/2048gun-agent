@@ -38,8 +38,7 @@ public class UnlockManager : MonoBehaviour
     [Header("해금 연출 암전 오버레이 (살짝 어두운 판)")]
     [SerializeField] private Image unlockDimOverlay;
 
-    [Header("회복력 UI (3 stage에서 적 공격UI와 함께 등장)")]
-    [SerializeField] private GameObject healPowerUIObj;  // 회복력 텍스트 + 아이콘 부모 객체
+
 
     // 해금 상태
     private bool enemyAttackUnlocked = false;
@@ -74,7 +73,7 @@ public class UnlockManager : MonoBehaviour
         if (gaugeCoverObj != null) gaugeCoverObj.SetActive(true);
         if (fingerGuideImage != null) fingerGuideImage.gameObject.SetActive(false);
         if (unlockDimOverlay != null) { unlockDimOverlay.color = new Color(unlockDimOverlay.color.r, unlockDimOverlay.color.g, unlockDimOverlay.color.b, 0f); unlockDimOverlay.gameObject.SetActive(false); }
-        if (healPowerUIObj != null) healPowerUIObj.SetActive(false);
+
     }
 
     // 보스 레벨 변경 시 호출 (BossManager에서 OnBossDefeated 후)
@@ -89,15 +88,7 @@ public class UnlockManager : MonoBehaviour
                 enemyAttackUIObj.SetActive(true);
                 AnimateUIAppear(enemyAttackUIObj, true); // 암전 사용
             }
-            // 회복력 UI: 우측에서 슬라이드인
-            if (healPowerUIObj != null)
-            {
-                healPowerUIObj.SetActive(true);
-                AnimateHealPowerSlideIn(healPowerUIObj);
-            }
-            // GunSystem에도 회복력 값 초기화
-            if (gunSystem != null) gunSystem.UpdateHealPowerUI();
-            Debug.Log("🔓 Unlock: Enemy Attack + Heal Power UI!");
+            Debug.Log("🔓 Unlock: Enemy Attack UI!");
         }
 
         // 5 stage: Gun UI 반절 표시
@@ -295,27 +286,4 @@ public class UnlockManager : MonoBehaviour
         });
     }
 
-    // 회복력 UI: 우측에서 좌측으로 슬라이드인 (적 공격 UI 등장과 동시)
-    void AnimateHealPowerSlideIn(GameObject obj)
-    {
-        if (obj == null) return;
-
-        RectTransform rt = obj.GetComponent<RectTransform>();
-        CanvasGroup cg = obj.GetComponent<CanvasGroup>();
-        if (cg == null) cg = obj.AddComponent<CanvasGroup>();
-
-        // 원래 위치 저장
-        Vector2 originalPos = rt.anchoredPosition;
-
-        // 우측 화면 바깥에서 시작 (+300px 오프셋)
-        rt.anchoredPosition = new Vector2(originalPos.x + 300f, originalPos.y);
-        cg.alpha = 0f;
-
-        Sequence seq = DOTween.Sequence();
-        // 적 공격 UI와 동일한 1.1초 대기 후 등장
-        seq.AppendInterval(1.1f);
-        // 페이드인 + 슬라이드 (0.5초)
-        seq.Append(cg.DOFade(1f, 0.4f).SetEase(Ease.OutQuad));
-        seq.Join(rt.DOAnchorPosX(originalPos.x, 0.5f).SetEase(Ease.OutCubic));
-    }
 }

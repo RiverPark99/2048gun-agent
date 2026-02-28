@@ -68,9 +68,7 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private Image atkIconImage;       // 공격력 아이콘 (텍스트 옆)
     [SerializeField] private Image boostIconImage;      // Boost 아이콘 (freezeTurnText 옆)
 
-    [Header("회복력 UI (Berry 1개 기준, challenge 3~ 표시)")]
-    [SerializeField] private TextMeshProUGUI healPowerText;  // "3 ♥" 형태
-    [SerializeField] private Image healIconImage;             // 회복력 아이콘 이미지 (선택)
+
 
     [Header("Continue")]
     [SerializeField] private TextMeshProUGUI continueGuideText;
@@ -225,10 +223,7 @@ public class GunSystem : MonoBehaviour
     private long currentSessionBestDamage = 0;  // 현재 판 최고
     private long allTimeBestDamage = 0;          // 전체 최고 (PlayerPrefs)
 
-    // 회복력 UI 추적
-    private int lastHealPower = -1;
-    private float healTextOriginalY = 0f;
-    private bool healTextInitialized = false;
+
 
 
 
@@ -487,7 +482,7 @@ public class GunSystem : MonoBehaviour
             boostIconOriginalColor = boostIconImage.color;
             boostIconColorSaved = true;
         }
-        if (healPowerText != null) healPowerText.gameObject.SetActive(false);
+
 
         if (turnsUntilBulletText != null && !progressTextColorSaved)
         {
@@ -549,8 +544,10 @@ public class GunSystem : MonoBehaviour
             boostIconImage.DOKill();
             boostIconImage.color = boostIconOriginalColor;
         }
-        if (healPowerText != null) healPowerText.gameObject.SetActive(false);
-        lastHealPower = -1;
+
+
+        // 계산식 정리
+        ClearDamageFormula();
 
         if (cheatMode)
         {
@@ -1492,9 +1489,6 @@ public class GunSystem : MonoBehaviour
 
         // 손가락 튜토리얼 가이드 체크
         if (unlockManager != null) unlockManager.CheckFingerGuide(mergeGauge);
-
-        // 회복력 UI 갱신
-        UpdateHealPowerUI();
     }
 
     public void UpdateGuideText()
@@ -1685,9 +1679,25 @@ public class GunSystem : MonoBehaviour
     }
 
     // === 데미지 계산식 표시 ===
-    // 형식: (a+b)×4 + (c+d)×2 + (e+f)×4 [×콤보] [+ATK] [×freeze]
-    // - Choco머지: (val+val)×4  Berry머지: (val+val)×1  Mix머지: (chocoVal+berryVal)×2
-    // - 각 타일 숫자는 Choco갈/Berry핑 색, ×N 연산자는 mergeType별 SerializeField 색
+    // 실제 계산 순서:
+    //   step1 = Σ (tileVal+tileVal)×mergeTypeMult  ← 머지 합산
+    //   step2 = step1 × 콤보배율                   ← 콤보 (>1일 때만)
+    //   step3 = step2 + ATK                        ← 추가공격력
+    //   step4 = step3 × freeze배율                 ← freeze (있을 때만)
+    //
+    // 괄호 규칙:
+    //   - 콤보 있으면: (머지합) × 콤보
+    //   - ATK 있으면 콤보와 합쳐서: ((머지합)×콤보 + ATK)
+    //   - freeze 있으면 전체를: ((머지합)×콤보 + ATK) × freeze
+    //   - ATK 없고 콤보 없으면 머지합 그대로 × freeze
+    //
+    // DOTween: 아래에서 올라오며 등장 → 5초 후 페이드아웃
+    //          재호출 시 기존 시퀀스 kill → 원래 위치에서 재시작
+
+    private Sequence formulaShowSequence;
+    private Vector2 formulaOriginalAnchorPos;
+    private bool formulaOriginalPosSaved = false;
+
     public void ShowDamageFormula(
         System.Collections.Generic.List<GridManager.MergeEntry> entries,
         int mergeCount,
@@ -1698,29 +1708,22 @@ public class GunSystem : MonoBehaviour
     )
     {
         if (damageFormulaText == null) return;
-        if (entries == null || entries.Count == 0) { damageFormulaText.text = ""; return; }
+        if (entries == null || entries.Count == 0) { ClearDamageFormula(); return; }
 
         string H(Color c) => ColorUtility.ToHtmlStringRGB(c);
+        Color TileC(TileColor tc) => tc == TileColor.Berry ? formulaBerryColor : formulaChocoColor;
 
-        // 타일 색상 헬퍼: TileColor → formula색
-        Color TileC(TileColor tc)
-            => tc == TileColor.Berry ? formulaBerryColor : formulaChocoColor;
-
-        // ─ 1부: 각 머지별 "(a+b)×N" 파트 리스트
-        // 접두어: 첫 항목 없음, 이후 '+'
+        // ── 1단계: 각 머지별 "(a+b)×N" 파트 조립
         var mergeParts = new System.Collections.Generic.List<string>();
         foreach (var e in entries)
         {
-            int v = e.tileVal; // 타일 하나 값 (두 타일 모두 같음)
-
+            int v = e.tileVal;
             string innerStr;
             Color multColor;
             string multStr;
 
             if (e.mergeType == GridManager.MergeType.Mix)
             {
-                // Mix: Choco쪽 + Berry쪽 — 색상 다름
-                // color1, color2 중 어느 쪽이 Choco/Berry인지 판단
                 Color cA = TileC(e.color1);
                 Color cB = TileC(e.color2);
                 innerStr = $"<color=#{H(cA)}>{v:N0}</color>+<color=#{H(cB)}>{v:N0}</color>";
@@ -1729,7 +1732,6 @@ public class GunSystem : MonoBehaviour
             }
             else if (e.mergeType == GridManager.MergeType.Berry)
             {
-                // Berry+Berry
                 Color cCol = formulaBerryColor;
                 innerStr = $"<color=#{H(cCol)}>{v:N0}</color>+<color=#{H(cCol)}>{v:N0}</color>";
                 multColor = formulaBerryMultColor;
@@ -1737,84 +1739,165 @@ public class GunSystem : MonoBehaviour
             }
             else
             {
-                // Choco+Choco
                 Color cCol = formulaChocoColor;
                 innerStr = $"<color=#{H(cCol)}>{v:N0}</color>+<color=#{H(cCol)}>{v:N0}</color>";
                 multColor = formulaChocoMultColor;
                 multStr = "×4";
             }
-
             mergeParts.Add($"({innerStr})<color=#{H(multColor)}>{multStr}</color>");
         }
 
-        // ─ 2부이후: 콤보/ATK/Freeze 파트
-        var tailParts = new System.Collections.Generic.List<string>();
-        if (mergeCount > 1)
-        {
-            float comboMult = Mathf.Pow(comboMultiplierBase, mergeCount - 1);
-            Color comboColor = mergeCount == 2 ? formulaCombo2Color
-                             : mergeCount == 3 ? formulaCombo3Color
-                             : mergeCount == 4 ? formulaCombo4Color
-                             :                   formulaCombo5Color;
-            tailParts.Add("×" + $"<color=#{H(comboColor)}>{comboMult:F2}</color>");
-        }
-        if (atkBonus > 0)
-            tailParts.Add("+" + $"<color=#{H(formulaAtkColor)}>{atkBonus:N0}</color>");
-        if (isFreeze)
-            tailParts.Add("×" + $"<color=#{H(formulaFreezeColor)}>{freezeMultiplier:F2}</color>");
-
-        // ─ 줄바꿈 로직
-        // mergeParts는 '+'로 연결, tailParts는 천첫 문자가 연산자
+        // ── 2단계: 머지 파트들을 '+'로 이어 붙인 "머지합" 문자열 생성
+        //          (줄바꿈 고려)
         var sb = new System.Text.StringBuilder();
         int lineLen = 0;
-
-        // mergeParts 조립
         for (int i = 0; i < mergeParts.Count; i++)
         {
             string raw = StripRichTags(mergeParts[i]);
-            if (i == 0)
-            {
-                sb.Append(mergeParts[i]);
-                lineLen = raw.Length;
-            }
+            if (i == 0) { sb.Append(mergeParts[i]); lineLen = raw.Length; }
             else
             {
-                // 접두어 '+' 포함
-                int addLen = 1 + raw.Length; // '+' + 콘텐츠
+                int addLen = 1 + raw.Length;
                 if (lineLen + addLen > formulaLineBreakThreshold)
-                {
-                    sb.Append("+\n");
-                    sb.Append(mergeParts[i]);
-                    lineLen = raw.Length;
-                }
+                { sb.Append("+\n"); sb.Append(mergeParts[i]); lineLen = raw.Length; }
                 else
-                {
-                    sb.Append("+");
-                    sb.Append(mergeParts[i]);
-                    lineLen += addLen;
-                }
+                { sb.Append("+"); sb.Append(mergeParts[i]); lineLen += addLen; }
             }
         }
+        string mergeStr = sb.ToString();
+        int mergePlainLen = StripRichTags(mergeStr).Length;
 
-        // tailParts 조립 (연산자가 접두어)
-        foreach (var part in tailParts)
+        // ── 3단계: 콤보/ATK/Freeze 를 실제 연산 순서에 맞게 괄호 조립
+        //
+        // 최종 식 구조:
+        //   freeze 없음:
+        //     콤보 없음, ATK 없음  →  mergeStr
+        //     콤보 있음, ATK 없음  →  (mergeStr)×콤보
+        //     콤보 없음, ATK 있음  →  mergeStr+ATK
+        //     콤보 있음, ATK 있음  →  (mergeStr)×콤보+ATK
+        //   freeze 있음:
+        //     콤보 없음, ATK 없음  →  mergeStr×freeze
+        //     콤보 있음, ATK 없음  →  ((mergeStr)×콤보)×freeze
+        //     콤보 없음, ATK 있음  →  (mergeStr+ATK)×freeze
+        //     콤보 있음, ATK 있음  →  ((mergeStr)×콤보+ATK)×freeze
+
+        bool hasCombo  = mergeCount > 1;
+        bool hasAtk    = atkBonus > 0;
+
+        float comboMult = hasCombo ? Mathf.Pow(comboMultiplierBase, mergeCount - 1) : 1f;
+        Color comboColor = mergeCount == 2 ? formulaCombo2Color
+                         : mergeCount == 3 ? formulaCombo3Color
+                         : mergeCount == 4 ? formulaCombo4Color
+                         :                   formulaCombo5Color;
+        string comboStr = $"<color=#{H(comboColor)}>{comboMult:F2}</color>";
+        string atkStr   = $"<color=#{H(formulaAtkColor)}>{atkBonus:N0}</color>";
+        string frzStr   = $"<color=#{H(formulaFreezeColor)}>{freezeMultiplier:F2}</color>";
+
+        // 식 조립 (줄바꿈은 큰 블록 단위로만)
+        string finalExpr;
+        if (!isFreeze)
         {
-            char op = part[0];
-            int rawLen = StripRichTags(part).Length;
-            if (lineLen + rawLen > formulaLineBreakThreshold)
+            if (!hasCombo && !hasAtk)
+                finalExpr = mergeStr;
+            else if (hasCombo && !hasAtk)
+                finalExpr = AppendWithBreak(mergePlainLen, $"({mergeStr})", $"×{comboStr}");
+            else if (!hasCombo && hasAtk)
+                finalExpr = AppendWithBreak(mergePlainLen, mergeStr, $"+{atkStr}");
+            else // hasCombo && hasAtk
             {
-                sb.Append(op); sb.Append("\n");
-                sb.Append(part.Substring(1));
-                lineLen = rawLen - 1;
+                string inner = AppendWithBreak(mergePlainLen, $"({mergeStr})", $"×{comboStr}");
+                int innerLen = StripRichTags(inner).Length;
+                finalExpr = AppendWithBreak(innerLen, inner, $"+{atkStr}");
+            }
+        }
+        else
+        {
+            string core;
+            int coreLen;
+            if (!hasCombo && !hasAtk)
+            {
+                core = mergeStr; coreLen = mergePlainLen;
+            }
+            else if (hasCombo && !hasAtk)
+            {
+                string inner = AppendWithBreak(mergePlainLen, $"({mergeStr})", $"×{comboStr}");
+                // freeze 있을 때 콤보만: ((머지합)×콤보)
+                core = $"({inner})"; coreLen = StripRichTags(core).Length;
+            }
+            else if (!hasCombo && hasAtk)
+            {
+                // (머지합+ATK)
+                string inner = AppendWithBreak(mergePlainLen, mergeStr, $"+{atkStr}");
+                core = $"({inner})"; coreLen = StripRichTags(core).Length;
             }
             else
             {
-                sb.Append(part);
-                lineLen += rawLen;
+                // ((머지합)×콤보+ATK)
+                string comboInner = AppendWithBreak(mergePlainLen, $"({mergeStr})", $"×{comboStr}");
+                int comboLen = StripRichTags(comboInner).Length;
+                string withAtk = AppendWithBreak(comboLen, comboInner, $"+{atkStr}");
+                core = $"({withAtk})"; coreLen = StripRichTags(core).Length;
             }
+            finalExpr = AppendWithBreak(coreLen, core, $"×{frzStr}");
         }
 
-        damageFormulaText.text = sb.ToString();
+        // ── 4단계: 텍스트 설정 후 DOTween 애니메이션
+        damageFormulaText.gameObject.SetActive(true);
+        damageFormulaText.text = finalExpr;
+
+        // 원래 위치 저장 (최초 1회)
+        RectTransform rt = damageFormulaText.GetComponent<RectTransform>();
+        if (!formulaOriginalPosSaved)
+        {
+            formulaOriginalAnchorPos = rt.anchoredPosition;
+            formulaOriginalPosSaved = true;
+        }
+
+        // 기존 시퀀스 중단 → 원래 위치 즉시 복원 후 재시작
+        if (formulaShowSequence != null) { formulaShowSequence.Kill(); formulaShowSequence = null; }
+        rt.DOKill();
+        damageFormulaText.DOKill();
+
+        CanvasGroup cg = damageFormulaText.GetComponent<CanvasGroup>();
+        if (cg == null) cg = damageFormulaText.gameObject.AddComponent<CanvasGroup>();
+        cg.DOKill();
+
+        // 원래 위치보다 아래에서 시작
+        float riseOffset = 30f;
+        rt.anchoredPosition = formulaOriginalAnchorPos + new Vector2(0f, -riseOffset);
+        cg.alpha = 0f;
+
+        float riseDur  = 0.35f;
+        float stayDur  = 5.0f;
+        float fadeDur  = 0.5f;
+
+        formulaShowSequence = DOTween.Sequence();
+        // 올라오며 등장
+        formulaShowSequence.Append(rt.DOAnchorPos(formulaOriginalAnchorPos, riseDur).SetEase(Ease.OutCubic));
+        formulaShowSequence.Join(cg.DOFade(1f, riseDur * 0.8f).SetEase(Ease.OutQuad));
+        // 5초 유지
+        formulaShowSequence.AppendInterval(stayDur);
+        // 페이드아웃
+        formulaShowSequence.Append(cg.DOFade(0f, fadeDur).SetEase(Ease.InCubic));
+        formulaShowSequence.OnComplete(() =>
+        {
+            formulaShowSequence = null;
+            if (damageFormulaText != null) damageFormulaText.gameObject.SetActive(false);
+        });
+    }
+
+    // 두 문자열을 이어붙이되, 합산 길이가 threshold 초과 시 줄바꿈 삽입
+    // suffix 첫 글자(연산자)를 줄 앞으로 이동
+    string AppendWithBreak(int baseLen, string baseStr, string suffix)
+    {
+        int suffixLen = StripRichTags(suffix).Length;
+        if (baseLen + suffixLen > formulaLineBreakThreshold)
+        {
+            // 연산자(첫 글자)를 줄 앞에, 나머지는 그다음
+            char op = suffix[0];
+            return baseStr + op + "\n" + suffix.Substring(1);
+        }
+        return baseStr + suffix;
     }
 
     static string StripRichTags(string s)
@@ -1822,58 +1905,20 @@ public class GunSystem : MonoBehaviour
 
     public void ClearDamageFormula()
     {
-        if (damageFormulaText != null) damageFormulaText.text = "";
+        if (formulaShowSequence != null) { formulaShowSequence.Kill(); formulaShowSequence = null; }
+        if (damageFormulaText != null)
+        {
+            damageFormulaText.DOKill();
+            RectTransform rt = damageFormulaText.GetComponent<RectTransform>();
+            if (rt != null) rt.DOKill();
+            CanvasGroup cg = damageFormulaText.GetComponent<CanvasGroup>();
+            if (cg != null) { cg.DOKill(); cg.alpha = 1f; }
+            damageFormulaText.text = "";
+            // 원래 위치로 복원
+            if (formulaOriginalPosSaved && rt != null)
+                rt.anchoredPosition = formulaOriginalAnchorPos;
+            damageFormulaText.gameObject.SetActive(false);
+        }
     }
 
-    // === 회복력 UI (_13) ===
-    // challenge 3 이상에서 표시, 레벨업 후 즉시 반영, 변경 시 DOTween
-    public void UpdateHealPowerUI()
-    {
-        if (healPowerText == null || playerHP == null || bossManager == null) return;
-        int stage = bossManager.GetBossLevel();
-        if (stage < 3)
-        {
-            healPowerText.gameObject.SetActive(false);
-            return;
-        }
-        healPowerText.gameObject.SetActive(true);
-
-        if (!healTextInitialized)
-        {
-            healTextOriginalY = healPowerText.GetComponent<RectTransform>().anchoredPosition.y;
-            healTextInitialized = true;
-        }
-
-        int healPower = playerHP.GetMixHealPower();
-        healPowerText.text = $"{healPower} \u2665";
-
-        // 값 변경 시 DOTween 효과 (HP 텍스트와 동일 스타일)
-        if (lastHealPower >= 0 && healPower != lastHealPower)
-        {
-            RectTransform rt = healPowerText.GetComponent<RectTransform>();
-            rt.DOKill();
-            healPowerText.DOKill();
-
-            // 튝 올라갔다 복귀
-            rt.DOAnchorPosY(healTextOriginalY + 8f, 0.12f).SetEase(Ease.OutQuad)
-                .OnComplete(() => {
-                    if (rt != null) rt.DOAnchorPosY(healTextOriginalY, 0.12f).SetEase(Ease.InQuad);
-                });
-
-            // 색상 강조 (green flash)
-            Color origColor = healPowerText.color;
-            healPowerText.color = new Color(0.3f, 1f, 0.5f);
-            healPowerText.DOColor(origColor, 0.5f).SetDelay(0.2f);
-
-            // 아이콘도 같이 강조
-            if (healIconImage != null)
-            {
-                healIconImage.DOKill();
-                Color iconOrig = healIconImage.color;
-                healIconImage.color = new Color(0.3f, 1f, 0.5f);
-                healIconImage.DOColor(iconOrig, 0.5f).SetDelay(0.2f);
-            }
-        }
-        lastHealPower = healPower;
-    }
 }
