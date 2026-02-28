@@ -16,6 +16,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private BossManager bossManager;
     [SerializeField] private UnlockManager unlockManager;
 
+    [Header("Particle Settings (ParticleScaler 주입)")]
+    [SerializeField] private ParticleSettings particleSettings;
+
     [Header("Swipe Settings")]
     [SerializeField] private float swipeThresholdBase = 80f; // 1290px 기준
 
@@ -74,6 +77,9 @@ public class GameManager : MonoBehaviour
     {
         // v6.6: 화면 비율 대응 스와이프 임계값
         swipeThreshold = swipeThresholdBase * (Screen.width / 1290f);
+
+        // ParticleScaler 초기화 (파티클 해상도 보정값 주입)
+        ParticleScaler.Initialize(particleSettings);
 
         gridManager.Initialize();
         playerHP.Initialize();

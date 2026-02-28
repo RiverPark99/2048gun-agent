@@ -498,39 +498,49 @@ public class BossBattleSystem : MonoBehaviour
         GameObject fwObj = new GameObject("ClearFirework");
         fwObj.transform.SetParent(canvas.transform, false);
         RectTransform fwRect = fwObj.AddComponent<RectTransform>();
-        fwRect.anchorMin = new Vector2(0.5f, 0.75f); fwRect.anchorMax = new Vector2(0.5f, 0.75f);
-        fwRect.sizeDelta = Vector2.zero;
+        fwRect.anchorMin = new Vector2(0.5f, 0.75f);
+        fwRect.anchorMax = new Vector2(0.5f, 0.75f);
+        fwRect.sizeDelta  = Vector2.zero;
 
         ParticleSystem ps = fwObj.AddComponent<ParticleSystem>();
-        float psc = Tile.SmallParticleSizeCorrectionStatic();
-        var main = ps.main;
-        main.startLifetime = 1.0f; main.startSpeed = 200f; main.startSize = 20f / psc;
-        main.maxParticles = 100; main.simulationSpace = ParticleSystemSimulationSpace.Local;
-        main.playOnAwake = false; main.loop = false;
 
-        var emission = ps.emission; emission.enabled = true; emission.rateOverTime = 0;
-        emission.SetBursts(new ParticleSystem.Burst[] { new ParticleSystem.Burst(0f, 60, 100) });
+        // ParticleScaler 기반 설정
+        ParticleScaler.ApplyMergeParticleSettings(
+            ps,
+            color:       new Color(1f, 0.84f, 0f),
+            startSize:   20f / ParticleScaler.SmallCorrection,
+            startSpeed:  200f,
+            lifetime:    1.0f,
+            shapeRadius: 30f,
+            minBurst:    60,
+            maxBurst:    100
+        );
 
-        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Circle; shape.radius = 30f;
+        // Shape 켜 술 줄 수정 (Circle 반경 30)
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius    = 30f;
 
-        var colorOL = ps.colorOverLifetime; colorOL.enabled = true;
+        // 파이어워크 전용 Gradient (3색)
+        var colorOL = ps.colorOverLifetime;
+        colorOL.enabled = true;
         Gradient gradient = new Gradient();
         gradient.SetKeys(
-            new GradientColorKey[] { new GradientColorKey(new Color(1f, 0.84f, 0f), 0f), new GradientColorKey(new Color(1f, 0.5f, 0f), 0.5f), new GradientColorKey(new Color(1f, 0.2f, 0.2f), 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.8f, 0.5f), new GradientAlphaKey(0f, 1f) }
-        );
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(1f, 0.84f, 0f), 0f),
+                new GradientColorKey(new Color(1f, 0.5f,  0f), 0.5f),
+                new GradientColorKey(new Color(1f, 0.2f, 0.2f), 1f)
+            },
+            new GradientAlphaKey[]
+            {
+                new GradientAlphaKey(1f,   0f),
+                new GradientAlphaKey(0.8f, 0.5f),
+                new GradientAlphaKey(0f,   1f)
+            });
         colorOL.color = new ParticleSystem.MinMaxGradient(gradient);
 
-        var sizeOL = ps.sizeOverLifetime; sizeOL.enabled = true;
-        AnimationCurve curve = new AnimationCurve(); curve.AddKey(0f, 1f); curve.AddKey(1f, 0f);
-        sizeOL.size = new ParticleSystem.MinMaxCurve(1f, curve);
-
-        var renderer = ps.GetComponent<ParticleSystemRenderer>();
-        renderer.renderMode = ParticleSystemRenderMode.Billboard;
-        renderer.material = new Material(Shader.Find("UI/Default"));
-
-        float pScale = 3f * ((float)Screen.width / 498f);
-        var uiP = fwObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = pScale;
+        ParticleScaler.AddUIParticle(fwObj);
         ps.Play();
         Destroy(fwObj, 2f);
     }

@@ -1109,7 +1109,7 @@ public class GunSystem : MonoBehaviour
         feverBackgroundImage2.gameObject.SetActive(false);
     }
 
-    // === Fever 파티클 (Screen.width 보정) ===
+    // === Fever 파티클 (ParticleScaler 기반) ===
     void SpawnFeverParticle()
     {
         if (feverParticleSpawnPoint == null) return;
@@ -1121,29 +1121,52 @@ public class GunSystem : MonoBehaviour
 
         ParticleSystem ps = particleObj.AddComponent<ParticleSystem>();
         var main = ps.main;
-        float psc = Tile.SmallParticleSizeCorrectionStatic();
-        main.startLifetime = 0.5f; main.startSpeed = 15f; main.startSize = 12f / psc;
-        main.startColor = new Color(1f, 0.5f, 0f); main.maxParticles = 50;
-        main.simulationSpace = ParticleSystemSimulationSpace.Local; main.playOnAwake = true; main.loop = true;
+        main.startLifetime  = 0.5f;
+        main.startSpeed     = 15f;
+        main.startSize      = 12f / ParticleScaler.SmallCorrection;
+        main.startColor     = new Color(1f, 0.5f, 0f);
+        main.maxParticles   = 50;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.playOnAwake    = true;
+        main.loop           = true;
 
-        var emission = ps.emission; emission.enabled = true; emission.rateOverTime = 20;
-        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Cone; shape.angle = 15f; shape.radius = 3f;
+        var emission = ps.emission;
+        emission.enabled      = true;
+        emission.rateOverTime = 20;
 
-        var col = ps.colorOverLifetime; col.enabled = true;
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Cone;
+        shape.angle     = 15f;
+        shape.radius    = 3f;
+
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
         Gradient g = new Gradient();
         g.SetKeys(
-            new GradientColorKey[] { new GradientColorKey(new Color(1f, 1f, 0f), 0f), new GradientColorKey(new Color(1f, 0.5f, 0f), 0.5f), new GradientColorKey(new Color(1f, 0f, 0f), 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.8f, 0.5f), new GradientAlphaKey(0f, 1f) }
-        );
+            new GradientColorKey[]
+            {
+                new GradientColorKey(new Color(1f, 1f,   0f), 0f),
+                new GradientColorKey(new Color(1f, 0.5f, 0f), 0.5f),
+                new GradientColorKey(new Color(1f, 0f,   0f), 1f)
+            },
+            new GradientAlphaKey[]
+            {
+                new GradientAlphaKey(1f,   0f),
+                new GradientAlphaKey(0.8f, 0.5f),
+                new GradientAlphaKey(0f,   1f)
+            });
         col.color = new ParticleSystem.MinMaxGradient(g);
 
-        var vel = ps.velocityOverLifetime; vel.enabled = true; vel.y = new ParticleSystem.MinMaxCurve(30f);
-        var renderer = ps.GetComponent<ParticleSystemRenderer>();
-        renderer.renderMode = ParticleSystemRenderMode.Billboard;
-        renderer.material = new Material(Shader.Find("UI/Default")); renderer.sortingOrder = 1;
-        float pScale = 3f * ((float)Screen.width / 498f);
-        var uiP = particleObj.AddComponent<Coffee.UIExtensions.UIParticle>(); uiP.scale = pScale;
+        var vel = ps.velocityOverLifetime;
+        vel.enabled = true;
+        vel.y       = new ParticleSystem.MinMaxCurve(30f);
 
+        var rend = ps.GetComponent<ParticleSystemRenderer>();
+        rend.renderMode  = ParticleSystemRenderMode.Billboard;
+        rend.material    = ParticleScaler.SharedUIMaterial;
+        rend.sortingOrder = 1;
+
+        ParticleScaler.AddUIParticle(particleObj);
         activeFeverParticle = particleObj;
     }
 
@@ -1946,8 +1969,12 @@ public class GunSystem : MonoBehaviour
         return baseStr + suffix;
     }
 
-    static string StripRichTags(string s)
-        => System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
+    // static Regex 캐싱 — 매 호출마다 Regex 객체 생성 방지
+    private static readonly System.Text.RegularExpressions.Regex _richTagRegex =
+        new System.Text.RegularExpressions.Regex("<[^>]*>",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    static string StripRichTags(string s) => _richTagRegex.Replace(s, "");
 
     public void ClearDamageFormula()
     {

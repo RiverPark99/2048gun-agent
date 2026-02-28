@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6105b55023d95ce43b40d5a80c0af6cd, type: 3}
+  m_Name: ParticleSettings
+  m_EditorClassIdentifier: Assembly-CSharp::ParticleSettings
+  resolutionEntries:
+  - label: Mobile 360p
+    maxScreenWidth: 498
+    mergeParticleSizeCorrection: 1
+    gunParticleSizeCorrection: 1
+    smallParticleSizeCorrection: 1
+    uiParticleScale: 3
+  - label: Mobile 480p
+    maxScreenWidth: 600
+    mergeParticleSizeCorrection: 5
+    gunParticleSizeCorrection: 4
+    smallParticleSizeCorrection: 2
+    uiParticleScale: 3.6
+  - label: Mobile HD
+    maxScreenWidth: 1080
+    mergeParticleSizeCorrection: 55
+    gunParticleSizeCorrection: 35
+    smallParticleSizeCorrection: 6
+    uiParticleScale: 6.5
+  - label: Mobile FHD+
+    maxScreenWidth: 1290
+    mergeParticleSizeCorrection: 67
+    gunParticleSizeCorrection: 55
+    smallParticleSizeCorrection: 8
+    uiParticleScale: 7.8
+  - label: Tablet / PC
+    maxScreenWidth: 9999
+    mergeParticleSizeCorrection: 80
+    gunParticleSizeCorrection: 65
+    smallParticleSizeCorrection: 10
+    uiParticleScale: 10
