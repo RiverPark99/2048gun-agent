@@ -1456,7 +1456,7 @@ MonoBehaviour:
   freezeLoopStartColor_Total: {r: 1, g: 0.6, b: 0.1, a: 1}
   freezeLoopStartColor_Boost: {r: 0.83137256, g: 0.1882353, b: 0, a: 1}
   freezeEndFixedColor_Turn: {r: 0.83137256, g: 0.1882353, b: 0, a: 1}
-  freezeEndFixedColor_Total: {r: 1, g: 0.6, b: 0.101960786, a: 1}
+  freezeEndFixedColor_Total: {r: 0, g: 0, b: 0, a: 1}
   continueGuideText: {fileID: 1089917018}
   currentRecordText: {fileID: 1832857741}
   bestRecordText: {fileID: 287494417}
@@ -4179,8 +4179,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 62
-  m_fontSizeBase: 62
+  m_fontSize: 57
+  m_fontSizeBase: 57
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
