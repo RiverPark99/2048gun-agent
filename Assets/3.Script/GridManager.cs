@@ -1,5 +1,5 @@
 // =====================================================
-// GridManager.cs - v6.0
+// GridManager.cs - v6.0  (Phase 1 - IGridEventListener 연결)
 // Grid, Tile 생성/이동/머지/점수/턴 관리
 // =====================================================
 
@@ -33,6 +33,11 @@ public class GridManager : MonoBehaviour
     [SerializeField] private BossBattleSystem bossBattle;
     [SerializeField] private BossManager bossManager;
     [SerializeField] private UnlockManager unlockManager;
+
+    // ⭐ Phase 1: 모드 컨트롤러 (선택적 연결 — null이면 기존 직접 참조 방식 유지)
+    [Header("Mode Controller (Phase 1)")]
+    [SerializeField] private MonoBehaviour modeControllerObject;
+    private IGridEventListener modeListener;
 
     // Grid 데이터
     private Tile[,] tiles;
@@ -69,6 +74,26 @@ public class GridManager : MonoBehaviour
 
     public void Initialize()
     {
+        // 모드 리스너 연결:
+        // 1순위: Inspector modeControllerObject 필드
+        // 2순위: 같은 GameObject의 IGridEventListener 구현체 자동 탐색
+        if (modeControllerObject != null)
+        {
+            modeListener = modeControllerObject as IGridEventListener;
+        }
+        else
+        {
+            // GetComponents로 같은 GameObject에서 IGridEventListener 구현 컴포넌트 탐색
+            foreach (var comp in GetComponents<MonoBehaviour>())
+            {
+                if (comp is IGridEventListener listener)
+                {
+                    modeListener = listener;
+                    Debug.Log($"[GridManager] 모드 리스너 자동 연결: {comp.GetType().Name}");
+                    break;
+                }
+            }
+        }
         string bestScoreStr = PlayerPrefs.GetString("BestScore", "0");
         if (long.TryParse(bestScoreStr, out long parsedScore))
             bestScore = parsedScore;
@@ -285,8 +310,10 @@ public class GridManager : MonoBehaviour
                                 targetTile.PlayMixMergeEffect();
                             }
 
-                            TileColor newColor = (unlockManager != null) ? unlockManager.GetMergeResultColorForStage()
-                                : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry);
+                            // ⭐ Phase 1: 모드에서 머지 결과 색상 위임
+                            TileColor? mergeResultColor = modeListener?.GetMergeResultColor();
+                            TileColor newColor = mergeResultColor ?? ((unlockManager != null) ? unlockManager.GetMergeResultColorForStage()
+                                : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry));
                             targetTile.SetColor(newColor);
 
                             merged[nextPos.x, nextPos.y] = true;
@@ -518,8 +545,10 @@ public class GridManager : MonoBehaviour
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
 
-        TileColor tileColor = (unlockManager != null) ? unlockManager.GetTileColorForStage()
-            : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry);
+        // ⭐ Phase 1: 모드에서 색상 결정 위임 (모드가 null을 반환하면 기존 unlockManager 방식 사용)
+        TileColor? listenerColor = modeListener?.GetSpawnTileColor();
+        TileColor tileColor = listenerColor ?? ((unlockManager != null) ? unlockManager.GetTileColorForStage()
+            : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry));
         tile.SetColor(tileColor);
 
         tile.SetGridPosition(pos);
