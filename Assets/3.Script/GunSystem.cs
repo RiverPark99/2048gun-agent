@@ -724,7 +724,7 @@ public class GunSystem : MonoBehaviour
         SetProgressBarFreezeColor();
         StartFreezeColorLoops();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "x1.00"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
@@ -877,7 +877,7 @@ public class GunSystem : MonoBehaviour
         if (freezeTurnText != null && isFeverMode)
         {
             float mult = GetFreezeDamageMultiplier();
-            freezeTurnText.text = $"{mult:F2}";
+            freezeTurnText.text = $"x{mult:F2}";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
@@ -906,7 +906,7 @@ public class GunSystem : MonoBehaviour
             float turnMult = Mathf.Pow(freezeTurnMultiplier, prevTurnCount);
             float tileMult = GetFreezeTileBonusMultiplier();
             float mult = turnMult * tileMult;
-            freezeTurnText.text = $"{mult:F2}";
+            freezeTurnText.text = $"x{mult:F2}";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
@@ -1108,7 +1108,7 @@ public class GunSystem : MonoBehaviour
         StartFreezeColorLoops();
         FireFeverFreezeLaser();
 
-        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "0"; }
+        if (freezeTurnText != null) { freezeTurnText.gameObject.SetActive(true); freezeTurnText.text = "x1.00"; }
         if (freezeTotalDamageText != null) { freezeTotalDamageText.gameObject.SetActive(true); freezeTotalDamageText.text = "0"; }
 
         UpdateGunUI();
@@ -1190,6 +1190,13 @@ public class GunSystem : MonoBehaviour
         // Clear 모드(41+)는 빠르게+0.6초 딜레이, 일반은 보스 등장 애니메이션 대기
         bool isClearMode = bossManager != null && bossManager.IsClearMode();
         yield return new WaitForSeconds(isClearMode ? 1.4f : 3.5f);
+
+        // 레벨업 룰렛 연출 중이면 완료될 때까지 대기 (터치 대기 포함)
+        if (playerHP != null)
+        {
+            while (playerHP.IsLevelUpAnimating)
+                yield return new WaitForSecondsRealtime(0.1f);
+        }
 
         if (!isFeverMode) yield break;
 

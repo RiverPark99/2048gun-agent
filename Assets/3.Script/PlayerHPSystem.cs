@@ -245,6 +245,9 @@ public class PlayerHPSystem : MonoBehaviour
     }
 
     // 배열 전체를 "3 4 5 ... 40" 형태로 빌드 (2줄, 절반 지점에서 줄바꿈)
+    // 한 자리 수는 앞에 0 붙여 두 자리로 표시 (03, 04 ... 07)
+    string FormatRouletteValue(int v) => v < 10 ? $"0{v}" : v.ToString();
+
     string BuildRouletteString(int[] values, int highlightIndex, Color highlightColor)
     {
         var sb = new System.Text.StringBuilder();
@@ -254,14 +257,15 @@ public class PlayerHPSystem : MonoBehaviour
             if (i == half) sb.Append("\n");
             else if (i > 0) sb.Append(" ");
 
+            string label = FormatRouletteValue(values[i]);
             if (i == highlightIndex)
             {
                 string hex = ColorUtility.ToHtmlStringRGB(highlightColor);
-                sb.Append($"<color=#{hex}><b>{values[i]}</b></color>");
+                sb.Append($"<color=#{hex}><b>{label}</b></color>");
             }
             else
             {
-                sb.Append($"<color=#888888>{values[i]}</color>");
+                sb.Append($"<color=#888888>{label}</color>");
             }
         }
         return sb.ToString();
