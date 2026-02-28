@@ -62,7 +62,6 @@ public class GunSystem : MonoBehaviour
     [Header("Freeze UI")]
     [SerializeField] private TextMeshProUGUI freezeTurnText;
     [SerializeField] private TextMeshProUGUI freezeTotalDamageText;
-    [SerializeField] private TextMeshProUGUI freezeMaxTileText; // Freeze 중 최대값 타일 숫자 표시 (boostIcon과 동일 색상/타이밍)
 
     [Header("아이콘 이미지 (텍스트 색상/alpha 동기화)")]
     [SerializeField] private Image atkIconImage;       // 공격력 아이콘 (텍스트 옆)
@@ -209,9 +208,6 @@ public class GunSystem : MonoBehaviour
     private bool atkIconColorSaved = false;
     private Color boostIconOriginalColor;
     private bool boostIconColorSaved = false;
-
-    // freezeMaxTileText 색상 루프
-    private Sequence freezeMaxTileColorAnim;
 
     // Freeze UI 원래 위치 저장
     private Vector2 freezeTurnOriginalPos;
@@ -884,7 +880,6 @@ public class GunSystem : MonoBehaviour
             rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
                 .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
         }
-        UpdateFreezeMaxTileUI();
     }
 
     // 이번 턴에 실제 적용된 배율을 UI에 표시 (ProcessFreezeAfterMove에서 freezeTurnCount++ 후 호용)
@@ -913,16 +908,6 @@ public class GunSystem : MonoBehaviour
             rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
                 .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
         }
-        UpdateFreezeMaxTileUI();
-    }
-
-    void UpdateFreezeMaxTileUI()
-    {
-        if (freezeMaxTileText == null) return;
-        if (!isFeverMode) { freezeMaxTileText.gameObject.SetActive(false); return; }
-        if (gridManager == null) return;
-        int maxVal = gridManager.GetMaxTileValue();
-        freezeMaxTileText.text = maxVal > 0 ? $"{maxVal:N0}" : "";
     }
 
     // === 주황↔검정 색상 루프 ===
@@ -982,19 +967,6 @@ public class GunSystem : MonoBehaviour
             boostIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
 
-        // freezeMaxTileText — boostIcon과 동일 주기(1.2f)
-        if (freezeMaxTileText != null)
-        {
-            freezeMaxTileText.gameObject.SetActive(true);
-            freezeMaxTileText.DOKill();
-            freezeMaxTileText.color = freezeLoopStartColor_Boost;
-            freezeMaxTileColorAnim = DOTween.Sequence();
-            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
-            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(freezeLoopStartColor_Boost, 1.2f).SetEase(Ease.InOutSine));
-            freezeMaxTileColorAnim.SetLoops(-1, LoopType.Restart);
-            UpdateFreezeMaxTileUI();
-        }
-
         // _11: progress text (40/40) 붉은색 고정
         if (turnsUntilBulletText != null)
         {
@@ -1011,9 +983,6 @@ public class GunSystem : MonoBehaviour
         if (freezeTotalDmgColorAnim != null) { freezeTotalDmgColorAnim.Kill(); freezeTotalDmgColorAnim = null; }
         if (atkIconFreezeAnim != null) { atkIconFreezeAnim.Kill(); atkIconFreezeAnim = null; }
         if (boostIconFreezeAnim != null) { boostIconFreezeAnim.Kill(); boostIconFreezeAnim = null; }
-        if (freezeMaxTileColorAnim != null) { freezeMaxTileColorAnim.Kill(); freezeMaxTileColorAnim = null; }
-        if (freezeMaxTileText != null) { freezeMaxTileText.DOKill(); freezeMaxTileText.gameObject.SetActive(false); }
-
         if (attackPowerText != null)
         {
             attackPowerText.DOKill();
