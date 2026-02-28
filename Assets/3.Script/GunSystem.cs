@@ -1227,8 +1227,8 @@ public class GunSystem : MonoBehaviour
 
             Vector3[] corners = new Vector3[4];
             atkRect.GetWorldCorners(corners);
-            Vector3 rightEdgeWorld = (corners[2] + corners[3]) * 0.5f;
-            r.position = rightEdgeWorld;
+            Vector3 leftEdgeWorld = (corners[0] + corners[1]) * 0.5f;
+            r.position = leftEdgeWorld;
 
             CanvasGroup cg = obj.GetComponent<CanvasGroup>(); if (cg == null) cg = obj.AddComponent<CanvasGroup>();
             DOTween.Sequence()
@@ -1604,6 +1604,9 @@ public class GunSystem : MonoBehaviour
     private Sequence slowGunColorLoop;
     private bool isSlowGunLooping = false;
 
+    [Header("HP 위험 Gun버튼 경고 색상")]
+    [SerializeField] private Color slowGunWarningColor = new Color(0.3f, 0.9f, 0.4f); // 노란 → 초록 (회복색)
+
     public void StartSlowGunButtonLoop()
     {
         if (isSlowGunLooping || isEmergencyFlashing) return;
@@ -1611,7 +1614,7 @@ public class GunSystem : MonoBehaviour
         isSlowGunLooping = true;
 
         Color colorA = GUN_READY_MINT;
-        Color colorB = new Color(1f, 0.85f, 0.3f); // 노란 경고색
+        Color colorB = slowGunWarningColor;
         gunButtonImage.color = colorA;
 
         slowGunColorLoop = DOTween.Sequence();
