@@ -19,15 +19,15 @@ MonoBehaviour:
   resolutionEntries:
   - label: laptop
     maxScreenWidth: 498
-    mergeParticleSizeCorrection: 1
-    gunParticleSizeCorrection: 1
-    smallParticleSizeCorrection: 1
+    mergeParticleSizeCorrection: 28
+    gunParticleSizeCorrection: 20
+    smallParticleSizeCorrection: 5
     uiParticleScale: 3
   - label: Mobile 480p
     maxScreenWidth: 600
-    mergeParticleSizeCorrection: 5
-    gunParticleSizeCorrection: 4
-    smallParticleSizeCorrection: 2
+    mergeParticleSizeCorrection: 18
+    gunParticleSizeCorrection: 14
+    smallParticleSizeCorrection: 4
     uiParticleScale: 3.6
   - label: android
     maxScreenWidth: 1080
