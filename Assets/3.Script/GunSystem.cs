@@ -68,6 +68,15 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private Image atkIconImage;       // 공격력 아이콘 (텍스트 옆)
     [SerializeField] private Image boostIconImage;      // Boost 아이콘 (freezeTurnText 옆)
 
+    [Header("Freeze 루프 시작색 (freezeTurnText / freezeTotalDamageText / boostIcon)")]
+    [SerializeField] private Color freezeLoopStartColor_Turn   = new Color(1f, 0.6f, 0.1f, 1f);  // freezeTurnText 루프 시작
+    [SerializeField] private Color freezeLoopStartColor_Total  = new Color(1f, 0.6f, 0.1f, 1f);  // freezeTotalDamageText 루프 시작
+    [SerializeField] private Color freezeLoopStartColor_Boost  = new Color(1f, 0.6f, 0.1f, 1f);  // boostIconImage 루프 시작
+
+    [Header("Freeze 종료 후 확정 수치 색상")]
+    [SerializeField] private Color freezeEndFixedColor_Turn  = new Color(0f, 0f, 0f, 1f);  // freezeTurnText 종료 픽스색
+    [SerializeField] private Color freezeEndFixedColor_Total = new Color(0f, 0f, 0f, 1f);  // freezeTotalDamageText 종료 픽스색
+
 
 
     [Header("Continue")]
@@ -647,7 +656,10 @@ public class GunSystem : MonoBehaviour
         if (netChange != 0)
             ShowGaugeChangeText(netChange, isCombo);
 
-        UpdateFreezeTurnUI();
+        // freezeTurnCount 증가 전 배율(이번 턴에 실제 적용된 배율)을 UI에 표시
+        // GetFreezeDamageMultiplier()는 현재 freezeTurnCount 기준이므로
+        // 이번 머지의 실제 배율 = freezeTurnCount-1 기준으로 계산
+        UpdateFreezeTurnUIForCurrentTurn();
 
         if (mergeGauge <= GAUGE_FOR_BULLET) EndFever();
 
@@ -756,6 +768,8 @@ public class GunSystem : MonoBehaviour
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill(); rt.localScale = Vector3.one;
             if (freezeTurnPosSaved) rt.anchoredPosition = freezeTurnOriginalPos;
+            // 루프 Kill 직후 중간값(검정) 대신 종료 픽스색으로 즉시 복원
+            freezeTurnText.color = freezeEndFixedColor_Turn;
             CanvasGroup cg = freezeTurnText.GetComponent<CanvasGroup>();
             if (cg != null) cg.alpha = 1f;
         }
@@ -765,7 +779,9 @@ public class GunSystem : MonoBehaviour
             RectTransform rt = freezeTotalDamageText.GetComponent<RectTransform>();
             rt.DOKill(); rt.localScale = Vector3.one;
             if (freezeTotalDmgPosSaved) rt.anchoredPosition = freezeTotalDmgOriginalPos;
-            if (freezeTotalDmgColorSaved) freezeTotalDamageText.color = freezeTotalDmgOriginalColor;
+            // 루프 Kill 직후 중간값(검정) 대신 플래시 시작색(루프 시작색)으로 설정
+            // AnimateAndHideFreezeUI에서 되는 반짝반짝 애니메이션은 flashOrange에서 시작하므로
+            freezeTotalDamageText.color = freezeLoopStartColor_Total;
             if (freezeTotalDmgFontSizeSaved) freezeTotalDamageText.fontSize = freezeTotalDmgOriginalFontSize;
             CanvasGroup cg = freezeTotalDamageText.GetComponent<CanvasGroup>();
             if (cg != null) cg.alpha = 1f;
@@ -799,7 +815,7 @@ public class GunSystem : MonoBehaviour
             if (cg == null) cg = freezeTurnText.gameObject.AddComponent<CanvasGroup>();
             rt.DOKill(); cg.DOKill(); freezeTurnText.DOKill();
             cg.alpha = 1f; rt.localScale = Vector3.one;
-            freezeTurnText.color = FREEZE_BLACK;
+            freezeTurnText.color = freezeEndFixedColor_Turn;
 
             DOTween.Sequence()
                 .AppendInterval(stayDuration)
@@ -837,8 +853,8 @@ public class GunSystem : MonoBehaviour
             seq.Append(freezeTotalDamageText.DOColor(flashOrange, 0.12f).SetEase(Ease.InOutSine));
             seq.Append(freezeTotalDamageText.DOColor(flashWhite, 0.10f).SetEase(Ease.InOutSine));
             seq.Append(freezeTotalDamageText.DOColor(flashOrange, 0.10f).SetEase(Ease.InOutSine));
-            // 픽스: 검정으로 + 스케일 복귀
-            seq.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 0.15f).SetEase(Ease.OutQuad));
+            // 픽스: 종료색으로 + 스케일 복귀
+            seq.Append(freezeTotalDamageText.DOColor(freezeEndFixedColor_Total, 0.15f).SetEase(Ease.OutQuad));
             seq.Join(rt.DOScale(1f, 0.2f).SetEase(Ease.OutBack));
             // 잔류
             seq.AppendInterval(stayDuration);
@@ -859,15 +875,43 @@ public class GunSystem : MonoBehaviour
     {
         if (freezeTurnText != null && isFeverMode)
         {
-            // 소수점 배율 제거 — 턴 수만 표시
-            freezeTurnText.text = $"{freezeTurnCount}";
+            float mult = GetFreezeDamageMultiplier();
+            freezeTurnText.text = $"{mult:F2}";
             RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
             rt.DOKill();
             rt.localScale = Vector3.one;
             rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
                 .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
         }
-        // 최대 타일 값 갱신
+        UpdateFreezeMaxTileUI();
+    }
+
+    // 이번 턴에 실제 적용된 배율을 UI에 표시 (ProcessFreezeAfterMove에서 freezeTurnCount++ 후 호용)
+    // GridManager에서 데미지 계산 시 freezeTurnCount (++ 전)을 사용함
+    // ProcessFreezeAfterMove에서는 ++된 후 호용되으므로 2칸 전 값 사용
+    void UpdateFreezeTurnUIForCurrentTurn()
+    {
+        if (freezeTurnText != null && isFeverMode)
+        {
+            // GridManager에서 데미지 계산 시: freezeTurnCount = N (구 값)
+            // ProcessFreezeAfterMove에서: freezeTurnCount++ 후 이 메서드 호용 → freezeTurnCount = N+1
+            // 다음 턴에 적용될 배율 표시 원함 → freezeTurnCount (= N+1) 기준
+            // but 참조에 의하면 이미 1턴 더 물리고 있으므로
+            // 이번에 적용된 배율(N일 때의 실제 값) = prevTurnCount-1 표시
+            // freezeTurnCount++된 후 호출 → N+1
+            // 실제 이번 데미지에 사용된 값: N (= ++전 값) = freezeTurnCount-1
+            int prevTurnCount = freezeTurnCount - 1;
+            if (prevTurnCount < 0) prevTurnCount = 0;
+            float turnMult = Mathf.Pow(freezeTurnMultiplier, prevTurnCount);
+            float tileMult = GetFreezeTileBonusMultiplier();
+            float mult = turnMult * tileMult;
+            freezeTurnText.text = $"{mult:F2}";
+            RectTransform rt = freezeTurnText.GetComponent<RectTransform>();
+            rt.DOKill();
+            rt.localScale = Vector3.one;
+            rt.DOScale(1.03f, 0.06f).SetEase(Ease.OutQuad)
+                .OnComplete(() => { if (rt != null) rt.DOScale(1f, 0.08f).SetEase(Ease.InQuad); });
+        }
         UpdateFreezeMaxTileUI();
     }
 
@@ -898,20 +942,20 @@ public class GunSystem : MonoBehaviour
         if (freezeTurnText != null)
         {
             freezeTurnText.DOKill();
-            freezeTurnText.color = FREEZE_ORANGE;
+            freezeTurnText.color = freezeLoopStartColor_Turn;
             freezeTurnColorAnim = DOTween.Sequence();
             freezeTurnColorAnim.Append(freezeTurnText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
-            freezeTurnColorAnim.Append(freezeTurnText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeTurnColorAnim.Append(freezeTurnText.DOColor(freezeLoopStartColor_Turn, 1.2f).SetEase(Ease.InOutSine));
             freezeTurnColorAnim.SetLoops(-1, LoopType.Restart);
         }
 
         if (freezeTotalDamageText != null)
         {
             freezeTotalDamageText.DOKill();
-            freezeTotalDamageText.color = FREEZE_ORANGE;
+            freezeTotalDamageText.color = freezeLoopStartColor_Total;
             freezeTotalDmgColorAnim = DOTween.Sequence();
             freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_BLACK, 0.7f).SetEase(Ease.InOutSine));
-            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(FREEZE_ORANGE, 0.7f).SetEase(Ease.InOutSine));
+            freezeTotalDmgColorAnim.Append(freezeTotalDamageText.DOColor(freezeLoopStartColor_Total, 0.7f).SetEase(Ease.InOutSine));
             freezeTotalDmgColorAnim.SetLoops(-1, LoopType.Restart);
         }
 
@@ -926,14 +970,14 @@ public class GunSystem : MonoBehaviour
             atkIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
 
-        // Boost 아이콘 색상 동기화 (freezeTurnText와 같은 주기)
+        // Boost 아이콘 색상 동기화 (freezeLoopStartColor_Boost 사용)
         if (boostIconImage != null)
         {
             boostIconImage.DOKill();
-            boostIconImage.color = FREEZE_ORANGE;
+            boostIconImage.color = freezeLoopStartColor_Boost;
             boostIconFreezeAnim = DOTween.Sequence();
             boostIconFreezeAnim.Append(boostIconImage.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
-            boostIconFreezeAnim.Append(boostIconImage.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            boostIconFreezeAnim.Append(boostIconImage.DOColor(freezeLoopStartColor_Boost, 1.2f).SetEase(Ease.InOutSine));
             boostIconFreezeAnim.SetLoops(-1, LoopType.Restart);
         }
 
@@ -942,10 +986,10 @@ public class GunSystem : MonoBehaviour
         {
             freezeMaxTileText.gameObject.SetActive(true);
             freezeMaxTileText.DOKill();
-            freezeMaxTileText.color = FREEZE_ORANGE;
+            freezeMaxTileText.color = freezeLoopStartColor_Boost;
             freezeMaxTileColorAnim = DOTween.Sequence();
             freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(FREEZE_BLACK, 1.2f).SetEase(Ease.InOutSine));
-            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(FREEZE_ORANGE, 1.2f).SetEase(Ease.InOutSine));
+            freezeMaxTileColorAnim.Append(freezeMaxTileText.DOColor(freezeLoopStartColor_Boost, 1.2f).SetEase(Ease.InOutSine));
             freezeMaxTileColorAnim.SetLoops(-1, LoopType.Restart);
             UpdateFreezeMaxTileUI();
         }
@@ -1843,7 +1887,7 @@ public class GunSystem : MonoBehaviour
 
         // ── 4단계: 텍스트 설정 후 DOTween 애니메이션
         damageFormulaText.gameObject.SetActive(true);
-        damageFormulaText.text = finalExpr;
+        damageFormulaText.text = finalExpr + " =";
 
         // 원래 위치 저장 (최초 1회)
         RectTransform rt = damageFormulaText.GetComponent<RectTransform>();
@@ -1868,7 +1912,7 @@ public class GunSystem : MonoBehaviour
         cg.alpha = 0f;
 
         float riseDur  = 0.35f;
-        float stayDur  = 5.0f;
+        float stayDur  = 20.0f;
         float fadeDur  = 0.5f;
 
         formulaShowSequence = DOTween.Sequence();
