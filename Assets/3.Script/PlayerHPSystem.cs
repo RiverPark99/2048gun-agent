@@ -27,6 +27,7 @@ public class PlayerHPSystem : MonoBehaviour
     [Header("Level Up UI")]
     [SerializeField] private GameObject levelUpPanel;
     [SerializeField] private TextMeshProUGUI levelUpText;
+    [SerializeField] private TextMeshProUGUI levelUpRouletteText;  // 룰렛 배열 표시용 추가 텍스트
     [SerializeField] private GameObject levelUpTapHintObj;
 
     [Header("Level Up 확률 테이블")]
@@ -225,6 +226,47 @@ public class PlayerHPSystem : MonoBehaviour
             return goldValue;
     }
 
+    // =====================================================
+    // LevelUp 룰렛: 실제 테이블 후보값 나열 + 랜덤 하이라이트
+    // 브론즈(bronzeMin~bronzeMax) / 실버(silverMin~silverMax) / 골드(goldValue)
+    // =====================================================
+
+    // 실제 테이블 기반 모든 후보 값 목록 빌드
+    int[] GetAllLevelUpValues()
+    {
+        var list = new System.Collections.Generic.List<int>();
+        // 브론즈 범위
+        for (int v = bronzeMin; v <= bronzeMax; v++) list.Add(v);
+        // 실버 범위
+        for (int v = silverMin; v <= silverMax; v++) list.Add(v);
+        // 골드
+        list.Add(goldValue);
+        return list.ToArray();
+    }
+
+    // 배열 전체를 "3 4 5 ... 40" 형태로 빌드 (2줄, 절반 지점에서 줄바꿈)
+    string BuildRouletteString(int[] values, int highlightIndex, Color highlightColor)
+    {
+        var sb = new System.Text.StringBuilder();
+        int half = values.Length / 2;
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (i == half) sb.Append("\n");
+            else if (i > 0) sb.Append(" ");
+
+            if (i == highlightIndex)
+            {
+                string hex = ColorUtility.ToHtmlStringRGB(highlightColor);
+                sb.Append($"<color=#{hex}><b>{values[i]}</b></color>");
+            }
+            else
+            {
+                sb.Append($"<color=#888888>{values[i]}</color>");
+            }
+        }
+        return sb.ToString();
+    }
+
     IEnumerator LevelUpRouletteCoroutine(int finalIncrease)
     {
         isLevelUpAnimating = true;
@@ -238,55 +280,112 @@ public class PlayerHPSystem : MonoBehaviour
             panelCG.alpha = 1f;
         }
 
-        bool hasText = (levelUpText != null);
-
-        // === Phase 1: 랜덤 텍스트 셔플 (2.0초) ===
-        float shuffleTime = 2.0f;
-        float elapsed = 0f;
-        while (elapsed < shuffleTime)
+        // levelUpText: "Level UP!" 고정 라벨
+        if (levelUpText != null)
         {
-            if (hasText)
+            levelUpText.text = "Level UP!";
+            levelUpText.color = Color.white;
+        }
+
+        // 실제 테이블 후보 배열 + finalIncrease 인덱스
+        int[] allValues = GetAllLevelUpValues();
+        int finalIndex = System.Array.IndexOf(allValues, finalIncrease);
+        if (finalIndex < 0) finalIndex = allValues.Length - 1;
+
+        if (levelUpRouletteText != null)
+        {
+            levelUpRouletteText.gameObject.SetActive(true);
+            levelUpRouletteText.text = BuildRouletteString(allValues, Random.Range(0, allValues.Length), SHUFFLE_COLORS[0]);
+        }
+
+        // === Phase 1: 룰렛 (카드 셔플 픽 연출, 3.5초) ===
+        // 초반: 배열 안에서 랜덤 점프 (빠름) → 후반: finalIndex로 점점 수렴 (느림)
+        float totalScan = 3.5f;
+        float elapsed = 0f;
+        int currentIdx = Random.Range(0, allValues.Length);
+        int colorIdx = 0;
+        int n = allValues.Length;
+
+        while (elapsed < totalScan)
+        {
+            float progress = elapsed / totalScan;  // 0→1
+            // 이차 곡선으로 자연스럽게 감속
+            float interval = Mathf.Lerp(0.05f, 0.28f, Mathf.Pow(progress, 2.2f));
+
+            if (progress < 0.65f)
             {
-                int randVal = GetRandomLevelUpValue();
-                levelUpText.text = GetLabelForValue(randVal);
-                levelUpText.color = SHUFFLE_COLORS[Random.Range(0, SHUFFLE_COLORS.Length)];
+                // 초반 65%: 완전 랜덤 점프 (배열 안에서만)
+                // 다만 직전 인덱스로 돌아가지 않게 제약
+                int next;
+                do { next = Random.Range(0, n); } while (next == currentIdx);
+                currentIdx = next;
             }
-            float interval = Mathf.Lerp(0.06f, 0.18f, elapsed / shuffleTime);
+            else if (progress < 0.88f)
+            {
+                // 중반 23%: finalIndex 방향으로 1칸씩 + 가끔 랜덤 직프
+                int dist = finalIndex - currentIdx;
+                if (dist == 0)
+                    // 지나쳐서 주변 움직임
+                    currentIdx = Mathf.Clamp(currentIdx + (Random.value > 0.5f ? 2 : -2), 0, n - 1);
+                else
+                    currentIdx += (int)Mathf.Sign(dist);
+                currentIdx = Mathf.Clamp(currentIdx, 0, n - 1);
+            }
+            else
+            {
+                // 후반 12%: finalIndex로 1칸씩 수렴 (이미 갔으면 유지)
+                int dist = finalIndex - currentIdx;
+                if (dist != 0) currentIdx += (int)Mathf.Sign(dist);
+                currentIdx = Mathf.Clamp(currentIdx, 0, n - 1);
+            }
+
+            colorIdx = (colorIdx + 1) % SHUFFLE_COLORS.Length;
+            Color hColor = SHUFFLE_COLORS[colorIdx];
+
+            if (levelUpRouletteText != null)
+                levelUpRouletteText.text = BuildRouletteString(allValues, currentIdx, hColor);
+
             yield return new WaitForSeconds(interval);
             elapsed += interval;
         }
 
-        // === Phase 2: 최종 숫자 픽스 ===
-        if (hasText)
+        // === Phase 2: finalIndex 정착 + 픽스 연출 ===
+        Color finalColor = GetColorForValue(finalIncrease);
+        if (levelUpRouletteText != null)
+        {
+            levelUpRouletteText.text = BuildRouletteString(allValues, finalIndex, finalColor);
+            RectTransform roulRT = levelUpRouletteText.GetComponent<RectTransform>();
+            roulRT.DOKill();
+            roulRT.localScale = Vector3.one * 1.25f;
+            roulRT.DOScale(1f, 0.35f).SetEase(Ease.OutBack);
+        }
+
+        // levelUpText: 최종 수치 + 등급 색상
+        if (levelUpText != null)
         {
             levelUpText.text = GetLabelForValue(finalIncrease);
-            levelUpText.color = GetColorForValue(finalIncrease);
+            levelUpText.color = finalColor;
 
-            float popScale;
-            float popDuration;
-            if (finalIncrease >= goldValue)       { popScale = 1.8f; popDuration = 0.35f; }
-            else if (finalIncrease >= silverMin)  { popScale = 1.5f; popDuration = 0.28f; }
-            else                                  { popScale = 1.3f; popDuration = 0.20f; }
-
+            float popScale = finalIncrease >= goldValue ? 1.8f : finalIncrease >= silverMin ? 1.5f : 1.3f;
+            float popDur   = finalIncrease >= goldValue ? 0.35f : finalIncrease >= silverMin ? 0.28f : 0.20f;
             RectTransform tr = levelUpText.GetComponent<RectTransform>();
             tr.DOKill();
             tr.localScale = Vector3.one * popScale;
-            tr.DOScale(1f, popDuration).SetEase(Ease.OutBack);
+            tr.DOScale(1f, popDur).SetEase(Ease.OutBack);
         }
 
-        // === Phase 3: 실제 HP 증가 + 회복 + 회복력 UI 즉시 반영 ===
+        // === Phase 3: 실제 HP 증가 + 회복 UI ===
         maxHeat += finalIncrease;
         int oldHeat = currentHeat;
         currentHeat = maxHeat;
         UpdateHeatUI();
 
         int recovery = currentHeat - oldHeat;
-        if (recovery > 0)
-            ShowHeatChangeText(recovery);
+        if (recovery > 0) ShowHeatChangeText(recovery);
 
         Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1.2f);
 
         // === Phase 4: TimeScale 정지 → 터치 대기 ===
         Time.timeScale = 0f;
@@ -313,11 +412,19 @@ public class PlayerHPSystem : MonoBehaviour
         isLevelUpAnimating = false;
 
         // === Phase 5: 페이드아웃 ===
+        if (levelUpRouletteText != null)
+        {
+            RectTransform rrt = levelUpRouletteText.GetComponent<RectTransform>();
+            if (rrt != null) rrt.DOKill();
+            levelUpRouletteText.DOKill();
+        }
+
         if (panelCG != null)
         {
             panelCG.DOKill();
             panelCG.DOFade(0f, 1.0f).SetEase(Ease.InQuad).OnComplete(() => {
                 if (levelUpPanel != null) levelUpPanel.SetActive(false);
+                if (levelUpRouletteText != null) levelUpRouletteText.gameObject.SetActive(false);
             });
         }
 

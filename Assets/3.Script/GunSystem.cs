@@ -100,6 +100,7 @@ public class GunSystem : MonoBehaviour
     [SerializeField] private Color formulaBerryMultColor = new Color(0.90f, 0.30f, 0.55f);  // 진핑크 - Berry ×1 연산자
     [SerializeField] private Color formulaMixMultColor   = new Color(0.70f, 0.40f, 0.75f);  // 라일락 - Mix ×2 연산자
     [Header("계산식 색상 - 콤보/추공/Freeze")]
+    [SerializeField] private Color formulaCombo0Color    = new Color(0.85f, 0.85f, 0.85f);  // 밝은회색 - 0콤보(단일머지) 결과값
     [SerializeField] private Color formulaCombo2Color    = new Color(1.00f, 0.85f, 0.30f);  // 노랑  - 콤보×2
     [SerializeField] private Color formulaCombo3Color    = new Color(1.00f, 0.60f, 0.10f);  // 주황  - 콤보×3
     [SerializeField] private Color formulaCombo4Color    = new Color(1.00f, 0.30f, 0.10f);  // 빨강  - 콤보×4
@@ -1471,7 +1472,7 @@ public class GunSystem : MonoBehaviour
                 attackTextInitialized = true;
             }
 
-            attackPowerText.text = $"{permanentAttackPower:N0}";
+            attackPowerText.text = $"+{permanentAttackPower:N0}";
 
             if (!isFeverMode)
             {
@@ -1838,7 +1839,7 @@ public class GunSystem : MonoBehaviour
                          :                   formulaCombo5Color;
         string comboStr = $"<color=#{H(comboColor)}>{comboMult:F2}</color>";
         string atkStr   = $"<color=#{H(formulaAtkColor)}>{atkBonus:N0}</color>";
-        string frzStr   = $"<color=#{H(formulaFreezeColor)}>{freezeMultiplier:F2}</color>";
+        string frzStr   = $"<color=#{H(formulaFreezeColor)}>×{freezeMultiplier:F2}</color>";
 
         // 식 조립 (줄바꿈은 큰 블록 단위로만)
         string finalExpr;
@@ -1890,7 +1891,29 @@ public class GunSystem : MonoBehaviour
 
         // ── 4단계: 텍스트 설정 후 DOTween 애니메이션
         damageFormulaText.gameObject.SetActive(true);
-        damageFormulaText.text = finalExpr + " =";
+        // 최종 데미지 계산
+        long finalDamage = 0;
+        foreach (var e in entries)
+        {
+            long tileContrib = (long)e.tileVal * 2;
+            if (e.mergeType == GridManager.MergeType.Choco)      tileContrib *= 4;
+            else if (e.mergeType == GridManager.MergeType.Mix)   tileContrib *= 2;
+            // Berry는 ×1 (그대로)
+            finalDamage += tileContrib;
+        }
+        float comboDmgMult = hasCombo ? Mathf.Pow(comboMultiplierBase, mergeCount - 1) : 1f;
+        finalDamage = (long)Mathf.Floor(finalDamage * comboDmgMult);
+        finalDamage += atkBonus;
+        if (isFreeze) finalDamage = (long)(finalDamage * freezeMultiplier);
+
+        // 결과값 색상: 콤보 수에 따른 현재 콤보 색상 사용 (0콤보면 formulaCombo0Color)
+        Color resultColor = !hasCombo ? formulaCombo0Color
+                          : mergeCount == 2 ? formulaCombo2Color
+                          : mergeCount == 3 ? formulaCombo3Color
+                          : mergeCount == 4 ? formulaCombo4Color
+                          :                   formulaCombo5Color;
+        string finalDmgColor = ColorUtility.ToHtmlStringRGB(resultColor);
+        damageFormulaText.text = finalExpr + $" = <color=#{finalDmgColor}>{finalDamage:N0}</color>";
 
         // 원래 위치 저장 (최초 1회)
         RectTransform rt = damageFormulaText.GetComponent<RectTransform>();
