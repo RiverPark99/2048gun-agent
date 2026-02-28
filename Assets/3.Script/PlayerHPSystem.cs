@@ -302,55 +302,39 @@ public class PlayerHPSystem : MonoBehaviour
             levelUpRouletteText.text = BuildRouletteString(allValues, Random.Range(0, allValues.Length), SHUFFLE_COLORS[0]);
         }
 
-        // === Phase 1: 룰렛 (카드 셔플 픽 연출, 3.5초) ===
-        // 초반: 배열 안에서 랜덤 점프 (빠름) → 후반: finalIndex로 점점 수렴 (느림)
-        float totalScan = 2.5f;
-        float elapsed = 0f;
-        int currentIdx = Random.Range(0, allValues.Length);
-        int colorIdx = 0;
+        // === Phase 1: 룰렛 (순차 이동 + 감속 픽스 연출) ===
+        // 2~3바퀴 빠르게 순환 후 finalIndex에서 자연스럽게 감속 정지
         int n = allValues.Length;
+        int laps      = Random.Range(2, 4);           // 2~3바퀴 랜덤
+        int totalSteps = laps * n + finalIndex + 1;   // 정확히 finalIndex에 멈춤
+        // 시작은 항상 인덱스 0부터 (배열 맨 앞에서 출발하는 느낌)
+        int currentIdx = -1;  // 첫 step에서 +1 해서 0이 됨
+        int colorIdx = 0;
 
-        while (elapsed < totalScan)
+        for (int step = 0; step < totalSteps; step++)
         {
-            float progress = elapsed / totalScan;  // 0→1
-            // 이차 곡선으로 자연스럽게 감속
-            float interval = Mathf.Lerp(0.05f, 0.28f, Mathf.Pow(progress, 2.2f));
+            currentIdx = (currentIdx + 1) % n;
 
-            if (progress < 0.65f)
-            {
-                // 초반 65%: 완전 랜덤 점프 (배열 안에서만)
-                // 다만 직전 인덱스로 돌아가지 않게 제약
-                int next;
-                do { next = Random.Range(0, n); } while (next == currentIdx);
-                currentIdx = next;
-            }
-            else if (progress < 0.88f)
-            {
-                // 중반 23%: finalIndex 방향으로 1칸씩 + 가끔 랜덤 직프
-                int dist = finalIndex - currentIdx;
-                if (dist == 0)
-                    // 지나쳐서 주변 움직임
-                    currentIdx = Mathf.Clamp(currentIdx + (Random.value > 0.5f ? 2 : -2), 0, n - 1);
-                else
-                    currentIdx += (int)Mathf.Sign(dist);
-                currentIdx = Mathf.Clamp(currentIdx, 0, n - 1);
-            }
+            // 진행률 0→1
+            float progress = (float)step / (totalSteps - 1);
+            // 앞 60%는 거의 일정하게 빠름, 이후 급격히 감속
+            float interval;
+            if (progress < 0.6f)
+                interval = Mathf.Lerp(0.04f, 0.07f, progress / 0.6f);   // 0.04→0.07 완만
             else
-            {
-                // 후반 12%: finalIndex로 1칸씩 수렴 (이미 갔으면 유지)
-                int dist = finalIndex - currentIdx;
-                if (dist != 0) currentIdx += (int)Mathf.Sign(dist);
-                currentIdx = Mathf.Clamp(currentIdx, 0, n - 1);
-            }
+                interval = Mathf.Lerp(0.07f, 0.35f, Mathf.Pow((progress - 0.6f) / 0.4f, 2.0f)); // 급감속
 
             colorIdx = (colorIdx + 1) % SHUFFLE_COLORS.Length;
-            Color hColor = SHUFFLE_COLORS[colorIdx];
+            // 마지막 5칸은 최종 등급 색상으로 서서히 전환
+            int remaining = totalSteps - 1 - step;
+            Color hColor = remaining <= 5
+                ? Color.Lerp(SHUFFLE_COLORS[colorIdx], GetColorForValue(finalIncrease), 1f - (float)remaining / 5f)
+                : SHUFFLE_COLORS[colorIdx];
 
             if (levelUpRouletteText != null)
                 levelUpRouletteText.text = BuildRouletteString(allValues, currentIdx, hColor);
 
             yield return new WaitForSeconds(interval);
-            elapsed += interval;
         }
 
         // === Phase 2: finalIndex 정착 + 픽스 연출 ===
