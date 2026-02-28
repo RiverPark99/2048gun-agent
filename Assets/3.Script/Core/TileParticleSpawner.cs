@@ -1,33 +1,26 @@
 // =====================================================
 // TileParticleSpawner.cs
 // Tile 머지/파괴 파티클 전담 컴포넌트
-// Object Pool 적용 — 매 머지마다 Instantiate 제거
+// - 색상: ParticleSettings ScriptableObject (ParticleScaler 경유)
+// - Merge 파티클: static Queue Pool 재사용
+// - Gun 파괴 파티클: Instantiate/Destroy (Tile과 수명 독립)
 // =====================================================
 
 using UnityEngine;
-using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(RectTransform))]
 public class TileParticleSpawner : MonoBehaviour
 {
-    [Header("파티클 색상")]
-    [SerializeField] private Color berryParticleColor  = new Color(1f, 0.5f, 0.65f);
-    [SerializeField] private Color chocoParticleColor  = new Color(0.55f, 0.40f, 0.28f);
-    [SerializeField] private Color mergeParticleColor  = new Color(1f, 0.8f, 0.2f);
-    [SerializeField] private Color gunParticleColor1   = new Color(1f, 0.84f, 0f);
-    [SerializeField] private Color gunParticleColor2   = Color.white;
-
     private RectTransform rectTransform;
 
     // ── 파티클 풀 (씬 전역 공유 static) ──
-    // TileParticleSpawner는 Tile마다 하나씩 존재하므로 static 공유 풀이 효율적
     private static Queue<GameObject> _particlePool;
     private static bool _poolInitialized = false;
-    private static Transform _poolRoot;   // 비활성 파티클 보관용 부모
+    private static Transform _poolRoot;
 
-    // 현재 Tile이 발사한 파티클 추적 (씬 정리용)
+    // 현재 Spawner가 발사한 파티클 추적 (정리용)
     private readonly List<GameObject> _activeParticles = new List<GameObject>();
 
     // ── 초기화 ──
@@ -38,9 +31,16 @@ public class TileParticleSpawner : MonoBehaviour
         EnsurePoolInitialized();
     }
 
+    void OnDisable()
+    {
+        // Tile이 비활성화(Destroy 직전 포함)될 때 활성 파티클 즉시 풀 반환
+        ReturnAllActive();
+    }
+
     void OnDestroy()
     {
-        // 이 Tile이 소유한 파티클들을 풀에 반환
+        // OnDisable이 먼저 호출되므로 여기서는 추가 정리 불필요
+        // (안전 보강용으로 한 번 더 호출해도 무해)
         ReturnAllActive();
     }
 
@@ -48,10 +48,9 @@ public class TileParticleSpawner : MonoBehaviour
     {
         if (_poolInitialized && _poolRoot != null) return;
 
-        // Pool 루트 생성 (씬에 하나만 존재)
         GameObject root = new GameObject("[ParticlePool]");
         DontDestroyOnLoad(root);
-        root.SetActive(false);          // 비활성화로 자식도 자동 비활성
+        root.SetActive(false); // 비활성화로 자식도 자동 비활성
         _poolRoot = root.transform;
 
         _particlePool = new Queue<GameObject>();
@@ -105,28 +104,28 @@ public class TileParticleSpawner : MonoBehaviour
         GameObject obj = new GameObject("MergeParticle");
         obj.transform.SetParent(parent, false);
 
-        RectTransform rt   = obj.AddComponent<RectTransform>();
-        rt.anchorMin        = new Vector2(0.5f, 0.5f);
-        rt.anchorMax        = new Vector2(0.5f, 0.5f);
-        rt.pivot            = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta        = Vector2.zero;
+        var rt      = obj.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = Vector2.zero;
 
         obj.AddComponent<ParticleSystem>();
         obj.AddComponent<Coffee.UIExtensions.UIParticle>();
         return obj;
     }
 
-    // ── 파티클 설정 & 재생 ──
+    // ── Merge 파티클 재생 (Pool 방식) ──
 
     void PlayParticle(Vector2 anchoredPos, Color color, float sizeRatio, float lifetime, float correction)
     {
         GameObject obj = GetParticle(transform.parent);
         _activeParticles.Add(obj);
 
-        RectTransform rt   = obj.GetComponent<RectTransform>();
+        var rt          = obj.GetComponent<RectTransform>();
         rt.anchoredPosition = anchoredPos;
 
-        ParticleSystem ps = obj.GetComponent<ParticleSystem>();
+        var ps = obj.GetComponent<ParticleSystem>();
         ApplySettings(ps, color, sizeRatio, lifetime, correction);
 
         var uiP = obj.GetComponent<Coffee.UIExtensions.UIParticle>();
@@ -207,33 +206,108 @@ public class TileParticleSpawner : MonoBehaviour
         PlayParticle(pos, color, sizeRatio, lifetime, correction);
     }
 
-    // ── 공개 API ──
-
-    public void PlayMergeEffect(Vector2 pos)
-        => PlayParticle(pos, mergeParticleColor, 0.6f, 0.3f, ParticleScaler.MergeCorrection);
+    // ── 공개 API (색상은 ParticleScaler → ParticleSettings에서 읽음) ──
 
     public void PlayChocoEffect(Vector2 pos)
     {
-        PlayParticle(pos, chocoParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
-        StartCoroutine(DelayedPlay(pos, chocoParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
+        PlayParticle(pos, ParticleScaler.ChocoColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
+        StartCoroutine(DelayedPlay(pos, ParticleScaler.ChocoColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
     }
 
     public void PlayBerryEffect(Vector2 pos)
     {
-        PlayParticle(pos, berryParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
-        StartCoroutine(DelayedPlay(pos, berryParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
+        PlayParticle(pos, ParticleScaler.BerryColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
+        StartCoroutine(DelayedPlay(pos, ParticleScaler.BerryColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
     }
 
     public void PlayMixEffect(Vector2 pos)
     {
-        PlayParticle(pos, chocoParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
-        StartCoroutine(DelayedPlay(pos, berryParticleColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
+        PlayParticle(pos, ParticleScaler.ChocoColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection);
+        StartCoroutine(DelayedPlay(pos, ParticleScaler.BerryColor, 0.75f, 0.35f, ParticleScaler.MergeCorrection, 0.05f));
     }
+
+    // ── Gun 파괴 전용: Instantiate 방식 (Tile과 수명 독립) ──
 
     public void PlayGunDestroyEffect(Vector2 pos)
     {
-        float gunCorr = ParticleScaler.GunCorrection;
-        PlayParticle(pos, gunParticleColor1, 0.9f, 0.4f, gunCorr);
-        PlayParticle(pos, gunParticleColor2, 1.1f, 0.2f, gunCorr);
+        float tileSize = Mathf.Max(rectTransform.rect.width, rectTransform.rect.height);
+        SpawnGunParticle(pos, ParticleScaler.GunColor1, 0.9f, 0.4f, ParticleScaler.GunCorrection, tileSize);
+        SpawnGunParticle(pos, ParticleScaler.GunColor2, 1.1f, 0.2f, ParticleScaler.GunCorrection, tileSize);
+    }
+
+    void SpawnGunParticle(Vector2 anchoredPos, Color color, float sizeRatio, float lifetime, float correction, float tileSize)
+    {
+        Transform container = transform.parent ?? transform;
+
+        GameObject obj = new GameObject("GunDestroyParticle");
+        obj.transform.SetParent(container, false);
+
+        var rt          = obj.AddComponent<RectTransform>();
+        rt.anchorMin     = new Vector2(0.5f, 0.5f);
+        rt.anchorMax     = new Vector2(0.5f, 0.5f);
+        rt.pivot         = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta     = Vector2.zero;
+        rt.anchoredPosition = anchoredPos;
+
+        var ps = obj.AddComponent<ParticleSystem>();
+
+        float speed  = tileSize * 0.5f;
+        float radius = tileSize * 0.08f;
+        float size   = tileSize * sizeRatio / correction;
+
+        var main = ps.main;
+        main.startLifetime   = lifetime;
+        main.startSpeed      = speed;
+        main.startSize       = size;
+        main.startColor      = color;
+        main.maxParticles    = 90;
+        main.simulationSpace = ParticleSystemSimulationSpace.Local;
+        main.playOnAwake     = false;
+        main.loop            = false;
+
+        var emission = ps.emission;
+        emission.enabled      = true;
+        emission.rateOverTime = 0;
+        emission.SetBursts(new ParticleSystem.Burst[]
+            { new ParticleSystem.Burst(0f, (short)50, (short)80) });
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius    = radius;
+
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        Gradient g = new Gradient();
+        g.SetKeys(
+            new GradientColorKey[]
+            {
+                new GradientColorKey(Color.white, 0f),
+                new GradientColorKey(color,       0.5f),
+                new GradientColorKey(color,       1f)
+            },
+            new GradientAlphaKey[]
+            {
+                new GradientAlphaKey(1f,   0f),
+                new GradientAlphaKey(0.8f, 0.5f),
+                new GradientAlphaKey(0f,   1f)
+            });
+        col.color = new ParticleSystem.MinMaxGradient(g);
+
+        var sol = ps.sizeOverLifetime;
+        sol.enabled = true;
+        AnimationCurve curve = new AnimationCurve();
+        curve.AddKey(0f, 1f);
+        curve.AddKey(1f, 0f);
+        sol.size = new ParticleSystem.MinMaxCurve(1f, curve);
+
+        var uiP = obj.AddComponent<Coffee.UIExtensions.UIParticle>();
+        uiP.scale = ParticleScaler.UIParticleScale;
+
+        var rend = ps.GetComponent<ParticleSystemRenderer>();
+        rend.renderMode = ParticleSystemRenderMode.Billboard;
+        rend.material   = ParticleScaler.SharedUIMaterial;
+
+        ps.Play();
+        Destroy(obj, lifetime + 0.2f);
     }
 }

@@ -34,6 +34,14 @@ public class ParticleResolutionEntry
 [CreateAssetMenu(fileName = "ParticleSettings", menuName = "2048Gun/ParticleSettings")]
 public class ParticleSettings : ScriptableObject
 {
+    [Header("파티클 색상")]
+    public Color berryParticleColor = new Color(1f, 0.5f, 0.65f);
+    public Color chocoParticleColor = new Color(0.55f, 0.40f, 0.28f);
+    [Tooltip("Gun 파괴 파티클 색상 1 (기본: 금색)")]
+    public Color gunParticleColor1  = new Color(1f, 0.84f, 0f);
+    [Tooltip("Gun 파괴 파티클 색상 2 (기본: 흰색)")]
+    public Color gunParticleColor2  = Color.white;
+
     [Tooltip("화면 너비 오름차순으로 정렬. 현재 해상도보다 maxScreenWidth가 큰 첫 항목 적용.\n마지막 항목은 가장 큰 해상도(상한 없음)에 적용됨.")]
     public List<ParticleResolutionEntry> resolutionEntries = new List<ParticleResolutionEntry>()
     {

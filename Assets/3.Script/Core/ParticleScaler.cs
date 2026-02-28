@@ -52,6 +52,12 @@ public static class ParticleScaler
         }
     }
 
+    // ── 색상 프로퍼티 (ParticleSettings에서 읽음) ──
+    public static Color BerryColor  => _settings != null ? _settings.berryParticleColor : new Color(1f, 0.5f, 0.65f);
+    public static Color ChocoColor  => _settings != null ? _settings.chocoParticleColor : new Color(0.55f, 0.40f, 0.28f);
+    public static Color GunColor1   => _settings != null ? _settings.gunParticleColor1  : new Color(1f, 0.84f, 0f);
+    public static Color GunColor2   => _settings != null ? _settings.gunParticleColor2  : Color.white;
+
     // ── 보정값 프로퍼티 ──
     /// <summary>일반 머지 파티클 크기 보정</summary>
     public static float MergeCorrection    => Entry.mergeParticleSizeCorrection;

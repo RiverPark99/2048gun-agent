@@ -12,6 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6105b55023d95ce43b40d5a80c0af6cd, type: 3}
   m_Name: ParticleSettings
   m_EditorClassIdentifier: Assembly-CSharp::ParticleSettings
+  berryParticleColor: {r: 1, g: 0.5, b: 0.65, a: 1}
+  chocoParticleColor: {r: 0.55, g: 0.4, b: 0.28, a: 1}
+  gunParticleColor1: {r: 1, g: 0.29803923, b: 0, a: 1}
+  gunParticleColor2: {r: 0.6, g: 0.9490196, b: 0.8509804, a: 1}
   resolutionEntries:
   - label: laptop
     maxScreenWidth: 498

@@ -320,9 +320,9 @@ public class PlayerHPSystem : MonoBehaviour
             // 앞 60%는 거의 일정하게 빠름, 이후 급격히 감속
             float interval;
             if (progress < 0.6f)
-                interval = Mathf.Lerp(0.04f, 0.07f, progress / 0.6f);   // 0.04→0.07 완만
+                interval = Mathf.Lerp(0.025f, 0.045f, progress / 0.6f);  // 0.025→0.045 완만
             else
-                interval = Mathf.Lerp(0.07f, 0.35f, Mathf.Pow((progress - 0.6f) / 0.4f, 2.0f)); // 급감속
+                interval = Mathf.Lerp(0.045f, 0.25f, Mathf.Pow((progress - 0.6f) / 0.4f, 2.0f)); // 급감속
 
             colorIdx = (colorIdx + 1) % SHUFFLE_COLORS.Length;
             // 마지막 5칸은 최종 등급 색상으로 서서히 전환
@@ -373,7 +373,7 @@ public class PlayerHPSystem : MonoBehaviour
 
         Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 
-        yield return new WaitForSeconds(0.7f);
+        yield return new WaitForSeconds(0.5f);
 
         // === Phase 4: TimeScale 정지 → 터치 대기 ===
         Time.timeScale = 0f;

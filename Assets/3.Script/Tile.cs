@@ -21,7 +21,7 @@ public class Tile : MonoBehaviour
 
     [SerializeField] private Image background;
     [SerializeField] private TextMeshProUGUI valueText;
-    [SerializeField] private ParticleSystem mergeParticle; // 프리팹 연결용 (미사용 시 null)
+    // mergeParticle 필드 제거 — TileParticleSpawner가 전담
 
     // === Gun Mode Outline ===
     private Outline tileOutline;
@@ -161,7 +161,7 @@ public class Tile : MonoBehaviour
             background.color = berryGradient[Mathf.Clamp(idx, 0, berryGradient.Length - 1)];
             valueText.color  = idx < berryTextColors.Length ? berryTextColors[idx] : berryTextColors[^1];
         }
-        if (mergeParticle != null) { var m = mergeParticle.main; m.startColor = background.color; }
+
     }
 
     // ═══════════════════════════════════════════════
@@ -171,7 +171,6 @@ public class Tile : MonoBehaviour
     public void MergeWith(Tile other)
     {
         SetValue(value * 2);
-        particleSpawner.PlayMergeEffect(rectTransform.anchoredPosition);
         StartCoroutine(PopAnimation());
     }
 
@@ -331,59 +330,6 @@ public class Tile : MonoBehaviour
             if (waveObj != null) { activeWaveObjects.Remove(waveObj); Destroy(waveObj); }
             yield return new WaitForSeconds(0.15f);
         }
-    }
-
-    // ═══════════════════════════════════════════════
-    // Pool 반환 전 초기화 (풀링 지원)
-    // ═══════════════════════════════════════════════
-
-    /// <summary>Pool에 반환하기 전 상태 초기화. GridManager._tilePool.Return() 호출 전 반드시 호출.</summary>
-    public void ResetForPool()
-    {
-        // ── 이동 상태 ──
-        isMoving = false;
-        transform.localScale = Vector3.one;
-
-        // ── DOTween 전부 킬 (남은 tween이 alpha/color/scale 중간값을 만들 수 있음) ──
-        DOTween.Kill(transform);
-        RectTransform rt = GetComponent<RectTransform>();
-        if (rt != null) DOTween.Kill(rt);
-
-        // ── 루트 Image alpha 복원 (DimProtectedTiles가 0.4f로 설정할 수 있음) ──
-        Image rootImg = GetComponent<Image>();
-        if (rootImg != null)
-        {
-            Color c = rootImg.color;
-            c.a = 1f;
-            rootImg.color = c;
-        }
-
-        // ── background Image alpha/color 복원 ──
-        if (background != null)
-        {
-            Color c = background.color;
-            c.a = 1f;
-            background.color = c;
-        }
-
-        // ── valueText alpha 복원 ──
-        if (valueText != null)
-        {
-            Color c = valueText.color;
-            c.a = 1f;
-            valueText.color = c;
-        }
-
-        // ── CanvasGroup 복원 (혹시 붙어 있다면) ──
-        CanvasGroup cg = GetComponent<CanvasGroup>();
-        if (cg != null) cg.alpha = 1f;
-
-        // ── Outline 끄기 ──
-        isGunProtected = false;
-        isGunBlinking  = false;
-        if (blinkCoroutine != null) { StopCoroutine(blinkCoroutine); blinkCoroutine = null; }
-        StopUltrasonicEffect();
-        if (tileOutline != null) tileOutline.enabled = false;
     }
 
     // ═══════════════════════════════════════════════

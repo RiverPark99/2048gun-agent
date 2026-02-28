@@ -39,8 +39,7 @@ public class GridManager : MonoBehaviour
     private List<Tile> activeTiles = new List<Tile>();
     private float cellSize;
 
-    // Object Pool
-    private ObjectPool<Tile> _tilePool;
+    // Tile은 Instantiate/Destroy 방식 사용 (풀링 제거)
 
     // 점수
     private long score = 0;
@@ -76,9 +75,8 @@ public class GridManager : MonoBehaviour
         else
             bestScore = 0;
 
-        // Tile pool 생성 (워밍 8개: 4x4 기준 최대 16종의 절반)
-        Tile tilePrefabComp = tilePrefab.GetComponent<Tile>();
-        _tilePool = new ObjectPool<Tile>(tilePrefabComp, gridContainer, 8);
+        // Tile은 최대 16개, 상태가 복잡하여 풀링 대신 직접 Instantiate/Destroy 사용
+        // _tilePool 필드는 선언부에서 삭제
 
         InitializeGrid();
     }
@@ -118,10 +116,7 @@ public class GridManager : MonoBehaviour
         foreach (var tile in activeTiles)
         {
             if (tile != null)
-            {
-                tile.ResetForPool();
-                _tilePool.Return(tile);
-            }
+                Destroy(tile.gameObject);
         }
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
@@ -314,8 +309,7 @@ public class GridManager : MonoBehaviour
                             gunSystem.UpdateGaugeUIOnly();
 
                             activeTiles.Remove(tile);
-                            tile.ResetForPool();
-                            _tilePool.Return(tile);
+                            Destroy(tile.gameObject);
                             tile = null;
                             moved = true;
                             break;
@@ -517,9 +511,8 @@ public class GridManager : MonoBehaviour
         Vector2Int pos = emptyPositions[Random.Range(0, emptyPositions.Count)];
         int value = Random.value < 0.9f ? 2 : 4;
 
-        // Pool에서 타일 가져오기
-        Tile tile = _tilePool.Get();
-        tile.transform.SetParent(gridContainer, false);
+        // 타일 생성 (Instantiate)
+        Tile tile = Instantiate(tilePrefab, gridContainer).GetComponent<Tile>();
         RectTransform tileRect = tile.GetComponent<RectTransform>();
 
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
