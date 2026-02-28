@@ -304,7 +304,7 @@ public class PlayerHPSystem : MonoBehaviour
 
         // === Phase 1: 룰렛 (카드 셔플 픽 연출, 3.5초) ===
         // 초반: 배열 안에서 랜덤 점프 (빠름) → 후반: finalIndex로 점점 수렴 (느림)
-        float totalScan = 3.5f;
+        float totalScan = 2.5f;
         float elapsed = 0f;
         int currentIdx = Random.Range(0, allValues.Length);
         int colorIdx = 0;
@@ -389,7 +389,7 @@ public class PlayerHPSystem : MonoBehaviour
 
         Debug.Log($"[LevelUP] Max HP +{finalIncrease}: {maxHeat}");
 
-        yield return new WaitForSeconds(1.2f);
+        yield return new WaitForSeconds(0.7f);
 
         // === Phase 4: TimeScale 정지 → 터치 대기 ===
         Time.timeScale = 0f;
@@ -426,7 +426,7 @@ public class PlayerHPSystem : MonoBehaviour
         if (panelCG != null)
         {
             panelCG.DOKill();
-            panelCG.DOFade(0f, 1.0f).SetEase(Ease.InQuad).OnComplete(() => {
+            panelCG.DOFade(0f, 0.5f).SetEase(Ease.InQuad).OnComplete(() => {
                 if (levelUpPanel != null) levelUpPanel.SetActive(false);
                 if (levelUpRouletteText != null) levelUpRouletteText.gameObject.SetActive(false);
             });

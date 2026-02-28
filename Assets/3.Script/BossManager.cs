@@ -45,7 +45,7 @@ public class BossManager : MonoBehaviour
     public float bossSpawnDelay = 1.0f;
 
     [Header("Boss Attack Animation")]
-    [SerializeField] private float attackMotionDuration = 0.3f;
+    [SerializeField] private float attackMotionDuration = 0.22f;
 
     [Header("Enemy Data (ScriptableObject)")]
     [SerializeField] private EnemyData enemyData;
@@ -495,7 +495,7 @@ public class BossManager : MonoBehaviour
             attackBlinkAnimation.SetLoops(-1, LoopType.Restart);
         }
 
-        yield return new WaitForSeconds(0.25f);
+        yield return new WaitForSeconds(0.15f);
 
         if (bossImageArea != null)
         {
