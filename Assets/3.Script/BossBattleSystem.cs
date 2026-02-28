@@ -84,6 +84,9 @@ public class BossBattleSystem : MonoBehaviour
     private ProjectileManager projectileManager;
     private Sequence clearNewRecordAnim;
 
+    // DamageText Object Pool
+    private GameObjectPool _damageTextPool;
+
     public bool IsBossAttacking => isBossAttacking;
     public bool IsBossTransitioning => isBossTransitioning;
     public bool IsGameOver => isGameOver;
@@ -94,6 +97,10 @@ public class BossBattleSystem : MonoBehaviour
     public void Initialize()
     {
         projectileManager = FindAnyObjectByType<ProjectileManager>();
+
+        // DamageText pool 초기화 (워밍 4개)
+        if (damageTextPrefab != null && damageTextParent != null)
+            _damageTextPool = new GameObjectPool(damageTextPrefab, damageTextParent, 4);
 
         if (restartButton != null)
             restartButton.onClick.AddListener(RestartGame);
@@ -213,10 +220,26 @@ public class BossBattleSystem : MonoBehaviour
     // === 데미지 텍스트 (N0 포맷, 반짝+올라감 동시) ===
     public void ShowDamageText(long damage, int comboNum, bool isGunDamage, bool isChoco = false)
     {
-        if (damageTextPrefab == null || damageTextParent == null || hpText == null) return;
+        if (damageTextParent == null || hpText == null) return;
+        if (_damageTextPool == null && damageTextPrefab == null) return;
 
-        GameObject damageObj = Instantiate(damageTextPrefab, damageTextParent);
-        // 다른 UI 위에 표시되도록 sibling order 최상단
+        // Pool에서 가져오기 (폴 없으면 Instantiate 폴백)
+        GameObject damageObj = _damageTextPool != null
+            ? _damageTextPool.Get(damageTextParent)
+            : Instantiate(damageTextPrefab, damageTextParent);
+
+        // 풀에서 꾼낼 때 잘로 남은 상태 방어적 초기화
+        CanvasGroup existCG = damageObj.GetComponent<CanvasGroup>();
+        if (existCG != null) { existCG.DOKill(); existCG.alpha = 1f; }
+        RectTransform existRT = damageObj.GetComponent<RectTransform>();
+        if (existRT != null) { existRT.DOKill(); existRT.localScale = Vector3.one; }
+        TextMeshProUGUI existTMP = damageObj.GetComponent<TextMeshProUGUI>();
+        if (existTMP != null)
+        {
+            existTMP.DOKill();
+            Color ec = existTMP.color; ec.a = 1f; existTMP.color = ec;
+        }
+
         damageObj.transform.SetAsLastSibling();
         TextMeshProUGUI damageText = damageObj.GetComponent<TextMeshProUGUI>();
 
@@ -278,7 +301,30 @@ public class BossBattleSystem : MonoBehaviour
             seq.Insert(0f, damageRect.DOAnchorPosY(startY + 120f, 1.2f).SetEase(Ease.OutCubic));
             // 페이드: 0.5초부터 (반짝 끝난 뒤) 0.7초간
             seq.Insert(0.5f, canvasGroup.DOFade(0f, 0.7f).SetEase(Ease.InCubic));
-            seq.OnComplete(() => { if (damageObj != null) Destroy(damageObj); });
+            seq.OnComplete(() =>
+            {
+                if (damageObj == null) return;
+
+                // 풀 반환 전 시각적 상태 완전 초기화
+                // 1) DOTween 잔여 kill (중간값 방지)
+                damageRect.DOKill();
+                damageText.DOKill();
+                canvasGroup.DOKill();
+
+                // 2) 모든 시각 상태 복원
+                canvasGroup.alpha     = 1f;
+                damageRect.localScale = Vector3.one;
+
+                // 3) TMP color alpha 복원 (DOColor 중간에 kill되면 중간 alpha 잘로 남음)
+                Color tc = damageText.color;
+                tc.a = 1f;
+                damageText.color = tc;
+
+                if (_damageTextPool != null)
+                    _damageTextPool.Return(damageObj);
+                else
+                    Destroy(damageObj);
+            });
         }
     }
 

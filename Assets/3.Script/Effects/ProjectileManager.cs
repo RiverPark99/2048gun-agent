@@ -1,3 +1,8 @@
+// =====================================================
+// ProjectileManager.cs
+// Projectile 발사 관리 + Object Pool 적용
+// =====================================================
+
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
@@ -7,25 +12,29 @@ public class ProjectileManager : MonoBehaviour
     [Header("Projectile Prefabs")]
     public GameObject projectilePrefab;
 
+    [Header("Pool Settings")]
+    [SerializeField] private int initialPoolSize = 8;
+
     private Transform canvas;
-    private Transform bossTransform;
+    private GameObjectPool _projectilePool;
 
     void Awake()
     {
         canvas = FindAnyObjectByType<Canvas>()?.transform;
-        
+
         if (projectilePrefab == null)
-        {
             CreateProjectilePrefab();
-        }
+
+        // Pool 초기화
+        _projectilePool = new GameObjectPool(projectilePrefab, transform, initialPoolSize);
     }
 
     void CreateProjectilePrefab()
     {
         projectilePrefab = new GameObject("ProjectilePrefab");
         projectilePrefab.AddComponent<RectTransform>();
+        projectilePrefab.AddComponent<Image>();
         projectilePrefab.AddComponent<Projectile>();
-        
         projectilePrefab.SetActive(false);
     }
 
@@ -34,7 +43,6 @@ public class ProjectileManager : MonoBehaviour
         CreateAndFireProjectile(Projectile.ProjectileType.Knife, startPos, targetPos, laserColor, onHit);
     }
 
-    // ⭐ v5.0: Freeze 레이저 (두꺼운 얼음색 레이저)
     public void FireFreezeLaser(Vector3 startPos, Vector3 targetPos, Color laserColor, System.Action onHit = null)
     {
         CreateAndFireProjectile(Projectile.ProjectileType.Freeze, startPos, targetPos, laserColor, onHit);
@@ -53,7 +61,7 @@ public class ProjectileManager : MonoBehaviour
         for (int i = 0; i < bulletCount; i++)
         {
             int currentDamage = damagePerBullet + (i == bulletCount - 1 ? remainder : 0);
-            
+
             CreateAndFireProjectile(Projectile.ProjectileType.Bullet, startPos, targetPos, bulletColor, () =>
             {
                 onEachHit?.Invoke(currentDamage);
@@ -68,24 +76,18 @@ public class ProjectileManager : MonoBehaviour
     {
         if (projectilePrefab == null || canvas == null) return;
 
-        GameObject projectileObj = Instantiate(projectilePrefab, canvas);
-        projectileObj.SetActive(true);
+        // Pool에서 꺼내기
+        GameObject projectileObj = _projectilePool.Get(canvas);
         projectileObj.name = $"Projectile_{type}";
 
         Projectile projectile = projectileObj.GetComponent<Projectile>();
         if (projectile != null)
         {
-            projectile.Initialize(type, start, target, laserColor, onHit);
+            // 풀 반환 콜백을 onHit 이후 애니메이션 완료 시점에 연결
+            projectile.Initialize(type, start, target, laserColor, onHit,
+                returnToPool: () => _projectilePool.Return(projectileObj));
         }
     }
 
-    public void SetBossTransform(Transform boss)
-    {
-        bossTransform = boss;
-    }
-
-    public Vector3 GetBossPosition()
-    {
-        return bossTransform != null ? bossTransform.position : Vector3.zero;
-    }
+    public Vector3 GetBossPosition() => Vector3.zero;
 }

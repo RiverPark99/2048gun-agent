@@ -39,6 +39,9 @@ public class GridManager : MonoBehaviour
     private List<Tile> activeTiles = new List<Tile>();
     private float cellSize;
 
+    // Object Pool
+    private ObjectPool<Tile> _tilePool;
+
     // 점수
     private long score = 0;
     private long bestScore = 0;
@@ -72,6 +75,10 @@ public class GridManager : MonoBehaviour
             bestScore = parsedScore;
         else
             bestScore = 0;
+
+        // Tile pool 생성 (워밍 8개: 4x4 기준 최대 16종의 절반)
+        Tile tilePrefabComp = tilePrefab.GetComponent<Tile>();
+        _tilePool = new ObjectPool<Tile>(tilePrefabComp, gridContainer, 8);
 
         InitializeGrid();
     }
@@ -111,7 +118,10 @@ public class GridManager : MonoBehaviour
         foreach (var tile in activeTiles)
         {
             if (tile != null)
-                Destroy(tile.gameObject);
+            {
+                tile.ResetForPool();
+                _tilePool.Return(tile);
+            }
         }
         activeTiles.Clear();
         tiles = new Tile[gridSize, gridSize];
@@ -304,7 +314,8 @@ public class GridManager : MonoBehaviour
                             gunSystem.UpdateGaugeUIOnly();
 
                             activeTiles.Remove(tile);
-                            Destroy(tile.gameObject);
+                            tile.ResetForPool();
+                            _tilePool.Return(tile);
                             tile = null;
                             moved = true;
                             break;
@@ -506,14 +517,15 @@ public class GridManager : MonoBehaviour
         Vector2Int pos = emptyPositions[Random.Range(0, emptyPositions.Count)];
         int value = Random.value < 0.9f ? 2 : 4;
 
-        GameObject tileObj = Instantiate(tilePrefab, gridContainer);
-        Tile tile = tileObj.GetComponent<Tile>();
-        RectTransform tileRect = tileObj.GetComponent<RectTransform>();
+        // Pool에서 타일 가져오기
+        Tile tile = _tilePool.Get();
+        tile.transform.SetParent(gridContainer, false);
+        RectTransform tileRect = tile.GetComponent<RectTransform>();
 
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
 
-        TileColor tileColor = (unlockManager != null) ? unlockManager.GetTileColorForStage() 
+        TileColor tileColor = (unlockManager != null) ? unlockManager.GetTileColorForStage()
             : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry);
         tile.SetColor(tileColor);
 
@@ -523,10 +535,8 @@ public class GridManager : MonoBehaviour
         tiles[pos.x, pos.y] = tile;
         activeTiles.Add(tile);
 
-        tileObj.transform.localScale = Vector3.zero;
-        StartCoroutine(ScaleInAnimation(tileObj));
-
-        // 최고 타일 glow 갱신 (삭제됨 — Tile outline은 Gun mode만 사용)
+        tile.transform.localScale = Vector3.zero;
+        StartCoroutine(ScaleInAnimation(tile.gameObject));
 
         if (gunSystem != null && gunSystem.IsGunMode)
             UpdateTileBorders();
