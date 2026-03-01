@@ -63,6 +63,20 @@ public class BossManager : MonoBehaviour
     [SerializeField] private Slider guardAtkSlider;
     [SerializeField] private int guardAtkIncreaseTurns = 20;
 
+    [Header("Guard 색상 루프 (bossImageArea)")]
+    [SerializeField] private Color guardColorA = new Color(1.0f, 0.75f, 0.5f, 1.0f);  // 루프 A색 (기본 오렌지)
+    [SerializeField] private Color guardColorB = new Color(0.9f, 0.2f, 0.15f, 1.0f);  // 루프 B색 (붉은색)
+    [SerializeField] private float guardColorSpeed = 1.0f;
+
+    [Header("Guard HP Bar 색상 루프")]
+    [SerializeField] private Color guardHPBarColorA = new Color(1f, 0.6f, 0.15f, 1f);   // 루프 A색 (주황)
+    [SerializeField] private Color guardHPBarColorB = new Color(0.9f, 0.2f, 0.15f, 1f); // 루프 B색 (붉은색)
+    [SerializeField] private float guardHPBarColorSpeed = 1.5f;
+
+    [Header("Guard 해제 후 색상 (bossImageArea / HP Bar)")]
+    [SerializeField] private Color clearEnemyColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);   // Guard 해제 후 보스 이미지색
+    [SerializeField] private Color clearHPBarColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);   // Guard 해제 후 HP bar색
+
     [Header("Guard 해제 후 Clear 모드 배경 색상")]
     [SerializeField] private Color clearModeGroundColor = new Color(0.2f, 0.15f, 0.3f, 1f);
 
@@ -240,25 +254,25 @@ public class BossManager : MonoBehaviour
         if (bossImageArea == null) return;
         StopGuardColorAnimation();
 
-        Color pastelRedColor = new Color(0.9f, 0.2f, 0.15f, 1.0f);
-        Color pastelOrangeColor = new Color(1.0f, 0.75f, 0.5f, 1.0f);
-
         Material mat = new Material(Shader.Find("UI/Default"));
-        mat.SetColor("_Color", pastelOrangeColor);
+        mat.SetColor("_Color", guardColorA);
         bossImageArea.material = mat;
 
+        Color currentA = guardColorA;
         guardColorSequence = DOTween.Sequence();
         guardColorSequence.Append(
-            DOTween.To(() => pastelOrangeColor, x => {
+            DOTween.To(() => currentA, x => {
+                currentA = x;
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
-            }, pastelRedColor, 1.0f).SetEase(Ease.InOutSine)
+            }, guardColorB, guardColorSpeed).SetEase(Ease.InOutSine)
         );
         guardColorSequence.Append(
-            DOTween.To(() => pastelRedColor, x => {
+            DOTween.To(() => currentA, x => {
+                currentA = x;
                 if (bossImageArea != null && bossImageArea.material != null)
                     bossImageArea.material.SetColor("_Color", x);
-            }, pastelOrangeColor, 1.0f).SetEase(Ease.InOutSine)
+            }, guardColorA, guardColorSpeed).SetEase(Ease.InOutSine)
         );
         guardColorSequence.SetLoops(-1, LoopType.Restart);
 
@@ -277,13 +291,11 @@ public class BossManager : MonoBehaviour
         Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
         if (fillImage == null) return;
 
-        Color orangeColor = new Color(1f, 0.6f, 0.15f);
-        Color redColor = new Color(0.9f, 0.2f, 0.15f);
-        fillImage.color = orangeColor;
+        fillImage.color = guardHPBarColorA;
 
         hpBarGlowSequence = DOTween.Sequence();
-        hpBarGlowSequence.Append(fillImage.DOColor(redColor, 1.5f).SetEase(Ease.InOutSine));
-        hpBarGlowSequence.Append(fillImage.DOColor(orangeColor, 1.5f).SetEase(Ease.InOutSine));
+        hpBarGlowSequence.Append(fillImage.DOColor(guardHPBarColorB, guardHPBarColorSpeed).SetEase(Ease.InOutSine));
+        hpBarGlowSequence.Append(fillImage.DOColor(guardHPBarColorA, guardHPBarColorSpeed).SetEase(Ease.InOutSine));
         hpBarGlowSequence.SetLoops(-1, LoopType.Restart);
     }
 
@@ -292,14 +304,14 @@ public class BossManager : MonoBehaviour
         if (hpBarGlowSequence != null) { hpBarGlowSequence.Kill(); hpBarGlowSequence = null; }
     }
 
-    void SetHPBarRedFixed()
+    void SetHPBarClearColor()
     {
         if (hpSlider == null) return;
         Image fillImage = hpSlider.fillRect?.GetComponent<Image>();
         if (fillImage != null)
         {
             fillImage.DOKill();
-            fillImage.color = new Color(0.9f, 0.2f, 0.15f);
+            fillImage.color = clearHPBarColor;
         }
     }
 
@@ -309,10 +321,22 @@ public class BossManager : MonoBehaviour
         isGuardMode = false;
         isClearMode = true;
         StopGuardColorAnimation();
-        ApplyOrangeColor();
+
+        // Guard 해제 후 bossImageArea 색상
+        if (bossImageArea != null)
+        {
+            if (bossImageArea.material == null)
+                bossImageArea.material = new Material(Shader.Find("UI/Default"));
+            bossImageArea.material.DOKill();
+            DOTween.To(
+                () => bossImageArea.material.GetColor("_Color"),
+                x => { if (bossImageArea != null && bossImageArea.material != null) bossImageArea.material.SetColor("_Color", x); },
+                clearEnemyColor, 0.4f
+            ).SetEase(Ease.InOutSine);
+        }
 
         StopHPBarGlowAnimation();
-        SetHPBarRedFixed();
+        SetHPBarClearColor();
         HideGuardAtkSlider();
 
         maxHP = 2147483647;
@@ -829,7 +853,7 @@ public class BossManager : MonoBehaviour
             bossImageArea.sprite = bossSprites[stage39SpriteIndex];
 
         ApplyRedColor();
-        SetHPBarRedFixed();
+        SetHPBarClearColor();
         HideGuardAtkSlider();
         maxHP = 2147483647;
         currentHP = maxHP;
