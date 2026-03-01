@@ -1,23 +1,15 @@
 // =====================================================
-// BerryMode.cs
+// BerryMode.cs  v2.0
 // Berry 색상 고정 + HP drain 생존 모드
 //
-// ── 규칙 ──
-//   • 타일 색상: Berry 고정
-//   • HP: 내부 1000, 표시 ÷10 → 100
-//   • HP drain: 1초마다 레벨 기반 감소
-//     level = floor(log2(최대 타일 값)) - 1  (최소 1)
-//     drainPerLevel[level] SerializeField
-//   • Berry merge 회복: berryHealAmount (int, SerializeField)
-//   • 콤보 회복: ComboHeatRecover × 10 배
-//   • 점수: totalMergedValueBase × comboScoreMultipliers[mergeCount]
-//   • Continue: HP 최대 회복 + Gun count 20 지급 (1회)
-//   • 게임오버: HP drain → 0
+// v2.0:
+//   • GameModeBase 공통 베스트 스코어 / 플로팅 텍스트 / NewRecord 연출 적용
 // =====================================================
 
 using UnityEngine;
 using TMPro;
 using System.Collections;
+using DG.Tweening;
 
 public class BerryMode : GameModeBase
 {
@@ -43,15 +35,17 @@ public class BerryMode : GameModeBase
     [Header("Gun 참조 (Continue용)")]
     [SerializeField] private GunSystem gunSystem;
 
-    [Header("Continue UI")]
+    [Header("Continue / GameOver UI")]
     [SerializeField] private GameObject continuePanel;
-
-    private long bestScore = 0;
-    private const string BestScoreKey = "BestScore_Berry";
+    [SerializeField] private GameObject gameOverPanel;
+    [SerializeField] private TextMeshProUGUI gameOverScoreText;
+    [SerializeField] private TextMeshProUGUI gameOverBestText;
 
     private Coroutine drainCoroutine;
     private bool isContinueUsed = false;
     private const int ContinueGunCount = 20;
+
+    protected override string BestScorePlayerPrefsKey => "BestScore_Berry";
 
     // ─────────────────────────────────────────────
     // 초기화
@@ -73,9 +67,6 @@ public class BerryMode : GameModeBase
             playerHP.SetHeatToMax();
             playerHP.UpdateHeatUI(true);
         }
-
-        string saved = PlayerPrefs.GetString(BestScoreKey, "0");
-        long.TryParse(saved, out bestScore);
 
         isContinueUsed = false;
         UpdateScoreUI();
@@ -155,29 +146,24 @@ public class BerryMode : GameModeBase
         {
             int heal = berryHealAmount * summary.berryMergeCount;
             playerHP.AddHeat(heal);
-            Debug.Log($"[BerryMode] Berry merge ×{summary.berryMergeCount} → +{heal} HP");
         }
     }
 
     protected override long CalculateScore(TurnMergeSummary summary)
     {
         if (summary.mergeCount <= 0) return 0;
-        float mult = GetComboMultiplier(summary.mergeCount);
-        long score = (long)(summary.totalMergedValueBase * mult);
-        Debug.Log($"[BerryMode] score={score} (base={summary.totalMergedValueBase} × {mult:F2})");
+        float mult  = GetComboMultiplier(summary.mergeCount);
+        long  score = (long)(summary.totalMergedValueBase * mult);
+        Debug.Log($"[BerryMode] score={score} (base={summary.totalMergedValueBase} x{mult:F2})");
         return score;
     }
 
-    // 콤보 회복 × 10배
     protected override void ApplyComboHeal(TurnMergeSummary summary)
     {
         if (summary.mergeCount <= 0 || playerHP == null) return;
-
         int[] recover = playerHP.ComboHeatRecover;
-        int idx = Mathf.Min(summary.mergeCount, recover.Length - 1);
+        int idx  = Mathf.Min(summary.mergeCount, recover.Length - 1);
         int heal = recover[idx] * 10;
-
-        if (summary.hadBerryMerge) heal *= 2;
         if (heal > 0) playerHP.AddHeat(heal);
     }
 
@@ -186,22 +172,27 @@ public class BerryMode : GameModeBase
         if (scoreText != null)
             scoreText.text = currentScore.ToString("N0");
 
-        if (currentScore > bestScore)
-        {
-            bestScore = currentScore;
-            PlayerPrefs.SetString(BestScoreKey, bestScore.ToString());
-            PlayerPrefs.Save();
-        }
-
+        long best = LoadBestScore();
         if (bestScoreText != null)
-            bestScoreText.text = bestScore.ToString("N0");
+            bestScoreText.text = best.ToString("N0");
     }
 
     protected override void OnGameOver()
     {
         StopDrain();
-        Debug.Log($"[BerryMode] HP 소진 — 게임오버. 최종 점수: {currentScore}");
-        // TODO: GameOver UI 연결
+        Debug.Log($"[BerryMode] Game Over. Score: {currentScore}");
+
+        if (gameOverPanel != null)
+        {
+            gameOverPanel.SetActive(true);
+            if (gameOverScoreText != null) gameOverScoreText.text = currentScore.ToString("N0");
+            if (gameOverBestText  != null) gameOverBestText.text  = LoadBestScore().ToString("N0");
+
+            CanvasGroup cg = gameOverPanel.GetComponent<CanvasGroup>()
+                          ?? gameOverPanel.AddComponent<CanvasGroup>();
+            cg.alpha = 0f;
+            cg.DOFade(1f, 0.4f).SetEase(Ease.OutQuad);
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -210,7 +201,6 @@ public class BerryMode : GameModeBase
 
     public override void OnBoardFull()
     {
-        // Continue 미사용 + Gun 있으면 Continue, 아니면 게임오버
         if (!isContinueUsed && gunSystem != null && gunSystem.HasBullet)
             TryContinue();
         else
@@ -236,21 +226,13 @@ public class BerryMode : GameModeBase
         }
 
         if (gunSystem != null)
-            SetGunBulletCount(ContinueGunCount);
+            gunSystem.SetBulletCount(ContinueGunCount);
 
         if (continuePanel != null)
             continuePanel.SetActive(true);
 
-        Debug.Log($"[BerryMode] Continue! HP 최대 회복 + Gun ×{ContinueGunCount}");
+        Debug.Log($"[BerryMode] Continue! HP max + Gun x{ContinueGunCount}");
         StartDrain();
-    }
-
-    // GunSystem에 SetBulletCount 공개 메서드가 없을 경우를 대비한 래퍼
-    // GunSystem에 해당 메서드가 추가되면 직접 호출로 교체
-    void SetGunBulletCount(int count)
-    {
-        // TODO: gunSystem.SetBulletCount(count) — GunSystem에 메서드 추가 후 교체
-        Debug.Log($"[BerryMode] Gun count {count} 지급 예정 (GunSystem.SetBulletCount 미구현)");
     }
 
     // ─────────────────────────────────────────────

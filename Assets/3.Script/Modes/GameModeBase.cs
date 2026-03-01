@@ -1,23 +1,15 @@
 // =====================================================
-// GameModeBase.cs
+// GameModeBase.cs  v2.0
 // ClassicChocoMode / BerryMode 공통 기반 (Template Method Pattern)
 //
-// ── 역할 ──
-//   GridManager의 ChallengeMode 직접 참조 로직은 일절 건드리지 않는다.
-//   이 클래스를 상속한 모드가 modeListener로 연결되면,
-//   GridManager는 직접 처리 블록을 skip하고 OnTurnMergesComplete에 위임한다.
-//
-// ── Template Method 흐름 ──
-//   OnTurnMergesComplete(summary)
-//     ├─ ProcessMergeBonus(summary)   ← 머지별 bonus HP (override)
-//     ├─ CalculateScore(summary)      ← 점수 계산 (abstract)
-//     ├─ ApplyComboHeal(summary)      ← 콤보 회복 (virtual)
-//     ├─ AddScore(score)              ← 점수 누적 (공통)
-//     ├─ UpdateScoreUI()              ← UI 갱신 (abstract)
-//     └─ OnTurnProcessed(summary)     ← 모드별 후처리 (virtual)
+// v2.0 추가:
+//   • 스코어 플로팅 텍스트 시스템 (머지 색상 + 콤보 색상)
+//   • 베스트 스코어 / NewRecord 연출 공통화
 // =====================================================
 
 using UnityEngine;
+using TMPro;
+using DG.Tweening;
 
 public abstract class GameModeBase : MonoBehaviour, IGridEventListener
 {
@@ -25,7 +17,31 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
     [SerializeField] protected GridManager gridManager;
     [SerializeField] protected PlayerHPSystem playerHP;
 
+    [Header("스코어 플로팅 텍스트")]
+    [SerializeField] protected GameObject scoreFloatPrefab;   // damageTextPrefab 재사용 가능
+    [SerializeField] protected Transform  scoreFloatParent;   // 스코어 텍스트 위 빈 Transform
+    [SerializeField] protected float      scoreFloatSize   = 38f;
+    [SerializeField] protected float      scoreFloatRiseY  = 70f;
+    [SerializeField] protected float      scoreFloatDuration = 0.9f;
+
+    [Header("콤보 플로팅 색상 (index = mergeCount, 0/1=단일, 2=노랑, 3=주황, 4=빨강, 5+=보라)")]
+    [SerializeField] protected Color[] comboFloatColors = new Color[]
+    {
+        new Color(0.85f, 0.85f, 0.85f),  // 0: 미사용
+        new Color(0.85f, 0.85f, 0.85f),  // 1: 1콤보 (회색)
+        new Color(1.00f, 0.85f, 0.30f),  // 2: 2콤보 (노랑)
+        new Color(1.00f, 0.55f, 0.10f),  // 3: 3콤보 (주황)
+        new Color(1.00f, 0.25f, 0.10f),  // 4: 4콤보 (빨강)
+        new Color(0.80f, 0.10f, 0.90f),  // 5+: 보라
+    };
+
+    [Header("NewRecord 연출")]
+    [SerializeField] protected TextMeshProUGUI newRecordText;   // "NEW RECORD!" 라벨 (평소 비활성)
+    [SerializeField] protected Color newRecordColor = new Color(1f, 0.85f, 0.2f);
+    [SerializeField] protected float newRecordPopScale = 1.6f;
+
     protected long currentScore = 0;
+    private bool _newRecordShown = false;   // 이번 판에서 최초 NewRecord 연출 여부
 
     // ─────────────────────────────────────────────
     // 초기화
@@ -37,10 +53,11 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
         if (playerHP   == null) playerHP   = GetComponent<PlayerHPSystem>();
     }
 
-    /// <summary>게임 시작/리셋 시 모드 상태 초기화</summary>
     public virtual void OnModeStart()
     {
-        currentScore = 0;
+        currentScore    = 0;
+        _newRecordShown = false;
+        if (newRecordText != null) newRecordText.gameObject.SetActive(false);
         UpdateScoreUI();
     }
 
@@ -50,12 +67,9 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
 
     public virtual void OnTileMerged(MergeInfo info) { }
 
-    /// <summary>
-    /// Template Method: 한 턴 머지 완료 후 GridManager가 위임하는 진입점
-    /// </summary>
     public void OnTurnMergesComplete(TurnMergeSummary summary)
     {
-        // 1. 머지별 즉각 보너스 (Berry heal 등)
+        // 1. 머지별 즉각 보너스
         ProcessMergeBonus(summary);
 
         // 2. 점수 계산
@@ -74,8 +88,11 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
             if (netChange > 0)  playerHP.FlashHealGreen();
         }
 
-        // 5. 점수 반영
-        AddScore(score);
+        // 5. 점수 반영 + 플로팅 텍스트
+        if (score > 0)
+        {
+            AddScore(score, summary);
+        }
 
         // 6. 게임오버 체크
         if (playerHP != null && playerHP.CurrentHeat <= 0)
@@ -89,11 +106,8 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
     }
 
     public virtual void OnAfterMove() { }
-
     public virtual void OnBoardFull() => OnGameOver();
-
     public virtual void OnTileSpawned(Vector2Int pos, int value) { }
-
     public virtual TileColor? GetSpawnTileColor()   => null;
     public virtual TileColor? GetMergeResultColor() => null;
 
@@ -101,41 +115,144 @@ public abstract class GameModeBase : MonoBehaviour, IGridEventListener
     // Template Method Hooks
     // ─────────────────────────────────────────────
 
-    /// <summary>머지별 즉각 보너스 처리 (Berry heal, 이펙트 등)</summary>
     protected virtual void ProcessMergeBonus(TurnMergeSummary summary) { }
-
-    /// <summary>이번 턴 획득 점수 계산 [필수 구현]</summary>
     protected abstract long CalculateScore(TurnMergeSummary summary);
 
-    /// <summary>콤보 기반 HP 회복 적용</summary>
     protected virtual void ApplyComboHeal(TurnMergeSummary summary)
     {
         if (summary.mergeCount <= 0 || playerHP == null) return;
-
         int[] recover = playerHP.ComboHeatRecover;
-        int idx = Mathf.Min(summary.mergeCount, recover.Length - 1);
+        int idx  = Mathf.Min(summary.mergeCount, recover.Length - 1);
         int heal = recover[idx];
-
-        if (summary.hadBerryMerge) heal *= 2;
         if (heal > 0) playerHP.AddHeat(heal);
     }
 
-    /// <summary>점수 누적 및 UI 갱신</summary>
+    /// <summary>점수 누적 → UI 갱신 → 플로팅 텍스트 → NewRecord 체크</summary>
+    protected void AddScore(long score, TurnMergeSummary summary)
+    {
+        currentScore += score;
+
+        bool isNewRecord = CheckAndSaveBestScore(currentScore);
+        UpdateScoreUI();
+
+        // 플로팅 텍스트
+        ShowScoreFloat(score, summary.mergeCount);
+
+        // NewRecord 연출 (이번 판 최초 1회만 팝업 → 이후는 bestScoreText만 갱신)
+        if (isNewRecord && !_newRecordShown)
+        {
+            _newRecordShown = true;
+            PlayNewRecordEffect();
+        }
+    }
+
+    // 하위 호환용 (summary 없이 호출 가능)
     protected void AddScore(long score)
     {
         currentScore += score;
+        CheckAndSaveBestScore(currentScore);
         UpdateScoreUI();
     }
 
-    /// <summary>점수 UI 갱신 [필수 구현]</summary>
     protected abstract void UpdateScoreUI();
-
-    /// <summary>턴 처리 완료 후 모드별 추가 동작</summary>
     protected virtual void OnTurnProcessed(TurnMergeSummary summary) { }
 
-    /// <summary>게임오버 처리</summary>
     protected virtual void OnGameOver()
     {
         Debug.Log($"[{GetType().Name}] Game Over. Score: {currentScore}");
+    }
+
+    // ─────────────────────────────────────────────
+    // 베스트 스코어 (하위 클래스에서 Key 지정)
+    // ─────────────────────────────────────────────
+
+    protected abstract string BestScorePlayerPrefsKey { get; }
+
+    protected long LoadBestScore()
+    {
+        string saved = PlayerPrefs.GetString(BestScorePlayerPrefsKey, "0");
+        long.TryParse(saved, out long best);
+        return best;
+    }
+
+    /// <summary>currentScore가 bestScore를 넘으면 저장 후 true 반환</summary>
+    protected bool CheckAndSaveBestScore(long score)
+    {
+        long best = LoadBestScore();
+        if (score > best)
+        {
+            PlayerPrefs.SetString(BestScorePlayerPrefsKey, score.ToString());
+            PlayerPrefs.Save();
+            return true;
+        }
+        return false;
+    }
+
+    // ─────────────────────────────────────────────
+    // 스코어 플로팅 텍스트
+    // ─────────────────────────────────────────────
+
+    protected void ShowScoreFloat(long score, int mergeCount)
+    {
+        if (scoreFloatPrefab == null || scoreFloatParent == null) return;
+
+        GameObject obj = Instantiate(scoreFloatPrefab, scoreFloatParent);
+        TextMeshProUGUI txt = obj.GetComponent<TextMeshProUGUI>();
+        if (txt == null) { Destroy(obj); return; }
+
+        // 색상: 콤보 수에 따라
+        Color floatColor = GetComboFloatColor(mergeCount);
+        txt.color     = floatColor;
+        txt.fontSize  = scoreFloatSize;
+        txt.text      = $"+{score:N0}";
+
+        RectTransform rt = obj.GetComponent<RectTransform>();
+        CanvasGroup   cg = obj.GetComponent<CanvasGroup>() ?? obj.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+
+        DOTween.Sequence()
+            .Append(rt.DOAnchorPosY(rt.anchoredPosition.y + scoreFloatRiseY, scoreFloatDuration).SetEase(Ease.OutCubic))
+            .Join(cg.DOFade(0f, scoreFloatDuration).SetEase(Ease.InCubic))
+            .Insert(0f,   rt.DOScale(1.25f, 0.1f).SetEase(Ease.OutQuad))
+            .Insert(0.1f, rt.DOScale(1f,    0.12f).SetEase(Ease.InQuad))
+            .OnComplete(() => { if (obj != null) Destroy(obj); });
+    }
+
+    Color GetComboFloatColor(int mergeCount)
+    {
+        if (comboFloatColors == null || comboFloatColors.Length == 0)
+            return Color.white;
+        int idx = Mathf.Clamp(mergeCount, 0, comboFloatColors.Length - 1);
+        return comboFloatColors[idx];
+    }
+
+    // ─────────────────────────────────────────────
+    // NewRecord 연출
+    // ─────────────────────────────────────────────
+
+    protected virtual void PlayNewRecordEffect()
+    {
+        if (newRecordText == null) return;
+
+        newRecordText.gameObject.SetActive(true);
+        newRecordText.color = newRecordColor;
+
+        RectTransform rt = newRecordText.GetComponent<RectTransform>();
+        rt.DOKill();
+        newRecordText.DOKill();
+        rt.localScale = Vector3.one * newRecordPopScale;
+
+        DOTween.Sequence()
+            .Append(rt.DOScale(1f, 0.35f).SetEase(Ease.OutBack))
+            .AppendInterval(1.5f)
+            .Append(newRecordText.DOFade(0f, 0.4f).SetEase(Ease.InQuad))
+            .OnComplete(() =>
+            {
+                if (newRecordText != null)
+                {
+                    newRecordText.gameObject.SetActive(false);
+                    Color c = newRecordText.color; c.a = 1f; newRecordText.color = c;
+                }
+            });
     }
 }
