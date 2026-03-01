@@ -353,8 +353,7 @@ public class BossBattleSystem : MonoBehaviour
         if (gunSystem.IsFeverMode)
             StartCoroutine(gunSystem.SyncFreezeWithBossRespawn());
 
-        if (currentStage == 39)
-            gridManager.ResetInfiniteBossMoveCount();
+
     }
 
     public void UpdateInfiniteBossEnemyBarColor()

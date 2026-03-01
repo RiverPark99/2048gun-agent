@@ -202,6 +202,17 @@ public class UnlockManager : MonoBehaviour
         fingerGuideImage.gameObject.SetActive(true);
         fingerGuideImage.color = new Color(1f, 1f, 1f, 0.9f);
 
+        // ⭐ 루트 Canvas를 찾아 거기의 최상위 자식으로 이동 → 다른 UI에 가릴 일 없음
+        Canvas rootCanvas = fingerGuideImage.canvas;
+        if (rootCanvas != null)
+        {
+            Canvas[] parentCanvases = fingerGuideImage.GetComponentsInParent<Canvas>(true);
+            foreach (var c in parentCanvases)
+                if (c.isRootCanvas) { rootCanvas = c; break; }
+            fingerGuideImage.transform.SetParent(rootCanvas.transform, true);
+            fingerGuideImage.transform.SetAsLastSibling();
+        }
+
         RectTransform fingerRT = fingerGuideImage.GetComponent<RectTransform>();
         RectTransform gunBtnRT = gunButtonRef.GetComponent<RectTransform>();
 

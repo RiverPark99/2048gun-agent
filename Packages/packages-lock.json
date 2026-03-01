@@ -21,6 +21,13 @@
       },
       "hash": "4d59d9f5d3ad841a2d2efdd731ce76d97aff4948"
     },
+    "com.gilzoide.lottie-player": {
+      "version": "https://github.com/gilzoide/unity-lottie-player.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "405223bfd248c57a58d6e17979d5d732aa2392fe"
+    },
     "com.nobi.roundedcorners": {
       "version": "https://github.com/kirevdokimov/Unity-UI-Rounded-Corners.git",
       "depth": 0,

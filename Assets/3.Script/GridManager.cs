@@ -19,10 +19,6 @@ public class GridManager : MonoBehaviour
     [SerializeField] private GameObject cellPrefab;
     [SerializeField] private float cellSpacing = 20f;
 
-    [Header("UI")]
-    [SerializeField] private TextMeshProUGUI scoreText;
-    [SerializeField] private TextMeshProUGUI bestScoreText;
-
     [Header("Turn & Stage UI")]
     [SerializeField] private TextMeshProUGUI turnText;
     [SerializeField] private TextMeshProUGUI stageText;
@@ -46,10 +42,6 @@ public class GridManager : MonoBehaviour
 
     // Tile은 Instantiate/Destroy 방식 사용 (풀링 제거)
 
-    // 점수
-    private long score = 0;
-    private long bestScore = 0;
-
     // 상태
     private bool isProcessing = false;
     private int currentTurn = 0;
@@ -69,7 +61,6 @@ public class GridManager : MonoBehaviour
     public bool IsProcessing { get => isProcessing; set => isProcessing = value; }
     public int CurrentTurn => currentTurn;
     public int ComboCount => comboCount;
-    public long Score => score;
     public RectTransform GridContainer => gridContainer;
 
     public void Initialize()
@@ -94,12 +85,6 @@ public class GridManager : MonoBehaviour
                 }
             }
         }
-        string bestScoreStr = PlayerPrefs.GetString("BestScore", "0");
-        if (long.TryParse(bestScoreStr, out long parsedScore))
-            bestScore = parsedScore;
-        else
-            bestScore = 0;
-
         // Tile은 최대 16개, 상태가 복잡하여 풀링 대신 직접 Instantiate/Destroy 사용
         // _tilePool 필드는 선언부에서 삭제
 
@@ -127,11 +112,9 @@ public class GridManager : MonoBehaviour
 
     public void StartNewGame()
     {
-        score = 0;
         currentTurn = 0;
         comboCount = 0;
 
-        UpdateScoreUI();
         SpawnTile();
         SpawnTile();
     }
@@ -219,7 +202,6 @@ public class GridManager : MonoBehaviour
                         {
                             Tile targetTile = newTiles[nextPos.x, nextPos.y];
                             int mergedValue = tile.value * 2;
-                            score += mergedValue;
                             totalMergedValue += mergedValue;
 
                             TileColor color1 = tile.tileColor;
@@ -298,7 +280,6 @@ public class GridManager : MonoBehaviour
                                     gunSystem.ShowMergeGaugeChange(1, false);
                                 }
 
-                                score += mergedValue;
                                 Debug.Log($"MIX MERGE! x2 DMG, HP+{mixHeal}(6%), Gauge +1 ({gunSystem.MergeGauge}/40)");
                             }
 
@@ -451,7 +432,6 @@ public class GridManager : MonoBehaviour
                 gunSystem.ShowMergeGaugeChange(1, true); // cap 도달 시 내부에서 차단됨
             }
 
-            UpdateScoreUI();
             comboCount = mergeCountThisTurn;
 
             if (playerHP.CurrentHeat <= 0)
@@ -672,13 +652,6 @@ public class GridManager : MonoBehaviour
         }
     }
 
-    // === 점수 UI ===
-    void UpdateScoreUI()
-    {
-        // Score/Best UI는 Damage Record로 대체됨 → 더 이상 갱신 안함
-        // GunSystem의 currentRecordText / bestRecordText가 대신 사용됨
-    }
-
     // === Turn/Stage UI ===
     // ⭐ v6.4: 이전 스테이지 추적 (DOTween 효과용)
     private int lastDisplayedStage = -1;
@@ -754,27 +727,6 @@ public class GridManager : MonoBehaviour
 
         return new Vector2(posX, posY);
     }
-
-    // === 타일 합계 ===
-    public long GetAllTilesSum()
-    {
-        long sum = 0;
-        foreach (var tile in activeTiles)
-        {
-            if (tile != null)
-                sum += tile.value;
-        }
-        return sum;
-    }
-
-    // 하위 호환용
-    public void ResetInfiniteBossMoveCount() { }
-
-    // Tile outline은 Gun mode만 사용 — Freeze/Glow outline 제거됨
-    // 하위 호환 스텁
-    public void StartAllTileFreezeLoop() { }
-    public void StopAllTileFreezeLoop()  { }
-    public void UpdateTopTileGlow()      { }
 
     // Freeze 중 최대 타일 값 반환 (GunSystem에서 표시용)
     public int GetMaxTileValue()

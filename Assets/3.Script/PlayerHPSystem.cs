@@ -279,6 +279,8 @@ public class PlayerHPSystem : MonoBehaviour
         if (levelUpPanel != null)
         {
             levelUpPanel.SetActive(true);
+            // 손가락 가이드 등 다른 UI에 가리지 않도록 Canvas 최상단으로 이동
+            levelUpPanel.transform.SetAsLastSibling();
             panelCG = levelUpPanel.GetComponent<CanvasGroup>();
             if (panelCG == null) panelCG = levelUpPanel.AddComponent<CanvasGroup>();
             panelCG.alpha = 1f;

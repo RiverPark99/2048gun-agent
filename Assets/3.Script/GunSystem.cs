@@ -725,17 +725,13 @@ public class GunSystem : MonoBehaviour
 
         if (!bossManager.IsClearMode()) feverMergeIncreaseAtk++;
 
-        // Freeze 타일 텍스트 색상 루프 시작
-        if (gridManager != null) gridManager.StartAllTileFreezeLoop();
+
     }
 
     void EndFever()
     {
         // Damage record 갱신
         CheckAndUpdateDamageRecord();
-
-        // Freeze 타일 텍스트 색상 루프 종료
-        if (gridManager != null) gridManager.StopAllTileFreezeLoop();
 
         if (activeFeverParticle != null) { Destroy(activeFeverParticle); activeFeverParticle = null; }
         if (feverBackgroundImage != null) { feverBackgroundImage.DOKill(); feverBackgroundImage.gameObject.SetActive(false); }
