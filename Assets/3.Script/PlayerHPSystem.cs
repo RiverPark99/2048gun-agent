@@ -55,6 +55,16 @@ public class PlayerHPSystem : MonoBehaviour
     [Header("체력 변화 텍스트 크기")]
     [SerializeField] private float heatChangeTextSize = 40f;
 
+    [Header("Combo Heat Recover 텍스트 색상 (index 0 = combo2, 1 = combo3, ...)")]
+    [SerializeField] private Color baseHealColor = new Color(0.3f, 1f, 0.3f);  // Berry/Mix 기본 회복 (초록)
+    [SerializeField] private Color[] comboHealColors = new Color[]
+    {
+        new Color(1.0f, 0.85f, 0.3f),  // combo 2 (노랑)
+        new Color(1.0f, 0.55f, 0.1f),  // combo 3 (주황)
+        new Color(1.0f, 0.25f, 0.1f),  // combo 4 (빨강)
+        new Color(0.8f, 0.1f, 0.9f),   // combo 5+ (보라)
+    };
+
     [Header("References")]
     [SerializeField] private GunSystem gunSystem;
 
@@ -148,6 +158,12 @@ public class PlayerHPSystem : MonoBehaviour
     public void SetHeatToMax()
     {
         currentHeat = maxHeat;
+    }
+
+    /// <summary>BerryMode 등 외부 모드에서 maxHeat를 직접 설정할 때 사용</summary>
+    public void SetMaxHeatDirect(int value)
+    {
+        maxHeat = value;
     }
 
     public void ClampHeat()
@@ -563,6 +579,7 @@ public class PlayerHPSystem : MonoBehaviour
     public void ShowHeatChangeText(int change, string bonusText = "")
     {
         if (damageTextPrefab == null || damageTextParent == null || heatText == null) return;
+        if (change == 0) return;  // +0/-0 미표시
 
         GameObject heatChangeObj = Instantiate(damageTextPrefab, damageTextParent);
         TextMeshProUGUI heatChangeText = heatChangeObj.GetComponent<TextMeshProUGUI>();
@@ -609,6 +626,62 @@ public class PlayerHPSystem : MonoBehaviour
             heatSequence.OnComplete(() => {
                 if (heatChangeObj != null) Destroy(heatChangeObj);
             });
+        }
+    }
+
+    /// <summary>
+    /// Berry/Mix 회복 + Combo Heat Recover를 분리 표시
+    /// 예: "+12 <color=yellow>+4</color>" 형태로 한 텍스트에 표시
+    /// comboCount: 실제 콤보 수 (2 이상일 때만 comboRecovery 표시)
+    /// </summary>
+    public void ShowHeatChangeText(int baseRecovery, int comboRecovery, int comboCount)
+    {
+        if (damageTextPrefab == null || damageTextParent == null || heatText == null) return;
+        // 둘 다 0이면 표시 안 함
+        if (baseRecovery <= 0 && comboRecovery <= 0) return;
+
+        GameObject heatChangeObj = Instantiate(damageTextPrefab, damageTextParent);
+        TextMeshProUGUI txt = heatChangeObj.GetComponent<TextMeshProUGUI>();
+
+        if (txt != null)
+        {
+            string baseHex = ColorUtility.ToHtmlStringRGB(baseHealColor);
+            string basePart = baseRecovery > 0 ? $"<color=#{baseHex}>+{baseRecovery}</color>" : "";
+
+            string comboPart = "";
+            if (comboRecovery > 0 && comboCount >= 2)
+            {
+                int colorIdx = Mathf.Clamp(comboCount - 2, 0, comboHealColors != null && comboHealColors.Length > 0 ? comboHealColors.Length - 1 : 0);
+                Color comboColor = (comboHealColors != null && comboHealColors.Length > 0)
+                    ? comboHealColors[colorIdx]
+                    : new Color(1f, 0.85f, 0.3f);
+                string comboHex = ColorUtility.ToHtmlStringRGB(comboColor);
+                comboPart = $" <color=#{comboHex}>+{comboRecovery}</color>";
+            }
+
+            // basePart, comboPart 둘 다 비어있으면 표시 안 함
+            if (string.IsNullOrEmpty(basePart) && string.IsNullOrEmpty(comboPart))
+            {
+                Destroy(heatChangeObj);
+                return;
+            }
+            txt.text = basePart + comboPart;
+            txt.color = Color.white;  // Rich Text 사용하므로 기본색 흰색
+            txt.fontSize = heatChangeTextSize;
+
+            RectTransform heatChangeRect = heatChangeObj.GetComponent<RectTransform>();
+            RectTransform heatTextRect = heatText.GetComponent<RectTransform>();
+            heatChangeRect.position = heatTextRect.position;
+
+            CanvasGroup canvasGroup = heatChangeObj.GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = heatChangeObj.AddComponent<CanvasGroup>();
+
+            Sequence seq = DOTween.Sequence();
+            seq.Append(heatChangeRect.DOAnchorPosY(heatChangeRect.anchoredPosition.y + 100f, 1.0f).SetEase(Ease.OutCubic));
+            seq.Join(canvasGroup.DOFade(0f, 1.0f).SetEase(Ease.InCubic));
+            seq.Insert(0f, heatChangeRect.DOScale(1.2f, 0.15f).SetEase(Ease.OutQuad));
+            seq.Insert(0.15f, heatChangeRect.DOScale(1f, 0.15f).SetEase(Ease.InQuad));
+            seq.OnComplete(() => { if (heatChangeObj != null) Destroy(heatChangeObj); });
         }
     }
 

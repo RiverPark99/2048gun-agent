@@ -35,20 +35,20 @@ public class GridManager : MonoBehaviour
     [SerializeField] private MonoBehaviour modeControllerObject;
     private IGridEventListener modeListener;
 
+    // GameModeBase 구현체가 연결된 경우 true
+    // → GridManager의 ChallengeMode 직접 처리 블록을 skip하고 OnTurnMergesComplete에 위임
+    private bool isManagedMode = false;
+
     // Grid 데이터
     private Tile[,] tiles;
     private List<Tile> activeTiles = new List<Tile>();
     private float cellSize;
-
-    // Tile은 Instantiate/Destroy 방식 사용 (풀링 제거)
 
     // 상태
     private bool isProcessing = false;
     private int currentTurn = 0;
     private int comboCount = 0;
     private Vector3 lastMergedTilePosition;
-
-
 
     // ⭐ v6.7: 콤보 데미지 배율 (Inspector에서 밸런싱 가능)
     [Header("Balance")]
@@ -74,7 +74,6 @@ public class GridManager : MonoBehaviour
         }
         else
         {
-            // GetComponents로 같은 GameObject에서 IGridEventListener 구현 컴포넌트 탐색
             foreach (var comp in GetComponents<MonoBehaviour>())
             {
                 if (comp is IGridEventListener listener)
@@ -85,9 +84,13 @@ public class GridManager : MonoBehaviour
                 }
             }
         }
-        // Tile은 최대 16개, 상태가 복잡하여 풀링 대신 직접 Instantiate/Destroy 사용
-        // _tilePool 필드는 선언부에서 삭제
 
+        // GameModeBase 구현체 여부 판단
+        isManagedMode = (modeListener is GameModeBase);
+        if (isManagedMode)
+            Debug.Log($"[GridManager] Managed Mode: {modeListener.GetType().Name} (ChallengeMode 로직 skip)");
+
+        // Tile은 최대 16개, 상태가 복잡하여 풀링 대신 직접 Instantiate/Destroy 사용
         InitializeGrid();
     }
 
@@ -160,7 +163,7 @@ public class GridManager : MonoBehaviour
         // 계산식용 머지 항목 리스트
         var mergeEntries = new List<MergeEntry>();
 
-        int oldHeat = playerHP.CurrentHeat;
+        int oldHeat = playerHP != null ? playerHP.CurrentHeat : 0;
 
         bool anyMerged = true;
         while (anyMerged)
@@ -214,17 +217,17 @@ public class GridManager : MonoBehaviour
                                 // ⭐ v6.5: 초코+초코 = 4배 데미지
                                 chocoMergeCount++;
 
-                                int bonusDamage = mergedValue * 3; // 기본 mergedValue + 3배 추가 = 4배
+                                int bonusDamage = mergedValue * 3;
                                 totalMergedValue += bonusDamage;
                                 mergeEntries.Add(new MergeEntry { tileVal = mergedValue / 2, mergeType = MergeType.Choco, color1 = color1, color2 = color2 });
 
-                                if (!gunSystem.IsFeverMode)
+                                if (!isManagedMode && !gunSystem.IsFeverMode)
                                 {
                                     gunSystem.AddMergeGauge(1);
                                     gunSystem.ShowMergeGaugeChange(1, false);
                                 }
 
-                                Debug.Log($"CHOCO MERGE! x4 DMG, Gauge +1 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"CHOCO MERGE! x4 DMG, Gauge +1");
                                 targetTile.PlayChocoMergeEffect();
                                 isColorBonus = true;
                             }
@@ -233,54 +236,65 @@ public class GridManager : MonoBehaviour
                                 berryMergeCount++;
                                 hadBerryMerge = true;
 
-                                int bonusHeal = playerHP.GetBerryHealAmount();
-                                playerHP.AddHeat(bonusHeal);
-
-                                ProjectileManager pm = bossBattle.GetProjectileManager();
-                                if (pm != null && playerHP.HeatText != null)
+                                if (!isManagedMode)
                                 {
-                                    Vector3 berryPos = targetTile.transform.position;
-                                    Vector3 heatUIPos = playerHP.HeatText.transform.position;
-                                    Color berryColor = new Color(1f, 0.4f, 0.6f);
-                                    pm.FireKnifeProjectile(berryPos, heatUIPos, berryColor, null);
+                                    // ChallengeMode: % 기반 즉시 heal
+                                    int bonusHeal = playerHP.GetBerryHealAmount();
+                                    playerHP.AddHeat(bonusHeal);
+
+                                    ProjectileManager pm = bossBattle.GetProjectileManager();
+                                    if (pm != null && playerHP.HeatText != null)
+                                    {
+                                        Vector3 berryPos = targetTile.transform.position;
+                                        Vector3 heatUIPos = playerHP.HeatText.transform.position;
+                                        pm.FireKnifeProjectile(berryPos, heatUIPos, new Color(1f, 0.4f, 0.6f), null);
+                                    }
+
+                                    if (!gunSystem.IsFeverMode)
+                                    {
+                                        gunSystem.AddMergeGauge(1);
+                                        gunSystem.ShowMergeGaugeChange(1, false);
+                                    }
                                 }
 
-                                if (!gunSystem.IsFeverMode)
-                                {
-                                    gunSystem.AddMergeGauge(1);
-                                    gunSystem.ShowMergeGaugeChange(1, false);
-                                }
-
-                                Debug.Log($"BERRY MERGE! Gauge +1 ({gunSystem.MergeGauge}/40)");
+                                Debug.Log($"BERRY MERGE!");
                                 targetTile.PlayBerryMergeEffect();
                                 isColorBonus = true;
                                 mergeEntries.Add(new MergeEntry { tileVal = mergedValue / 2, mergeType = MergeType.Berry, color1 = color1, color2 = color2 });
                             }
                             else
                             {
-                                // ⭐ v6.5: 믹스머지 = 2배 데미지 + HP 6% 회복
-                                int mixHeal = playerHP.GetMixHealAmount();
-                                playerHP.AddHeat(mixHeal);
-                                totalMergedValue += mergedValue; // 기본 + 1배 추가 = 2배
+                                // Mix merge
+                                if (!isManagedMode)
+                                {
+                                    // ChallengeMode: % 기반 즉시 heal + 레이저
+                                    int mixHeal = playerHP.GetMixHealAmount();
+                                    playerHP.AddHeat(mixHeal);
+                                    totalMergedValue += mergedValue; // 2배
+
+                                    ProjectileManager pm2 = bossBattle.GetProjectileManager();
+                                    if (pm2 != null && playerHP.HeatText != null)
+                                    {
+                                        Vector3 mixPos = targetTile.transform.position;
+                                        Vector3 heatUIPos2 = playerHP.HeatText.transform.position;
+                                        pm2.FireKnifeProjectile(mixPos, heatUIPos2, new Color(1f, 0.4f, 0.6f), null);
+                                    }
+
+                                    if (!gunSystem.IsFeverMode)
+                                    {
+                                        gunSystem.AddMergeGauge(1);
+                                        gunSystem.ShowMergeGaugeChange(1, false);
+                                    }
+
+                                    Debug.Log($"MIX MERGE! x2 DMG");
+                                }
+                                else
+                                {
+                                    // ManagedMode: totalMergedValue는 base 그대로 (모드가 배율 결정)
+                                    Debug.Log($"MIX MERGE! (managed)");
+                                }
+
                                 mergeEntries.Add(new MergeEntry { tileVal = mergedValue / 2, mergeType = MergeType.Mix, color1 = color1, color2 = color2 });
-
-                                // 핑크 레이저 (Berry merge와 동일)
-                                ProjectileManager pm2 = bossBattle.GetProjectileManager();
-                                if (pm2 != null && playerHP.HeatText != null)
-                                {
-                                    Vector3 mixPos = targetTile.transform.position;
-                                    Vector3 heatUIPos2 = playerHP.HeatText.transform.position;
-                                    Color mixColor = new Color(1f, 0.4f, 0.6f);
-                                    pm2.FireKnifeProjectile(mixPos, heatUIPos2, mixColor, null);
-                                }
-
-                                if (!gunSystem.IsFeverMode)
-                                {
-                                    gunSystem.AddMergeGauge(1);
-                                    gunSystem.ShowMergeGaugeChange(1, false);
-                                }
-
-                                Debug.Log($"MIX MERGE! x2 DMG, HP+{mixHeal}(6%), Gauge +1 ({gunSystem.MergeGauge}/40)");
                             }
 
                             if (isColorBonus)
@@ -303,18 +317,32 @@ public class GridManager : MonoBehaviour
                             lastMergedTilePosition = targetTile.transform.position;
                             mergeCountThisTurn++;
 
-                            // Fever merge ATK 증가
-                            if (gunSystem.IsFeverMode)
+                            // Fever merge ATK 증가 (ChallengeMode만)
+                            if (!isManagedMode && gunSystem.IsFeverMode)
                             {
                                 if (!bossManager.IsClearMode())
                                 {
                                     gunSystem.AddFeverMergeATK();
-                                    Debug.Log($"🔥 FEVER MERGE! +ATK +{gunSystem.FeverMergeIncreaseAtk} (Total: {gunSystem.PermanentAttackPower})");
+                                    Debug.Log($"🔥 FEVER MERGE! +ATK");
                                 }
                             }
 
-                            // 머지마다 게이지 UI 즉시 업데이트 (Freeze 진입은 AfterMove에서)
-                            gunSystem.UpdateGaugeUIOnly();
+                            // 머지마다 게이지 UI 즉시 업데이트 (ChallengeMode만)
+                            if (!isManagedMode)
+                                gunSystem.UpdateGaugeUIOnly();
+
+                            // OnTileMerged 이벤트 (양쪽 모두)
+                            if (modeListener != null)
+                            {
+                                modeListener.OnTileMerged(new MergeInfo
+                                {
+                                    mergedValue = mergedValue,
+                                    color1      = color1,
+                                    color2      = color2,
+                                    gridPos     = nextPos,
+                                    worldPos    = targetTile.transform.position,
+                                });
+                            }
 
                             activeTiles.Remove(tile);
                             Destroy(tile.gameObject);
@@ -350,98 +378,116 @@ public class GridManager : MonoBehaviour
         {
             currentTurn++;
             UpdateTurnUI();
-
             comboCount = mergeCountThisTurn;
 
-            // Freeze 중 머지 게이지는 추가하지 않음 (AfterMove에서 처리)
-
-            // 보스 데미지 처리
-            if (totalMergedValue > 0 && bossManager != null)
+            if (!isManagedMode)
             {
-                float comboMultiplier = 1.0f;
-                if (mergeCountThisTurn > 1)
-                    comboMultiplier = Mathf.Pow(comboMultiplierBase, mergeCountThisTurn - 1);
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                // ChallengeMode 직접 처리 블록
+                // ⚠️  이 블록은 절대 수정하지 않는다.
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-                long baseDamage = (long)Mathf.Floor(totalMergedValue * comboMultiplier);
-
-                // ATK 보너스 추가
-                baseDamage += gunSystem.PermanentAttackPower;
-
-                // ⭐ v6.5: Freeze 중 턴별 배율 누적
-                // freezeMultiplier를 여기서 한 번만 계산 → 데미지·표시 모두 동일 값 사용
-                float freezeMultiplierForThisTurn = 1f;
-                if (gunSystem.IsFeverMode)
+                if (totalMergedValue > 0 && bossManager != null)
                 {
-                    freezeMultiplierForThisTurn = gunSystem.GetFreezeDamageMultiplier();
-                    baseDamage = (long)(baseDamage * freezeMultiplierForThisTurn);
-                    Debug.Log($"❄️ Freeze DMG x{freezeMultiplierForThisTurn:F2}");
+                    float comboMultiplier = 1.0f;
+                    if (mergeCountThisTurn > 1)
+                        comboMultiplier = Mathf.Pow(comboMultiplierBase, mergeCountThisTurn - 1);
+
+                    long baseDamage = (long)Mathf.Floor(totalMergedValue * comboMultiplier);
+                    baseDamage += gunSystem.PermanentAttackPower;
+
+                    float freezeMultiplierForThisTurn = 1f;
+                    if (gunSystem.IsFeverMode)
+                    {
+                        freezeMultiplierForThisTurn = gunSystem.GetFreezeDamageMultiplier();
+                        baseDamage = (long)(baseDamage * freezeMultiplierForThisTurn);
+                        Debug.Log($"❄️ Freeze DMG x{freezeMultiplierForThisTurn:F2}");
+                    }
+
+                    long damage = baseDamage;
+
+                    if (gunSystem.IsFeverMode)
+                        gunSystem.AddFreezeTotalDamage(damage);
+
+                    gunSystem.ShowDamageFormula(
+                        mergeEntries,
+                        mergeCountThisTurn,
+                        comboMultiplierBase,
+                        gunSystem.PermanentAttackPower,
+                        gunSystem.IsFeverMode,
+                        freezeMultiplierForThisTurn
+                    );
+
+                    bossBattle.FireDamageProjectile(lastMergedTilePosition, damage, mergeCountThisTurn, gunSystem.IsFeverMode);
                 }
 
-                long damage = baseDamage;
-
-                // Freeze 총 데미지 누적
-                if (gunSystem.IsFeverMode)
-                    gunSystem.AddFreezeTotalDamage(damage);
-
-                // 데미지 계산식 표시 (freezeMultiplier는 위에서 구한 값 재사용)
-                gunSystem.ShowDamageFormula(
-                    mergeEntries,
-                    mergeCountThisTurn,
-                    comboMultiplierBase,
-                    gunSystem.PermanentAttackPower,
-                    gunSystem.IsFeverMode,
-                    freezeMultiplierForThisTurn
-                );
-
-                bossBattle.FireDamageProjectile(lastMergedTilePosition, damage, mergeCountThisTurn, gunSystem.IsFeverMode);
-            }
-
-            // Heat 회복
-            if (mergeCountThisTurn > 0)
-            {
-                int comboIndex = Mathf.Min(mergeCountThisTurn, playerHP.ComboHeatRecover.Length - 1);
-                int heatRecovery = playerHP.ComboHeatRecover[comboIndex];
-                if (hadBerryMerge)
+                // Combo Heat Recover (comboHeatRecover 배열 기반)
+                int comboHeatAmount = 0;
+                if (mergeCountThisTurn > 0)
                 {
-                    heatRecovery *= 2;
-                    Debug.Log($"BERRY MERGE BONUS! Heat recovery x2: {heatRecovery}");
+                    int comboIndex = Mathf.Min(mergeCountThisTurn, playerHP.ComboHeatRecover.Length - 1);
+                    comboHeatAmount = playerHP.ComboHeatRecover[comboIndex];
+                    playerHP.AddHeat(comboHeatAmount);
                 }
-                playerHP.AddHeat(heatRecovery);
+
+                playerHP.ClampHeat();
+
+                int netChange = playerHP.CurrentHeat - oldHeat;
+                playerHP.UpdateHeatUI();
+
+                if (netChange > 0)
+                {
+                    // Berry/Mix 회복량 따로 계산 (netChange에서 comboHeatAmount 제외)
+                    int berryMixHealed = Mathf.Max(0, netChange - comboHeatAmount);
+                    // 실제 combo 회복도 netChange 범위 내로 클램프 (만HP 상황 대응)
+                    int actualComboHealed = netChange - berryMixHealed;
+                    if (actualComboHealed > 0 || berryMixHealed > 0)
+                        playerHP.ShowHeatChangeText(berryMixHealed, actualComboHealed, mergeCountThisTurn);
+                    playerHP.FlashHealGreen();
+                }
+                else if (netChange < 0)
+                {
+                    playerHP.ShowHeatChangeText(netChange);
+                }
+
+                gunSystem.FlashEndOfTurn(mergeCountThisTurn > 0);
+
+                if (!gunSystem.IsFeverMode && mergeCountThisTurn >= 2)
+                {
+                    gunSystem.AddMergeGauge(1);
+                    gunSystem.ClearFeverPaybackIfNeeded();
+                    gunSystem.ShowMergeGaugeChange(1, true);
+                }
+
+                comboCount = mergeCountThisTurn;
+
+                if (playerHP.CurrentHeat <= 0)
+                {
+                    Debug.Log("히트 고갈! 게임 오버");
+                    bossBattle.GameOver();
+                    yield break;
+                }
             }
-
-            playerHP.ClampHeat();
-
-            int netChange = playerHP.CurrentHeat - oldHeat;
-            playerHP.UpdateHeatUI();
-
-            if (netChange != 0)
-                playerHP.ShowHeatChangeText(netChange);
-
-            // _16: HP 회복 시 HP bar 깠박임 (턴당 1회, 회복량 0이면 미발동)
-            if (netChange > 0)
-                playerHP.FlashHealGreen();
-
-            // _6: progress bar/text 깠박임 (턴당 1회)
-            gunSystem.FlashEndOfTurn(mergeCountThisTurn > 0);
-
-            // 콤보 게이지 보너스 (Freeze 중이 아닐 때만)
-            if (!gunSystem.IsFeverMode && mergeCountThisTurn >= 2)
+            else
             {
-                gunSystem.AddMergeGauge(1);
-                gunSystem.ClearFeverPaybackIfNeeded();
-                gunSystem.ShowMergeGaugeChange(1, true); // cap 도달 시 내부에서 차단됨
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                // GameModeBase 관리 모드 경로 (isManagedMode=true)
+                // 모든 턴 처리를 GameModeBase.OnTurnMergesComplete에 위임
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                var summary = new TurnMergeSummary
+                {
+                    mergeCount           = mergeCountThisTurn,
+                    totalMergedValueBase = totalMergedValue,
+                    chocoMergeCount      = chocoMergeCount,
+                    hadBerryMerge        = hadBerryMerge,
+                    berryMergeCount      = berryMergeCount,
+                    lastMergeWorldPos    = lastMergedTilePosition,
+                    mergeEntries         = mergeEntries,
+                    heatBefore           = oldHeat,
+                };
+                modeListener.OnTurnMergesComplete(summary);
+                comboCount = mergeCountThisTurn;
             }
-
-            comboCount = mergeCountThisTurn;
-
-            if (playerHP.CurrentHeat <= 0)
-            {
-                Debug.Log("히트 고갈! 게임 오버");
-                bossBattle.GameOver();
-                yield break;
-            }
-
-            // 머지 없으면 계산식은 유지 (5초 후 자동 사라짐)
 
             yield return new WaitForSeconds(0.2f);
             AfterMove();
@@ -456,47 +502,50 @@ public class GridManager : MonoBehaviour
     {
         SpawnTile();
 
-        // (Tile outline은 Gun mode만 사용 — glow 갱신 없음)
-
-        // Freeze 중: 이동 비용 -2, 콤보 보너스 +2*combo, 20/40 도달시 종료
-        if (gunSystem.IsFeverMode)
+        if (!isManagedMode)
         {
-            gunSystem.ProcessFreezeAfterMove(comboCount);
-        }
+            // ChallengeMode AfterMove 로직 — 절대 수정 안 함
+            if (gunSystem.IsFeverMode)
+                gunSystem.ProcessFreezeAfterMove(comboCount);
 
-        // ⭐ v6.6: Freeze 진입 체크 — 보스 전환 중이면 리스폰 완료 후 지연 체크
-        if (bossBattle.IsBossTransitioning)
-            StartCoroutine(gunSystem.DelayedFreezeCheck());
-        else if (bossManager.GetCurrentHP() <= 0)
-            StartCoroutine(gunSystem.DelayedFreezeCheck()); // 보스 사망 직후
-        else
-            gunSystem.CheckGaugeAndFever();
+            if (bossBattle.IsBossTransitioning)
+                StartCoroutine(gunSystem.DelayedFreezeCheck());
+            else if (bossManager.GetCurrentHP() <= 0)
+                StartCoroutine(gunSystem.DelayedFreezeCheck());
+            else
+                gunSystem.CheckGaugeAndFever();
 
-        // 보스 턴 진행 (freeze 중에도 Guard ATK는 진행해야 함)
-        if (bossManager != null)
-        {
-            bossManager.OnPlayerTurn();
-        }
+            if (bossManager != null)
+                bossManager.OnPlayerTurn();
 
-        if (!CanMove())
-        {
-            bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
-            if (!hasGun)
+            if (!CanMove())
             {
-                bossBattle.GameOver();
-                return;
+                bool hasGun = gunSystem.HasBullet || (gunSystem.IsFeverMode && !gunSystem.FeverBulletUsed);
+                if (!hasGun)
+                {
+                    bossBattle.GameOver();
+                    return;
+                }
+                gunSystem.SetEmergencyFlash(true);
             }
-            // ⭐ v6.4: 이동 불가 + Gun 있으면 긴급 깜박임
-            gunSystem.SetEmergencyFlash(true);
+            else
+            {
+                gunSystem.SetEmergencyFlash(false);
+            }
+
+            if (gunSystem.IsGunMode)
+                UpdateTileBorders();
         }
         else
         {
-            gunSystem.SetEmergencyFlash(false);
+            // GameModeBase AfterMove
+            modeListener?.OnAfterMove();
+
+            if (!CanMove())
+                modeListener?.OnBoardFull();
         }
 
         isProcessing = false;
-        if (gunSystem.IsGunMode)
-            UpdateTileBorders();
     }
 
     // === Tile 생성 ===
@@ -518,14 +567,13 @@ public class GridManager : MonoBehaviour
         Vector2Int pos = emptyPositions[Random.Range(0, emptyPositions.Count)];
         int value = Random.value < 0.9f ? 2 : 4;
 
-        // 타일 생성 (Instantiate)
         Tile tile = Instantiate(tilePrefab, gridContainer).GetComponent<Tile>();
         RectTransform tileRect = tile.GetComponent<RectTransform>();
 
         tileRect.sizeDelta = new Vector2(cellSize, cellSize);
         tile.SetValue(value);
 
-        // ⭐ Phase 1: 모드에서 색상 결정 위임 (모드가 null을 반환하면 기존 unlockManager 방식 사용)
+        // ⭐ Phase 1: 모드에서 색상 결정 위임
         TileColor? listenerColor = modeListener?.GetSpawnTileColor();
         TileColor tileColor = listenerColor ?? ((unlockManager != null) ? unlockManager.GetTileColorForStage()
             : (Random.value < 0.5f ? TileColor.Choco : TileColor.Berry));
@@ -540,7 +588,9 @@ public class GridManager : MonoBehaviour
         tile.transform.localScale = Vector3.zero;
         StartCoroutine(ScaleInAnimation(tile.gameObject));
 
-        if (gunSystem != null && gunSystem.IsGunMode)
+        modeListener?.OnTileSpawned(pos, value);
+
+        if (!isManagedMode && gunSystem != null && gunSystem.IsGunMode)
             UpdateTileBorders();
     }
 
@@ -606,7 +656,7 @@ public class GridManager : MonoBehaviour
         List<int> sortedValues = new List<int>(uniqueValues);
         sortedValues.Sort((a, b) => b.CompareTo(a));
 
-        int firstValue = sortedValues.Count > 0 ? sortedValues[0] : 0;
+        int firstValue  = sortedValues.Count > 0 ? sortedValues[0] : 0;
         int secondValue = sortedValues.Count > 1 ? sortedValues[1] : 0;
 
         return new System.Tuple<int, int>(firstValue, secondValue);
@@ -653,7 +703,6 @@ public class GridManager : MonoBehaviour
     }
 
     // === Turn/Stage UI ===
-    // ⭐ v6.4: 이전 스테이지 추적 (DOTween 효과용)
     private int lastDisplayedStage = -1;
 
     public void UpdateTurnUI()
@@ -677,7 +726,6 @@ public class GridManager : MonoBehaviour
             {
                 stageText.text = $"Challenge\n{currentStage}/40";
 
-                // ⭐ v6.4: 스테이지 변경 시 DOTween 효과 (Clear 이후는 제외)
                 if (currentStage != lastDisplayedStage && lastDisplayedStage >= 0)
                 {
                     RectTransform stageRect = stageText.GetComponent<RectTransform>();
@@ -688,13 +736,9 @@ public class GridManager : MonoBehaviour
                     Color originalColor = stageText.color;
 
                     Sequence seq = DOTween.Sequence();
-                    // 위로 살짝 올람
                     seq.Append(stageRect.DOAnchorPosY(originalY + 10f, 0.15f).SetEase(Ease.OutQuad));
-                    // 주황색으로 변경
                     seq.Join(stageText.DOColor(new Color(1f, 0.65f, 0.1f), 0.15f));
-                    // 원래 자리로 복귀
                     seq.Append(stageRect.DOAnchorPosY(originalY, 0.2f).SetEase(Ease.InQuad));
-                    // 원래 색상으로 복귀
                     seq.Join(stageText.DOColor(originalColor, 0.3f));
                     seq.OnComplete(() => {
                         if (stageRect != null) stageRect.anchoredPosition = new Vector2(stageRect.anchoredPosition.x, originalY);
@@ -710,7 +754,6 @@ public class GridManager : MonoBehaviour
             lastDisplayedStage = currentStage;
         }
 
-        // ⭐ v5.0: 무한대 보스일 때 Enemy bar 색상
         if (bossManager != null && bossManager.IsInfiniteBoss())
             bossBattle.UpdateInfiniteBossEnemyBarColor();
     }
@@ -728,7 +771,7 @@ public class GridManager : MonoBehaviour
         return new Vector2(posX, posY);
     }
 
-    // Freeze 중 최대 타일 값 반환 (GunSystem에서 표시용)
+    // 최대 타일 값 반환 (GunSystem / BerryMode 레벨 계산용)
     public int GetMaxTileValue()
     {
         int maxValue = 0;

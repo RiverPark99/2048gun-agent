@@ -39,6 +39,17 @@ public class GunSystem : MonoBehaviour
     [Header("Gauge Change Text 크기 (_7)")]
     [SerializeField] private float gaugeChangeTextSize = 42f;
 
+    [Header("Gauge 증가 텍스트 색상 (index = combo 수. 0=단일, 1=1콤보, 2=2콤보 ...)")]
+    [SerializeField] private Color[] comboGaugeColors = new Color[]
+    {
+        new Color(0.9f, 0.2f, 0.2f),  // 0: 단일 머지 / Freeze -2 (기존 붉은색)
+        new Color(0.9f, 0.2f, 0.2f),  // 1: 콤보 1
+        new Color(1.0f, 0.85f, 0.3f), // 2: 콤보 2 (노랑)
+        new Color(1.0f, 0.55f, 0.1f), // 3: 콤보 3 (주황)
+        new Color(1.0f, 0.25f, 0.1f), // 4: 콤보 4 (빨강)
+        new Color(0.8f, 0.1f, 0.9f),  // 5: 콤보 5+ (보라)
+    };
+
     [Header("DOTween 효과 튜닝")]
     [SerializeField] private float chargePopScale = 1.5f;
     [SerializeField] private float chargeReturnDuration = 0.4f;
@@ -627,7 +638,7 @@ public class GunSystem : MonoBehaviour
             // 게이지 측 도달 시 텍스트 안 보임
             int cap = (unlockManager != null) ? unlockManager.GetGaugeCap() : GAUGE_MAX;
             if (cap > 0 && mergeGauge >= cap) return;
-            ShowGaugeChangeText(change, isCombo);
+            ShowGaugeChangeText(change, isCombo, 0);
         }
     }
 
@@ -639,6 +650,9 @@ public class GunSystem : MonoBehaviour
         freezeTurnCount++;
         int gaugeBeforeAll = mergeGauge;
 
+        // 40/40 꽉 찬 상태 여부 미리 기록
+        bool wasAtMax = (mergeGauge >= GAUGE_MAX);
+
         if (comboCount >= 2)
         {
             int bonus = FREEZE_COMBO_BONUS * comboCount;
@@ -646,16 +660,29 @@ public class GunSystem : MonoBehaviour
             if (mergeGauge > GAUGE_MAX) mergeGauge = GAUGE_MAX;
         }
 
+        // 40 꽉 찬 상태에서 combo 보너스가 -2 비용을 상쇄하면 게이지 유지 + +0 표시
+        if (wasAtMax)
+        {
+            int comboBonus = (comboCount >= 2) ? (FREEZE_COMBO_BONUS * comboCount) : 0;
+            if (comboBonus >= FREEZE_MOVE_COST)
+            {
+                mergeGauge = GAUGE_MAX;
+                ShowGaugeChangeText(0, comboCount >= 2, comboCount);
+                UpdateFreezeTurnUIForCurrentTurn();
+                if (mergeGauge <= GAUGE_FOR_BULLET) EndFever();
+                UpdateGunUI();
+                return;
+            }
+        }
+
         mergeGauge -= FREEZE_MOVE_COST;
 
         int netChange = mergeGauge - gaugeBeforeAll;
         bool isCombo = (comboCount >= 2);
-        if (netChange != 0)
-            ShowGaugeChangeText(netChange, isCombo);
+        // 항상 표시 (변화량 0이어도 Combo! +0 보여줌)
+        ShowGaugeChangeText(netChange, isCombo, comboCount);
 
         // freezeTurnCount 증가 전 배율(이번 턴에 실제 적용된 배율)을 UI에 표시
-        // GetFreezeDamageMultiplier()는 현재 freezeTurnCount 기준이므로
-        // 이번 머지의 실제 배율 = freezeTurnCount-1 기준으로 계산
         UpdateFreezeTurnUIForCurrentTurn();
 
         if (mergeGauge <= GAUGE_FOR_BULLET) EndFever();
@@ -1053,6 +1080,15 @@ public class GunSystem : MonoBehaviour
         }
     }
 
+    /// <summary>BerryMode Continue 시 Gun count 직접 설정</summary>
+    public void SetBulletCount(int count)
+    {
+        mergeGauge = Mathf.Clamp(count * GUN_SHOT_COST, 0, GAUGE_MAX);
+        hasBullet  = (mergeGauge >= GAUGE_FOR_BULLET);
+        UpdateGunUI();
+        Debug.Log($"[GunSystem] SetBulletCount({count}) → gauge={mergeGauge}, hasBullet={hasBullet}");
+    }
+
     public void ContinueIntoFever()
     {
         isFeverMode = true; mergeGauge = GAUGE_MAX; feverBulletUsed = false; hasBullet = false;
@@ -1341,7 +1377,8 @@ public class GunSystem : MonoBehaviour
     }
 
     // === Gauge Change Text ===
-    void ShowGaugeChangeText(int change, bool isCombo = false)
+    // comboCount: 실제 콤보 수 (색상 배열 인덱스 결정용)
+    void ShowGaugeChangeText(int change, bool isCombo = false, int comboCount = 0)
     {
         if (damageTextPrefab == null || damageTextParent == null || turnsUntilBulletText == null) return;
         // Gun UI 미해금 시 텍스트 생성 안함
@@ -1351,11 +1388,20 @@ public class GunSystem : MonoBehaviour
         if (txt != null)
         {
             if (isCombo)
-                txt.text = change > 0 ? $"Combo! +{change}" : $"Combo! {change}";
+                txt.text = change > 0 ? $"Combo! +{change}" : (change == 0 ? "Combo! +0" : $"Combo! {change}");
             else
                 txt.text = change > 0 ? $"+{change}" : change.ToString();
 
-            txt.color = change > 0 ? new Color(0.9f, 0.2f, 0.2f) : new Color(0.6f, 0.6f, 0.6f);
+            // 색상: 증가/+0 → comboGaugeColors[comboCount], 감소 → 회색
+            if (change >= 0 && comboGaugeColors != null && comboGaugeColors.Length > 0)
+            {
+                int colorIdx = Mathf.Clamp(comboCount, 0, comboGaugeColors.Length - 1);
+                txt.color = comboGaugeColors[colorIdx];
+            }
+            else
+            {
+                txt.color = new Color(0.6f, 0.6f, 0.6f);
+            }
             txt.fontSize = gaugeChangeTextSize;
             RectTransform r = obj.GetComponent<RectTransform>();
             r.position = turnsUntilBulletText.GetComponent<RectTransform>().position;
