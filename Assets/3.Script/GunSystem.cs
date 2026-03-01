@@ -650,32 +650,15 @@ public class GunSystem : MonoBehaviour
         freezeTurnCount++;
         int gaugeBeforeAll = mergeGauge;
 
-        // 40/40 꽉 찬 상태 여부 미리 기록
-        bool wasAtMax = (mergeGauge >= GAUGE_MAX);
+        int comboBonus = (comboCount >= 2) ? (FREEZE_COMBO_BONUS * comboCount) : 0;
 
-        if (comboCount >= 2)
-        {
-            int bonus = FREEZE_COMBO_BONUS * comboCount;
-            mergeGauge += bonus;
-            if (mergeGauge > GAUGE_MAX) mergeGauge = GAUGE_MAX;
-        }
-
-        // 40 꽉 찬 상태에서 combo 보너스가 -2 비용을 상쇄하면 게이지 유지 + +0 표시
-        if (wasAtMax)
-        {
-            int comboBonus = (comboCount >= 2) ? (FREEZE_COMBO_BONUS * comboCount) : 0;
-            if (comboBonus >= FREEZE_MOVE_COST)
-            {
-                mergeGauge = GAUGE_MAX;
-                ShowGaugeChangeText(0, comboCount >= 2, comboCount);
-                UpdateFreezeTurnUIForCurrentTurn();
-                if (mergeGauge <= GAUGE_FOR_BULLET) EndFever();
-                UpdateGunUI();
-                return;
-            }
-        }
-
+        // 순서: combo 보너스 추가 → move cost 차감 → clamp
+        // 예) 36 + 8 - 2 = 42 → clamp(40) = 40  ✓
+        // 예) 40 + 4 - 2 = 42 → clamp(40) = 40  ✓
+        // 예) 36 + 0 - 2 = 34  (콤보 없음)
+        mergeGauge += comboBonus;
         mergeGauge -= FREEZE_MOVE_COST;
+        if (mergeGauge > GAUGE_MAX) mergeGauge = GAUGE_MAX;
 
         int netChange = mergeGauge - gaugeBeforeAll;
         bool isCombo = (comboCount >= 2);

@@ -25,9 +25,9 @@ public class ClassicChocoMode : GameModeBase
     [SerializeField] private TextMeshProUGUI scoreText;
     [SerializeField] private TextMeshProUGUI bestScoreText;
 
-    [Header("콤보 점수 배율 테이블")]
-    [Tooltip("index = 머지 횟수. [0]=미사용, [1]=1콤보, [2]=2콤보, ...")]
-    [SerializeField] private float[] comboScoreMultipliers = { 1f, 1f, 1.5f, 2.5f, 4f, 6f };
+    [Header("콤보 추가 점수 테이블 (배율 아님, 점수에 더해지는 고정 int)")]
+    [Tooltip("index = 머지 횟수. [0]=미사용, [1]=1콤보(추가없음), [2]=2콤보, ...\n최종점수 = totalMergedValueBase + comboScoreBonus[mergeCount]")]
+    [SerializeField] private int[] comboScoreBonus = { 0, 0, 50, 150, 350, 700 };
 
     [Header("GameOver UI")]
     [SerializeField] private GameObject gameOverPanel;
@@ -61,9 +61,9 @@ public class ClassicChocoMode : GameModeBase
     protected override long CalculateScore(TurnMergeSummary summary)
     {
         if (summary.mergeCount <= 0) return 0;
-        float mult  = GetComboMultiplier(summary.mergeCount);
-        long  score = (long)(summary.totalMergedValueBase * mult);
-        Debug.Log($"[ClassicChoco] score={score} (base={summary.totalMergedValueBase} × {mult:F2})");
+        int  bonus = GetComboBonus(summary.mergeCount);
+        long score = summary.totalMergedValueBase + bonus;
+        Debug.Log($"[ClassicChoco] score={score} (base={summary.totalMergedValueBase} + bonus={bonus})");
         return score;
     }
 
@@ -115,10 +115,10 @@ public class ClassicChocoMode : GameModeBase
     // 헬퍼
     // ─────────────────────────────────────────────
 
-    float GetComboMultiplier(int mergeCount)
+    int GetComboBonus(int mergeCount)
     {
-        if (comboScoreMultipliers == null || comboScoreMultipliers.Length == 0) return 1f;
-        int idx = Mathf.Clamp(mergeCount, 0, comboScoreMultipliers.Length - 1);
-        return comboScoreMultipliers[idx];
+        if (comboScoreBonus == null || comboScoreBonus.Length == 0) return 0;
+        int idx = Mathf.Clamp(mergeCount, 0, comboScoreBonus.Length - 1);
+        return comboScoreBonus[idx];
     }
 }
