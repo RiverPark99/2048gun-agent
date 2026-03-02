@@ -155,8 +155,8 @@ TextureImporter:
       name: 38_0
       rect:
         serializedVersion: 2
-        x: 5
-        y: 25
+        x: 0
+        y: 10
         width: 214
         height: 205
       alignment: 0
