@@ -155,10 +155,10 @@ TextureImporter:
       name: 27_0
       rect:
         serializedVersion: 2
-        x: 20
-        y: 34
-        width: 237
-        height: 195
+        x: 19
+        y: 43
+        width: 221
+        height: 208
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
