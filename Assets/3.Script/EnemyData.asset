@@ -42,7 +42,7 @@ MonoBehaviour:
     atk: 37
     turnInterval: 5
   - stageName: Stage 8
-    hp: 2000
+    hp: 8000
     atk: 38
     turnInterval: 5
   - stageName: Stage 9
