@@ -267,6 +267,10 @@ public class GunSystem : MonoBehaviour
     public long PermanentAttackPower => permanentAttackPower;
     public long FeverMergeIncreaseAtk => feverMergeIncreaseAtk;
     public int ContinuesRemaining => MAX_CONTINUES - continueCount;
+    /// <summary>현재 판에서 나온 최고 Freeze 토탈 데미지 (Clear Panel용)</summary>
+    public long CurrentSessionBestDamage => currentSessionBestDamage;
+    /// <summary>전체 플레이 통산 최고 Freeze 토탈 데미지 (PlayerPrefs 기반)</summary>
+    public long AllTimeBestDamage => allTimeBestDamage;
     public float GetFreezeDamageMultiplier()
     {
         float turnMult = Mathf.Pow(freezeTurnMultiplier, freezeTurnCount);

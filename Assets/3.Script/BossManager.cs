@@ -16,21 +16,31 @@ public class BossManager : MonoBehaviour
     [Header("Boss Panel Background")]
     [SerializeField] private Image bossPanelGroundImage;
 
-    [Header("Boss Stats")]
-    public int baseHP = 200;
-    public int hpIncreasePerLevel = 200;
-    private int maxHP;
-    private int currentHP;
-
-    [Header("보스 공격 시스템")]
-    [SerializeField] private int baseTurnInterval = 8;
-    [SerializeField] private int minTurnInterval = 3;
-
-    [Header("Enemy ATK 성장 설정")]
+    // ─── HP / ATK / TurnInterval : EnemyData ScriptableObject에서 로드 ───
+    // EnemyData 미할당 시에만 아래 Fallback 값을 사용합니다.
+    [Header("HP / ATK Fallback (EnemyData 미할당 시에만 사용)")]
+    [Tooltip("EnemyData가 할당되어 있으면 이 값들은 무시됩니다.")]
+    [SerializeField] private int baseHP = 200;
+    [SerializeField] private int hpIncreasePerLevel = 200;
     [SerializeField] private int baseDamage = 28;
     [SerializeField] private int atkGrowthPerStep = 3;
     [SerializeField] private int atkGrowthInterval = 2;
+    private int maxHP;
+    private int currentHP;
+
+    [Header("턴 간격 설정")]
+    [Tooltip("baseTurnInterval: EnemyData 없을 때 기본값, SetupClearModeBoss 등에서도 직접 사용")]
+    [SerializeField] private int baseTurnInterval = 8;
+    [Tooltip("minTurnInterval: EnemyData의 turnInterval에 Mathf.Max로 적용되는 하한값")]
+    [SerializeField] private int minTurnInterval = 3;
+
+    // ─── Guard Boss ATK 성장 시스템 ───
+    // currentBossDamage (EnemyData 기반 초기값) + infiniteBossExtraDamage (턴마다 누적)
+    // 합산이 bossAtkMaxTotal에 도달하면 ExitGuardMode() → Clear 모드 진입
+    [Header("Guard Boss ATK 성장 시스템")]
+    [Tooltip("ATK 누적 상한. currentBossDamage + infiniteBossExtraDamage >= 이 값이면 Clear 모드 진입")]
     [SerializeField] private int bossAtkMaxTotal = 90;
+    [Tooltip("Guard 해제 후 Clear 모드에서 고정 사용되는 ATK")]
     [SerializeField] private int clearModeFixedAtk = 60;
 
     private int currentTurnInterval;

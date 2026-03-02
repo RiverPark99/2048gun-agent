@@ -43,9 +43,20 @@ public class BossBattleSystem : MonoBehaviour
 
     [Header("Challenge Clear UI")]
     [SerializeField] private GameObject challengeClearPanel;
-    [SerializeField] private TextMeshProUGUI clearStatsText;
-    [SerializeField] private TextMeshProUGUI clearBestRecordText;
+    [Tooltip("\ud604\uc7ac \ud310 \ucd5c\uace0 Freeze \ud1a0\ud0c8 \ub370\ubbf8\uc9c0 (GunSystem.CurrentSessionBestDamage)")]
+    [SerializeField] private TextMeshProUGUI clearMaxDamageText;
+    [Tooltip("\uc804\uccb4 \uc5ed\ub300 \ucd5c\uace0 Freeze \ud1a0\ud0c8 \ub370\ubbf8\uc9c0 (PlayerPrefs: BestFreezeDamage)")]
+    [SerializeField] private TextMeshProUGUI clearBestDamageText;
+    [Tooltip("\ud074\ub9ac\uc5b4\uae4c\uc9c0 \ub098\uc628 \uc6d0\ub798 \ud130\uc218 (GridManager.CurrentTurn)")]
+    [SerializeField] private TextMeshProUGUI clearTurnText;
+    [Tooltip("\ud604\uc7ac \ud310 \ud1a0\ud0c8\ub370\ubbf8\uc9c0\uac00 \uc5ed\ub300 \ucd5c\uace0 \uacbd\uc2e0 \uc2dc\uc5d0\ub9cc \ud65c\uc131. \ud3c9\uc18c SetActive(false) \uc720\uc9c0")]
     [SerializeField] private TextMeshProUGUI clearNewRecordText;
+
+    [Header("New Record Glow \uc124\uc815")]
+    [SerializeField] private Color newRecordGlowColorA = new Color(1f, 0.84f, 0f);
+    [SerializeField] private Color newRecordGlowColorB = new Color(1f, 0.35f, 0.05f);
+    [SerializeField] private float newRecordGlowSpeed = 0.5f;
+    [SerializeField] private float newRecordPopScale = 1.5f;
 
     [Header("Combo Laser 색상 (1회, 2회, 3회, 4회, 5회+)")]
     [SerializeField] private Color laserColor1 = Color.white;
@@ -460,10 +471,16 @@ public class BossBattleSystem : MonoBehaviour
     // Challenge Clear UI
     // =====================================================
 
+    // 수치 정의
+    // • Max Total Damage  : 현재 판에서 나온 최고 Freeze 토탈 데미지 (GunSystem.CurrentSessionBestDamage)
+    // • Best Total Damage : 역대 전체 최고 Freeze 토탈 데미지 (PlayerPrefs "BestFreezeDamage")
+    // • Turn              : 클리어까지 진행된 터 수 (GridManager.CurrentTurn)
+    // • New Record!       : 현재 판 Max Total Damage가 역대 최고를 경신 시에만 표시 (glow DOTween)
     public void ShowChallengeClearUI()
     {
         isChallengeClearShown = true;
 
+        // ─ 판널 페이드인 ─
         if (challengeClearPanel != null)
         {
             challengeClearPanel.SetActive(true);
@@ -473,66 +490,62 @@ public class BossBattleSystem : MonoBehaviour
             cg.DOFade(1f, 0.5f).SetEase(Ease.InOutQuad);
         }
 
-        // Total Damage + Turn 표시
-        if (clearStatsText != null)
+        // ─ 수치 수집 ─
+        long maxDmg  = gunSystem != null ? gunSystem.CurrentSessionBestDamage : 0;
+        long bestDmg = gunSystem != null ? gunSystem.AllTimeBestDamage        : 0;
+        int  turn    = gridManager != null ? gridManager.CurrentTurn          : 0;
+
+        // ─ Max Total Damage ─
+        if (clearMaxDamageText != null)
+            clearMaxDamageText.text = $"{maxDmg:N0}";
+
+        // ─ Best Total Damage ─
+        if (clearBestDamageText != null)
+            clearBestDamageText.text = $"{bestDmg:N0}";
+
+        // ─ Turn ─
+        if (clearTurnText != null)
+            clearTurnText.text = $"{turn}";
+
+        // ─ New Record! : 현재 판 maxDmg == allTimeBest 일 때 (GunSystem에서 이미 PlayerPrefs 갱신 완료)─
+        //   maxDmg > 0 여야 의미 있음 (Freeze 한 번도 안 한 경우 제외)
+        bool isNewRecord = (maxDmg > 0 && maxDmg >= bestDmg);
+
+        if (clearNewRecordText != null)
         {
-            long totalDmg = gunSystem != null ? gunSystem.PermanentAttackPower : 0;
-            // Freeze total damage가 더 정확
-            string bestStr = PlayerPrefs.GetString("BestFreezeDamage", "0");
-            long bestRecord = 0;
-            long.TryParse(bestStr, out bestRecord);
-
-            int clearTurn = gridManager != null ? gridManager.CurrentTurn : 0;
-            clearStatsText.text = $"Total Damage: {bestRecord:N0}\nTurn: {clearTurn}";
-        }
-
-        // Challenge 최고기록
-        if (clearBestRecordText != null)
-        {
-            string bestStr = PlayerPrefs.GetString("BestClearTurn", "");
-            int prevBestTurn = 0;
-            if (!string.IsNullOrEmpty(bestStr)) int.TryParse(bestStr, out prevBestTurn);
-
-            int currentTurn = gridManager != null ? gridManager.CurrentTurn : 0;
-            bool isNewRecord = (prevBestTurn == 0 || currentTurn < prevBestTurn);
+            if (clearNewRecordAnim != null) { clearNewRecordAnim.Kill(); clearNewRecordAnim = null; }
 
             if (isNewRecord)
             {
-                PlayerPrefs.SetString("BestClearTurn", currentTurn.ToString());
-                PlayerPrefs.Save();
-                clearBestRecordText.text = $"Best: {currentTurn} Turns";
+                // 신기록: 활성화 + 팝업 스케일 + 글로우 색상 루프
+                clearNewRecordText.gameObject.SetActive(true);
+                clearNewRecordText.color = newRecordGlowColorA;
+
+                RectTransform rt = clearNewRecordText.GetComponent<RectTransform>();
+                rt.DOKill();
+                rt.localScale = Vector3.one * newRecordPopScale;
+
+                // 팝업 애니메이션: 콨 후 원래 크기로 복귀
+                Sequence popSeq = DOTween.Sequence();
+                popSeq.Append(rt.DOScale(1f, 0.4f).SetEase(Ease.OutBack));
+
+                // 글로우 색상 루프 (A ↔ B 무한 반복)
+                clearNewRecordAnim = DOTween.Sequence();
+                clearNewRecordAnim.Append(
+                    clearNewRecordText.DOColor(newRecordGlowColorB, newRecordGlowSpeed).SetEase(Ease.InOutSine));
+                clearNewRecordAnim.Append(
+                    clearNewRecordText.DOColor(newRecordGlowColorA, newRecordGlowSpeed).SetEase(Ease.InOutSine));
+                clearNewRecordAnim.SetLoops(-1, LoopType.Restart);
             }
             else
             {
-                clearBestRecordText.text = $"Best: {prevBestTurn} Turns";
-            }
-
-            // New Record 표시 + 색상 루프
-            if (clearNewRecordText != null)
-            {
-                if (isNewRecord)
-                {
-                    clearNewRecordText.gameObject.SetActive(true);
-                    clearNewRecordText.text = "NEW RECORD!";
-                    Color goldA = new Color(1f, 0.84f, 0f);
-                    Color goldB = new Color(1f, 0.5f, 0f);
-                    clearNewRecordText.color = goldA;
-
-                    if (clearNewRecordAnim != null) clearNewRecordAnim.Kill();
-                    clearNewRecordAnim = DOTween.Sequence();
-                    clearNewRecordAnim.Append(clearNewRecordText.DOColor(goldB, 0.6f).SetEase(Ease.InOutSine));
-                    clearNewRecordAnim.Append(clearNewRecordText.DOColor(goldA, 0.6f).SetEase(Ease.InOutSine));
-                    clearNewRecordAnim.SetLoops(-1, LoopType.Restart);
-                }
-                else
-                {
-                    clearNewRecordText.gameObject.SetActive(false);
-                }
+                // 신기록 아닐 시: 좌단히 비활성
+                clearNewRecordText.gameObject.SetActive(false);
             }
         }
 
         SpawnClearFirework();
-        Debug.Log("Challenge Clear UI!");
+        Debug.Log($"Challenge Clear! MaxDmg={maxDmg:N0} BestDmg={bestDmg:N0} Turn={turn} NewRecord={isNewRecord}");
     }
 
     void SpawnClearFirework()
