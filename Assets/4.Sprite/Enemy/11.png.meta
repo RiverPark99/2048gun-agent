@@ -5,6 +5,12 @@ TextureImporter:
   - first:
       213: -2966200626249415253
     second: 11_0
+  - first:
+      213: 6218123344806412219
+    second: 11_1
+  - first:
+      213: -5600215177432712551
+    second: 11_2
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -84,7 +90,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: Standalone
+    buildTarget: iOS
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -110,6 +116,19 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
     buildTarget: WebGL
     maxTextureSize: 2048
     resizeAlgorithm: 0
@@ -123,7 +142,7 @@ TextureImporter:
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
   - serializedVersion: 4
-    buildTarget: iOS
+    buildTarget: WindowsStoreApps
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
@@ -142,10 +161,10 @@ TextureImporter:
       name: 11_0
       rect:
         serializedVersion: 2
-        x: 10
-        y: 16
-        width: 151
-        height: 140
+        x: 26
+        y: 77
+        width: 188
+        height: 152
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -156,6 +175,50 @@ TextureImporter:
       bones: []
       spriteID: ba5ccdbfe30f5d6d0800000000000000
       internalID: -2966200626249415253
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 11_1
+      rect:
+        serializedVersion: 2
+        x: 26
+        y: 38
+        width: 90
+        height: 55
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bbfffb0bc363b4650800000000000000
+      internalID: 6218123344806412219
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: 11_2
+      rect:
+        serializedVersion: 2
+        x: 101
+        y: 76
+        width: 14
+        height: 28
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 99a3f53a7f90842b0800000000000000
+      internalID: -5600215177432712551
       vertices: []
       indices: 
       edges: []
@@ -175,6 +238,8 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       11_0: -2966200626249415253
+      11_1: 6218123344806412219
+      11_2: -5600215177432712551
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
