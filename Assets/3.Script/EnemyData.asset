@@ -92,91 +92,91 @@ MonoBehaviour:
     turnInterval: 4
   - stageName: Stage 20
     hp: 10000000
-    atk: 70
+    atk: 90
     turnInterval: 4
   - stageName: Stage 21
     hp: 500000
-    atk: 74
+    atk: 80
     turnInterval: 4
   - stageName: Stage 22
     hp: 8000000
-    atk: 76
+    atk: 95
     turnInterval: 4
   - stageName: Stage 23
     hp: 16000000
-    atk: 78
+    atk: 100
     turnInterval: 4
   - stageName: Stage 24
     hp: 20000000
-    atk: 81
+    atk: 102
     turnInterval: 4
   - stageName: Stage 25
     hp: 30000000
-    atk: 120
+    atk: 104
     turnInterval: 6
   - stageName: Stage 26
     hp: 32000000
-    atk: 84
+    atk: 110
     turnInterval: 4
   - stageName: Stage 27
     hp: 34000000
-    atk: 86
+    atk: 112
     turnInterval: 4
   - stageName: Stage 28
     hp: 40000000
-    atk: 88
+    atk: 114
     turnInterval: 5
   - stageName: Stage 29
     hp: 42000000
-    atk: 90
+    atk: 116
     turnInterval: 4
   - stageName: Stage 30
     hp: 200000000
-    atk: 92
+    atk: 125
     turnInterval: 4
   - stageName: Stage 31
     hp: 130000000
-    atk: 100
+    atk: 120
     turnInterval: 4
   - stageName: Stage 32
     hp: 150000000
-    atk: 106
+    atk: 124
     turnInterval: 4
   - stageName: Stage 33
     hp: 150000000
-    atk: 112
+    atk: 130
     turnInterval: 4
   - stageName: Stage 34
     hp: 200000000
-    atk: 120
+    atk: 132
     turnInterval: 4
   - stageName: Stage 35
     hp: 300000000
-    atk: 125
+    atk: 135
     turnInterval: 4
   - stageName: Stage 36
     hp: 400000000
-    atk: 128
+    atk: 140
     turnInterval: 4
   - stageName: Stage 37
     hp: 550000000
-    atk: 130
+    atk: 143
     turnInterval: 4
   - stageName: Stage 38
     hp: 700000000
-    atk: 135
+    atk: 145
     turnInterval: 4
   - stageName: Stage 39
     hp: 1000000000
-    atk: 140
+    atk: 149
     turnInterval: 4
   guardBoss:
     stageName: Guard Boss (40)
     hp: 2147483647
-    atk: 140
+    atk: 150
     turnInterval: 4
   clearModeEnemy:
     stageName: Clear Mode (41+)
     hp: 2147483647
-    atk: 140
+    atk: 150
     turnInterval: 4
