@@ -1942,8 +1942,8 @@ MonoBehaviour:
   atkGrowthInterval: 15
   baseTurnInterval: 6
   minTurnInterval: 4
-  bossAtkMaxTotal: 170
-  clearModeFixedAtk: 150
+  bossAtkMaxTotal: 160
+  clearModeFixedAtk: 140
   bossLevel: 1
   animationDuration: 0.5
   bossSpawnDelay: 1

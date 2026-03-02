@@ -152,31 +152,31 @@ MonoBehaviour:
     turnInterval: 4
   - stageName: Stage 35
     hp: 300000000
-    atk: 135
+    atk: 133
     turnInterval: 4
   - stageName: Stage 36
     hp: 400000000
-    atk: 140
+    atk: 134
     turnInterval: 4
   - stageName: Stage 37
     hp: 550000000
-    atk: 143
+    atk: 135
     turnInterval: 4
   - stageName: Stage 38
     hp: 700000000
-    atk: 145
+    atk: 136
     turnInterval: 4
   - stageName: Stage 39
     hp: 1000000000
-    atk: 149
+    atk: 139
     turnInterval: 4
   guardBoss:
     stageName: Guard Boss (40)
     hp: 2147483647
-    atk: 150
+    atk: 140
     turnInterval: 4
   clearModeEnemy:
     stageName: Clear Mode (41+)
     hp: 2147483647
-    atk: 150
+    atk: 140
     turnInterval: 4
