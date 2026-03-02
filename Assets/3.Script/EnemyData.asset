@@ -92,43 +92,43 @@ MonoBehaviour:
     turnInterval: 4
   - stageName: Stage 20
     hp: 10000000
-    atk: 90
+    atk: 85
     turnInterval: 4
   - stageName: Stage 21
     hp: 500000
-    atk: 80
+    atk: 82
     turnInterval: 4
   - stageName: Stage 22
     hp: 8000000
-    atk: 95
+    atk: 86
     turnInterval: 4
   - stageName: Stage 23
     hp: 16000000
-    atk: 100
+    atk: 90
     turnInterval: 4
   - stageName: Stage 24
     hp: 20000000
-    atk: 102
+    atk: 96
     turnInterval: 4
   - stageName: Stage 25
     hp: 30000000
-    atk: 104
+    atk: 110
     turnInterval: 6
   - stageName: Stage 26
     hp: 32000000
-    atk: 110
+    atk: 100
     turnInterval: 4
   - stageName: Stage 27
     hp: 34000000
-    atk: 112
+    atk: 106
     turnInterval: 4
   - stageName: Stage 28
     hp: 40000000
-    atk: 114
+    atk: 108
     turnInterval: 5
   - stageName: Stage 29
     hp: 42000000
-    atk: 116
+    atk: 110
     turnInterval: 4
   - stageName: Stage 30
     hp: 200000000
