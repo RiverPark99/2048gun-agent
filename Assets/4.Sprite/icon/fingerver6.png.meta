@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: cc60259e806956345a10a73d942ffa17
+guid: 401e3508da985cb43a5c87989c8e7997
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 7553282918288850107
-    second: scope_ver4_0
+      213: -7541831769583641967
+    second: fingerver6_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -50,9 +50,9 @@ TextureImporter:
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
-  spritePivot: {x: 0.5, y: 0.5}
+  spritePivot: {x: 0.45597816, y: 0.65935904}
   spritePixelsToUnits: 100
-  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteBorder: {x: 364, y: 321, z: 367, w: 334}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
   alphaIsTransparency: 1
@@ -152,7 +152,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: scope_ver4_0
+      name: fingerver6_0
       rect:
         serializedVersion: 2
         x: 0
@@ -160,15 +160,15 @@ TextureImporter:
         width: 1024
         height: 1024
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: bbcf1a09bc6a2d860800000000000000
-      internalID: 7553282918288850107
+      spriteID: 19a1632c6f7065790800000000000000
+      internalID: -7541831769583641967
       vertices: []
       indices: 
       edges: []
@@ -178,7 +178,7 @@ TextureImporter:
     physicsShape: []
     bones: []
     spriteID: 5e97eb03825dee720800000000000000
-    internalID: 0
+    internalID: 1537655665
     vertices: []
     indices: 
     edges: []
@@ -187,7 +187,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      scope_ver4_0: 7553282918288850107
+      fingerver6_0: -7541831769583641967
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
